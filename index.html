@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hary Store | Gadget & Technology</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        @keyframes popUp {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .animate-pop-up {
+            animation: popUp 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+
+<nav class="bg-white/80 backdrop-blur-md sticky top-0 z-[100] border-b border-gray-100">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+        <h1 class="text-2xl font-black tracking-tighter text-blue-600 text-style-bold">TOKOBERSAMA.</h1>
+        
+        <div class="hidden md:flex bg-gray-100 p-1 rounded-2xl">
+            <button onclick="showPage('shop')" id="nav-shop" class="px-6 py-2 rounded-xl text-sm font-bold transition-all bg-white shadow-sm text-blue-600">
+                🛍️ Belanja
+            </button>
+            <button onclick="showPage('admin')" id="nav-admin" class="px-6 py-2 rounded-xl text-sm font-bold transition-all text-gray-500 hover:text-gray-700">
+                ⚙️ Admin
+            </button>
+        </div>
+            <div class="flex items-center space-x-5">
+                <button onclick="toggleCart()" class="relative group">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 group-hover:text-blue-600 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                    </svg>
+                    <span class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+<main class="max-w-7xl mx-auto px-6 py-8">
+    <div id="shop-page" class="space-y-12">
+        </div>
+
+<div id="admin-page" class="hidden min-h-screen bg-gray-50 p-8">
+    <div class="max-w-2xl mx-auto">
+    <div class="flex justify-between items-center mb-8">
+        <h2 class="text-2xl font-black">Dashboard Seller</h2>
+        <button onclick="showPage('shop')" class="bg-gray-200 px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-100 hover:text-red-600 transition">
+            Keluar Mode Admin
+        </button>
+    </div>
+        <h2 class="text-3xl font-bold mb-8">Input Produk Baru</h2>
+        
+        <form id="product-form" class="bg-white p-8 rounded-3xl shadow-sm space-y-4">
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">Nama Produk</label>
+                <input type="text" id="input-name" class="w-full p-4 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-blue-500" placeholder="Contoh: Tripod Profesional">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Harga (Rp)</label>
+                    <input type="number" id="input-price" class="w-full p-4 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-blue-500" placeholder="150000">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Kategori</label>
+                    <select id="input-category" class="w-full p-4 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-blue-500">
+                        <option value="Gadget">Gadget</option>
+                        <option value="Photography">Photography</option>
+                        <option value="Audio">Audio</option>
+                    </select>
+                </div>
+            </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">URL Gambar</label>
+                    <input type="text" id="input-image" oninput="previewImage()" class="w-full p-4 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-blue-500" placeholder="https://link-gambar.com/foto.jpg">
+                    
+                    <div id="image-preview-container" class="mt-4 hidden">
+                        <p class="text-[10px] text-gray-400 uppercase font-bold mb-2">Preview Tampilan:</p>
+                        <div class="relative w-32 h-32 rounded-2xl overflow-hidden border-2 border-blue-100 shadow-sm">
+                            <img id="image-preview" src="" class="w-full h-full object-cover">
+                        </div>
+                    </div>
+                </div>
+            <button type="submit" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all">
+                Simpan Produk ke Toko
+            </button>
+        </form>
+            <div class="mt-12">
+                <h3 class="text-xl font-bold mb-6 text-gray-800 flex items-center">
+                    <span class="bg-blue-600 w-2 h-6 rounded-full mr-3"></span>
+                    Daftar Produk Saat Ini
+                </h3>
+                
+                <div class="bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-50 text-gray-500 text-xs uppercase font-bold">
+                            <tr>
+                                <th class="px-6 py-4">Produk</th>
+                                <th class="px-6 py-4">Harga</th>
+                                <th class="px-6 py-4 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-product-list" class="divide-y divide-gray-100">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+    <section class="pt-32 pb-20 bg-gradient-to-b from-blue-50 to-white">
+        <div class="container mx-auto px-6 flex flex-col md:flex-row items-center">
+            <div class="md:w-1/2 mb-10 md:mb-0">
+                <h1 class="text-5xl md:text-6xl font-extrabold leading-tight mb-6">
+                    Koleksi Gadget & <span class="text-blue-600">Visual</span> Pilihan.
+                </h1>
+                <p class="text-gray-600 text-lg mb-8 md:pr-20">
+                    Temukan perangkat teknologi terbaik dan aset fotografi estetik untuk mendukung produktivitas kreatifmu.
+                </p>
+                <a href="#produk" class="bg-blue-600 text-white px-8 py-4 rounded-full font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-200">
+                    Belanja Sekarang
+                </a>
+            </div>
+    <div class="md:w-1/2 relative overflow-hidden rounded-3xl shadow-2xl h-[300px] md:h-[450px]">
+        <div id="slider" class="flex transition-transform duration-1000 ease-in-out h-full">
+            <div class="min-w-full h-full">
+                <img src="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&q=80&w=800" class="w-full h-full object-cover" alt="Gadget">
+            </div>
+            <div class="min-w-full h-full">
+                <img src="https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&q=80&w=800" class="w-full h-full object-cover" alt="Kamera">
+            </div>
+            <div class="min-w-full h-full">
+                <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&q=80&w=800" class="w-full h-full object-cover" alt="Setup">
+            </div>
+        </div>
+
+        <div class="absolute bottom-5 left-1/2 transform -translate-x-1/2 flex space-x-2">
+            <div class="w-2 h-2 bg-white/50 rounded-full"></div>
+            <div class="w-2 h-2 bg-white/50 rounded-full"></div>
+            <div class="w-2 h-2 bg-white/50 rounded-full"></div>
+        </div>
+    </div>
+        </div>
+    </section>
+
+    <section id="produk" class="py-20">
+        <div class="container mx-auto px-6">
+            <div class="flex justify-between items-end mb-12">
+                <div>
+                    <h2 class="text-3xl font-bold mb-2">Produk Unggulan</h2>
+                    <p class="text-gray-500">Kualitas terbaik yang sudah kami kurasi.</p>
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="filterProducts('all', event)" class="filter-btn px-4 py-2 bg-blue-100 text-blue-600 rounded-full text-sm font-semibold transition-all">Semua</button>
+                    <button onclick="filterProducts('Gadget', event)" class="filter-btn px-4 py-2 hover:bg-gray-100 rounded-full text-sm font-semibold cursor-pointer transition-all">Gadget</button>
+                    <button onclick="filterProducts('Photography', event)" class="filter-btn px-4 py-2 hover:bg-gray-100 rounded-full text-sm font-semibold cursor-pointer transition-all">Photography</button>
+                    <button onclick="filterProducts('Audio', event)" class="filter-btn px-4 py-2 hover:bg-gray-100 rounded-full text-sm font-semibold cursor-pointer">Audio</button>
+                </div>
+            </div>
+
+            <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                </div>
+        </div>
+    </section>
+
+    <footer class="bg-gray-900 text-white py-12">
+        <div class="container mx-auto px-6 text-center text-gray-400">
+            <p>&copy; 2026 Hary Subekti.TOKOBERSAMA Built with Passion and AI.</p>
+        </div>
+    </footer>
+<div id="toast-container" class="fixed bottom-5 right-5 z-[100] flex flex-col space-y-3"></div>
+<div id="cart-modal" class="fixed inset-0 z-[200] hidden">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="toggleCart()"></div>
+    
+    <div class="absolute right-0 top-0 h-full w-full md:w-[400px] bg-white shadow-2xl p-6 transform transition-transform duration-300 translate-x-full" id="modal-content">
+        <div class="flex justify-between items-center mb-8">
+            <h2 class="text-2xl font-bold">Keranjang Saya</h2>
+            <button onclick="toggleCart()" class="p-2 hover:bg-gray-100 rounded-full text-gray-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+    
+
+        <div id="cart-items" class="space-y-4 h-[60vh] overflow-y-auto pr-2">
+            </div>
+
+        <div class="absolute bottom-0 left-0 w-full p-6 border-t bg-gray-50">
+            <div class="flex justify-between items-center mb-6">
+                <span class="text-gray-500 font-medium">Total Estimasi</span>
+                <span id="cart-total" class="text-xl font-bold text-blue-600">Rp 0</span>
+            </div>
+            <button onclick="toggleCheckout()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
+                Lanjut Pembayaran
+            </button>
+        </div>
+    </div>
+</div>
+<div id="checkout-modal" class="hidden fixed inset-0 z-[150] flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="toggleCheckout()"></div>
+    <div class="relative bg-white w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl animate-pop-up">
+        <h2 class="text-3xl font-black mb-6 text-gray-900">Data Pengiriman</h2>
+        
+        <form id="checkout-form" class="space-y-4">
+            <div>
+                <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Nama Lengkap</label>
+                <input type="text" id="buyer-name" required class="w-full p-4 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500" placeholder="Masukkan nama Mas...">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Alamat Pengiriman</label>
+                <textarea id="buyer-address" required class="w-full p-4 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500" rows="3" placeholder="Jl. Kenangan No. 1..."></textarea>
+            </div>
+
+            <div class="bg-blue-50 p-6 rounded-3xl mt-6">
+                <div class="flex justify-between items-center text-blue-900">
+                    <span class="font-bold">Total yang harus dibayar:</span>
+                    <span id="checkout-total-price" class="text-xl font-black">Rp 0</span>
+                </div>
+            </div>
+
+            <button type="submit" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-blue-200 hover:scale-[1.02] transition-transform active:scale-95 mt-4">
+                Konfirmasi Pesanan 🔥
+            </button>
+        </form>
+    </div>
+</div>
+<div id="shop-page">
+    </div>
+<script src="script.js"></script>
+</body>
+</html>
