@@ -29,18 +29,8 @@
 </head>
 <body class="bg-gray-50 text-gray-900">
 
-<nav class="bg-white/80 backdrop-blur-md sticky top-0 z-[100] border-b border-gray-100">
-    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-        <h1 class="text-2xl font-black tracking-tighter text-blue-600 text-style-bold">TOKOBERSAMA.</h1>
-        
-        <div class="hidden md:flex bg-gray-100 p-1 rounded-2xl">
-            <button onclick="showPage('shop')" id="nav-shop" class="px-6 py-2 rounded-xl text-sm font-bold transition-all bg-white shadow-sm text-blue-600">
-                🛍️ Belanja
-            </button>
-            <button onclick="showPage('admin')" id="nav-admin" class="px-6 py-2 rounded-xl text-sm font-bold transition-all text-gray-500 hover:text-gray-700">
-                ⚙️ Admin
-            </button>
-        </div>
+<nav class="sticky top-0 bg-white/80 backdrop-blur-md z-[100] px-6 py-4 flex justify-between items-center">
+    <h1 class="text-2xl font-black tracking-tighter text-blue-600 text-style-bold">TOKOBERSAMA.</h1>
             <div class="flex items-center space-x-5">
                 <button onclick="toggleCart()" class="relative group">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7 group-hover:text-blue-600 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -49,8 +39,17 @@
                     <span class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
                 </button>
             </div>
-        </div>
-    </nav>
+</nav>
+<div class="bg-gray-50 border-b border-gray-200 py-2 overflow-x-auto no-scrollbar">
+<div class="flex justify-center gap-2 px-4">
+        <button onclick="showPage('shop')" id="nav-shop" class="flex-none px-4 py-1.5 rounded-full text-xs font-bold transition-all bg-white shadow-sm text-blue-600">
+            🛍️ Mode Belanja
+        </button>
+        <button onclick="showPage('admin')" id="nav-admin" class="flex-none px-4 py-1.5 rounded-full text-xs font-bold transition-all text-gray-500">
+            🔑 Panel Admin
+        </button>
+    </div>
+</div>
 
 <main class="max-w-7xl mx-auto px-6 py-8">
     <div id="shop-page" class="space-y-12">
@@ -128,7 +127,7 @@
         <div class="container mx-auto px-6 flex flex-col md:flex-row items-center">
             <div class="md:w-1/2 mb-10 md:mb-0">
                 <h1 class="text-5xl md:text-6xl font-extrabold leading-tight mb-6">
-                    Koleksi Gadget & <span class="text-blue-600">Visual</span> Pilihan.
+                    Solusi Gadget & <span class="text-blue-600">Teknologi</span> Pilihan.
                 </h1>
                 <p class="text-gray-600 text-lg mb-8 md:pr-20">
                     Temukan perangkat teknologi terbaik dan aset fotografi estetik untuk mendukung produktivitas kreatifmu.
@@ -140,7 +139,7 @@
     <div class="md:w-1/2 relative overflow-hidden rounded-3xl shadow-2xl h-[300px] md:h-[450px]">
         <div id="slider" class="flex transition-transform duration-1000 ease-in-out h-full">
             <div class="min-w-full h-full">
-                <img src="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&q=80&w=800" class="w-full h-full object-cover" alt="Gadget">
+                <img src="https://images.unsplash.com/photo-1615655406736-b37c4fabf923?q=80&w=2940&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" class="w-full h-full object-cover" alt="Gadget">
             </div>
             <div class="min-w-full h-full">
                 <img src="https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&q=80&w=800" class="w-full h-full object-cover" alt="Kamera">
