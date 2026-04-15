@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { productsData } from "./data/products.js";
+import { supabase } from "./lib/supabase.js";
 import Header from "./components/Header.vue";
 import ProductCard from "./components/ProductCard.vue";
 import CartModal from "./components/CartModal.vue";
@@ -28,7 +29,19 @@ const isCheckoutOpen = ref(false);
 const selectedProduct = ref(null);
 
 // --- DATA STATE ---
-const products = ref(productsData);
+const products = ref([]);
+
+// Fetch produk dari Supabase
+const fetchProducts = async () => {
+  const { data, error } = await supabase.from("products").select("*");
+  if (error) {
+    console.error("Error fetching products:", error);
+    // Set ke array kosong kalau error
+  } else {
+    console.log("Fetched products:", data);
+    products.value = data;
+  }
+};
 
 // --- CART LOGIC ---
 const cart = ref([]); // Kita pakai satu nama saja: cart
@@ -53,19 +66,25 @@ const removeFromCart = (index) => {
 
 // --- FILTER LOGIC ---
 const filteredProducts = computed(() => {
-  if (!products.value) return [];
+  if (!products.value || products.value.length === 0) return [];
   return products.value.filter((p) => {
-    const s = searchQuery.value.toLowerCase();
-    const matchSearch = p.name.toLowerCase().includes(s);
+    const s = searchQuery.value ? searchQuery.value.toLowerCase() : "";
+    const productName = p.name ? p.name.toLowerCase() : "";
+
+    const matchSearch = productName.includes(s);
+
+    const productCategory = p.category ? p.category.toUpperCase() : "";
     const matchCategory =
       selectedCategory.value === "SEMUA" ||
-      p.category.toUpperCase() === selectedCategory.value;
+      productCategory === selectedCategory.value.toUpperCase();
+
     return matchSearch && matchCategory;
   });
 });
 
 // --- LIFECYCLE & HELPERS ---
-onMounted(() => {
+onMounted(async () => {
+  await fetchProducts();
   // Slider Interval
   setInterval(() => {
     currentSlide.value = (currentSlide.value + 1) % banners.length;
@@ -97,18 +116,73 @@ const scrollToSection = (id) => {
 const isAdminOpen = ref(false);
 
 // Fungsi Tambah Produk dari Admin
-const handleAddProduct = (newItem) => {
-  products.value.push(newItem);
-  toast.value = { show: true, message: "Produk berhasil ditambahkan!" };
-  setTimeout(() => (toast.value.show = false), 2000);
+const handleAddProduct = async (newItem) => {
+  try {
+    // 1. Kirim data ke tabel Supabase
+    const { data, error } = await supabase
+      .from("products")
+      .insert([
+        {
+          name: newItem.name,
+          price: parseInt(newItem.price), // Pastikan harga disimpan sebagai angka
+          category: newItem.category,
+          image: newItem.image,
+        },
+      ])
+      .select();
+
+    if (error) throw error;
+
+    // Update tampilan lokal
+    if (data) {
+      products.value.push(data[0]); // Tambahkan produk baru ke state lokal
+      toast.value = { show: true, message: "Produk berhasil ditambahkan!" };
+    }
+  } catch (error) {
+    console.error("Error adding product:", error.message);
+    alert("Gagal Simpan Data: " + error.message);
+  } finally {
+    setTimeout(() => (toast.value.show = false), 2000);
+  }
 };
 
 // Fungsi Hapus Produk dari Admin
-const handleDeleteProduct = (id) => {
-  if (confirm("Yakin mau hapus produk ini, Mas?")) {
+const handleDeleteProduct = async (id) => {
+  const confirmHapus = confirm("Yakin mau hapus produk ini dari Database?");
+  if (!confirmHapus) return;
+
+  try {
+    const { data: produk } = await supabase
+      .from("products")
+      .select("image")
+      .eq("id", id)
+      .single();
+
+    if (produk && produk.image) {
+      // Ekstrak nama file dari URL
+      const fileName = produk.image.split("/").pop();
+
+      // Hapus gambar dari storage
+      const { error: storageError } = await supabase.storage
+        .from("product-images")
+        .remove([fileName]);
+
+      if (storageError) {
+        console.error("Gagal hapus gambar dari storage:", storageError.message);
+      }
+    }
+
+    const { error: dbError } = await supabase
+      .from("products")
+      .delete()
+      .eq("id", id);
+
+    if (dbError) throw dbError;
+    // Update tampilan lokal
     products.value = products.value.filter((p) => p.id !== id);
     toast.value = { show: true, message: "Produk berhasil dihapus!" };
-    setTimeout(() => (toast.value.show = false), 2000);
+  } catch (error) {
+    alert("Gagal Hapus Data: " + error.message);
   }
 };
 
@@ -122,6 +196,19 @@ const handleOpenAdmin = () => {
   } else {
     alert("Passcode salah, Ente bukan Admin!");
   }
+};
+
+// Tambahkan ini di dalam script setup Mas
+const isModalOpen = ref(false);
+
+const openDetail = (product) => {
+  selectedProduct.value = product;
+  isModalOpen.value = true;
+};
+
+const closeDetail = () => {
+  isModalOpen.value = false;
+  selectedProduct.value = null;
 };
 </script>
 

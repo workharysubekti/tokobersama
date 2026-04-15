@@ -1,5 +1,35 @@
 <script setup>
 import { ref } from "vue";
+import { supabase } from "../lib/supabase.js";
+
+const isUploading = ref(false);
+const imageUrl = ref("");
+
+const uploadImage = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    isUploading.value = true;
+    const fileName = `${Date.now()}_${file.name}`;
+    const { data, error } = await supabase.storage
+      .from("product-images")
+      .upload(fileName, file);
+
+    if (error) throw error;
+
+    const { data: publicUrlData } = supabase.storage
+      .from("product-images")
+      .getPublicUrl(fileName);
+
+    imageUrl.value = publicUrlData.publicUrl;
+    alert("Gambar berhasil diunggah!");
+  } catch (error) {
+    alert("Gagal mengunggah gambar: " + error.message);
+  } finally {
+    isUploading.value = false;
+  }
+};
 
 const props = defineProps(["products"]);
 const emit = defineEmits(["add-product", "delete-product", "close"]);
@@ -8,20 +38,51 @@ const newProduct = ref({
   name: "",
   price: 0,
   category: "Laptop",
-  image: "https://via.placeholder.com/150",
+  image: imageUrl, // Akan diupdate setelah upload
 });
 
+const isSaving = ref(false);
+
 const submitForm = () => {
-  if (newProduct.value.name && newProduct.value.price > 0) {
+  const name = newProduct.value.name;
+  const price = Number(newProduct.value.price);
+  const category = newProduct.value.category;
+
+  if (name.trim() === "" || price <= 0) {
+    alert("Nama dan harga harus diisi dengan benar!");
+    return;
+  }
+  if (!imageUrl.value) {
+    alert("Silakan unggah gambar produk terlebih dahulu!");
+    return;
+  }
+
+  try {
+    isSaving.value = true;
+
     // Kirim data ke App.vue (Si Bos Utama)
-    emit("add-product", { ...newProduct.value, id: Date.now() });
+    emit("add-product", {
+      name: name,
+      price: price,
+      category: category,
+      image: imageUrl.value,
+    });
+
     // Reset form
     newProduct.value = {
       name: "",
       price: 0,
       category: "Laptop",
-      image: "https://via.placeholder.com/150",
+      image: "",
     };
+
+    imageUrl.value = "";
+    alert("Produk Berhasil Masuk Katalog! 🚀");
+    // Reset URL gambar setelah submit
+  } catch (error) {
+    alert("Gagal menyimpan produk: " + error.message);
+  } finally {
+    isSaving.value = false;
   }
 };
 </script>
@@ -55,23 +116,61 @@ const submitForm = () => {
             class="p-3 rounded-xl border"
           />
           <select v-model="newProduct.category" class="p-3 rounded-xl border">
-            <option>Laptop</option>
-            <option>Aksesoris</option>
-            <option>Monitor</option>
+            <option>GAGDET</option>
+            <option>AUDIO</option>
+            <option>PHOTOGRAPHY</option>
           </select>
-          <input
-            v-model="newProduct.image"
-            type="text"
-            placeholder="Link Gambar (URL)"
-            class="p-3 rounded-xl border"
-          />
+          <div class="space-y-2">
+            <label class="text-sm font-bold text-gray-700">Gambar Produk</label>
+            <input
+              type="file"
+              accept="image/*"
+              @change="uploadImage"
+              class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 transition-all cursor-pointer"
+            />
+            <p v-if="isUploading" class="text-xs text-blue-600 animate-pulse">
+              Mengunggah gambar...
+            </p>
+          </div>
+          <div
+            v-if="imageUrl"
+            class="mt-4 p-2 border-2 border-dashed border-blue-100 rounded-2xl"
+          >
+            <p class="text-[10px] font-bold text-blue-600 mb-2 uppercase">
+              Preview Foto:
+            </p>
+            <img
+              :src="imageUrl"
+              class="w-full h-40 object-cover rounded-xl shadow-md"
+            />
+          </div>
+          <p>
+            <button
+              @click="submitForm"
+              :disable="isSaving"
+              class="w-full py-3 rounded-xl font-black text-white transition-all"
+              :class="
+                isSaving
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              "
+            >
+              <span
+                v-if="isSaving"
+                class="flex items-center justify-center gap-2"
+              >
+                <svg
+                  class="animate-spin h-5 w-5 text-white"
+                  viewBox="0 0 24 24"
+                >
+                  ...
+                </svg>
+                MENYIMPAN...
+              </span>
+              Simpan Produk
+            </button>
+          </p>
         </div>
-        <button
-          @click="submitForm"
-          class="mt-4 w-full bg-blue-600 text-white py-3 rounded-xl font-bold"
-        >
-          Simpan Produk
-        </button>
       </div>
 
       <div class="overflow-x-auto">
