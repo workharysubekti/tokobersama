@@ -111,11 +111,23 @@ const handleDeleteProduct = (id) => {
     setTimeout(() => (toast.value.show = false), 2000);
   }
 };
+
+// Passcode sementara karena belum ada database
+const handleOpenAdmin = () => {
+  const passcode = prompt("Masukkan passcode admin:");
+  if (passcode === "zysoo1204") {
+    isAdminOpen.value = true;
+    toast.value = { show: true, message: "Selamat datang, Admin!" };
+    setTimeout(() => (toast.value.show = false), 2000);
+  } else {
+    alert("Passcode salah, Ente bukan Admin!");
+  }
+};
 </script>
 
 <template>
   <Header
-    :open-admin="() => (isAdminOpen = true)"
+    :open-admin="handleOpenAdmin"
     :cart="cart"
     :open-cart-modal="openCartModal"
     v-model:search-query="searchQuery"
