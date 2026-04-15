@@ -37,7 +37,7 @@ const emit = defineEmits(["add-product", "delete-product", "close"]);
 const newProduct = ref({
   name: "",
   price: 0,
-  category: "Laptop",
+  category: "GADGET",
   image: imageUrl, // Akan diupdate setelah upload
 });
 
@@ -72,7 +72,7 @@ const submitForm = () => {
     newProduct.value = {
       name: "",
       price: 0,
-      category: "Laptop",
+      category: "GADGET",
       image: "",
     };
 
@@ -116,9 +116,9 @@ const submitForm = () => {
             class="p-3 rounded-xl border"
           />
           <select v-model="newProduct.category" class="p-3 rounded-xl border">
-            <option>GAGDET</option>
-            <option>AUDIO</option>
-            <option>PHOTOGRAPHY</option>
+            <option value="GADGET">Gadget 📱</option>
+            <option value="AUDIO">Audio 🔊</option>
+            <option value="PHOTOGRAPHY">Photography 📸</option>
           </select>
           <div class="space-y-2">
             <label class="text-sm font-bold text-gray-700">Gambar Produk</label>
