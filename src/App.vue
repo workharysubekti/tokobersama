@@ -5,6 +5,7 @@ import Header from "./components/Header.vue";
 import ProductCard from "./components/ProductCard.vue";
 import CartModal from "./components/CartModal.vue";
 import Toast from "./components/Toast.vue";
+import AdminPanel from "./components/AdminPanel.vue";
 
 // --- GLOBAL STATE ---
 const isLoading = ref(true);
@@ -90,10 +91,31 @@ const openCartModal = () => {
 const scrollToSection = (id) => {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
 };
+
+//-- ADMIN PANEL LOGIC --
+// Di dalam <script setup> App.vue
+const isAdminOpen = ref(false);
+
+// Fungsi Tambah Produk dari Admin
+const handleAddProduct = (newItem) => {
+  products.value.push(newItem);
+  toast.value = { show: true, message: "Produk berhasil ditambahkan!" };
+  setTimeout(() => (toast.value.show = false), 2000);
+};
+
+// Fungsi Hapus Produk dari Admin
+const handleDeleteProduct = (id) => {
+  if (confirm("Yakin mau hapus produk ini, Mas?")) {
+    products.value = products.value.filter((p) => p.id !== id);
+    toast.value = { show: true, message: "Produk berhasil dihapus!" };
+    setTimeout(() => (toast.value.show = false), 2000);
+  }
+};
 </script>
 
 <template>
   <Header
+    :open-admin="() => (isAdminOpen = true)"
     :cart="cart"
     :open-cart-modal="openCartModal"
     v-model:search-query="searchQuery"
@@ -424,6 +446,15 @@ const scrollToSection = (id) => {
 
   <!-- Toast Notifikasi -->
   <Toast :show="toast.show" :message="toast.message" />
+
+  <!-- Admin Panel -->
+  <AdminPanel
+    v-if="isAdminOpen"
+    :products="products"
+    @close="isAdminOpen = false"
+    @add-product="handleAddProduct"
+    @delete-product="handleDeleteProduct"
+  />
 </template>
 
 <style>
