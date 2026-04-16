@@ -1,6 +1,23 @@
 <script setup>
-import { ref } from "vue";
+import { ref, watch, onMounted } from "vue";
 import { supabase } from "../lib/supabase.js";
+
+const props = defineProps(["isEditMode", "editData", "products"]);
+const emit = defineEmits([
+  "add-product",
+  "delete-product",
+  "close",
+  "edit-product",
+  "update-product",
+]);
+
+const confirmDelete = (product) => {
+  if (
+    confirm(`Yakin mau hapus product "${product.name}"? Tindakan ini permanen`)
+  ) {
+    emit("delete-product", product.id);
+  }
+};
 
 const isUploading = ref(false);
 const imageUrl = ref("");
@@ -31,13 +48,10 @@ const uploadImage = async (event) => {
   }
 };
 
-const props = defineProps(["products"]);
-const emit = defineEmits(["add-product", "delete-product", "close"]);
-
 const newProduct = ref({
   name: "",
   price: 0,
-  category: "Laptop",
+  category: "GADGET",
   image: imageUrl, // Akan diupdate setelah upload
 });
 
@@ -60,23 +74,29 @@ const submitForm = () => {
   try {
     isSaving.value = true;
 
-    // Kirim data ke App.vue (Si Bos Utama)
-    emit("add-product", {
+    const productData = {
       name: name,
       price: price,
       category: category,
-      image: imageUrl.value,
-    });
-
-    // Reset form
-    newProduct.value = {
-      name: "",
-      price: 0,
-      category: "Laptop",
-      image: "",
+      image: imageUrl.value, // Pastikan URL gambar terbaru digunakan
     };
 
-    imageUrl.value = "";
+    if (props.isEditMode) {
+      emit("update-product", { ...productData, id: props.editData.id });
+    } else {
+      emit("add-product", productData);
+    }
+
+    //Reset form setelah edit
+    if (!props.isEditMode) {
+      newProduct.value = {
+        name: "",
+        price: 0,
+        category: "GADGET",
+        image: "", // Reset URL gambar setelah submit
+      };
+    }
+
     alert("Produk Berhasil Masuk Katalog! 🚀");
     // Reset URL gambar setelah submit
   } catch (error) {
@@ -85,120 +105,257 @@ const submitForm = () => {
     isSaving.value = false;
   }
 };
+
+//ResetForm
+const resetForm = () => {
+  newProduct.value = {
+    id: null,
+    name: "",
+    price: 0,
+    category: "GADGET",
+    image: "", // Reset URL gambar
+  };
+  imageUrl.value = ""; // Reset preview gambar
+};
+
+//Pantau perubahan props untuk update form edit
+watch(
+  () => props.editData,
+  (newVal) => {
+    if (props.isEditMode && newVal) {
+      // isi otomatis kotak input dengan data lama saat edit
+      newProduct.value = {
+        id: newVal.id,
+        name: newVal.name,
+        price: newVal.price,
+        category: newVal.category,
+        image: newVal.image,
+      };
+      //tampilkan gambar lama di preview
+      imageUrl.value = newVal.image; // Update URL gambar saat data edit berubah
+    } else {
+      // Reset form jika tidak dalam mode edit
+      resetForm();
+    }
+  },
+  { immediate: true },
+);
+
+onMounted(() => {
+  if (props.isEditMode && props.editData) {
+    newProduct.value = { ...props.editData };
+    imageUrl.value = props.editData.image; // Set URL gambar dari data yang diedit
+  }
+});
 </script>
 
 <template>
-  <div class="fixed inset-0 bg-white z-[150] overflow-y-auto p-6">
-    <div class="max-w-4xl mx-auto">
-      <div class="flex justify-between items-center mb-8">
-        <h1 class="text-2xl font-black text-slate-900">ADMIN DASHBOARD</h1>
+  <div
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+  >
+    <div
+      class="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+    >
+      <div class="p-6 border-b flex justify-between items-center bg-gray-50/50">
+        <div>
+          <h1
+            class="text-xs font-black text-blue-600 uppercase tracking-widest"
+          >
+            Admin Dashboard
+          </h1>
+          <h2 class="text-2xl font-bold text-gray-800">
+            {{ isEditMode ? "🛠️ Edit Produk" : "➕ Tambah Produk" }}
+          </h2>
+        </div>
         <button
           @click="$emit('close')"
-          class="bg-red-500 text-white px-4 py-2 rounded-xl font-bold"
+          class="bg-gray-100 hover:bg-red-50 hover:text-red-500 w-10 h-10 rounded-full flex items-center justify-center transition-all text-2xl"
         >
-          Keluar
+          &times;
         </button>
       </div>
 
-      <div class="bg-gray-50 p-6 rounded-3xl mb-8 border border-gray-100">
-        <h3 class="font-bold mb-4">Tambah Produk Baru</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <input
-            v-model="newProduct.name"
-            type="text"
-            placeholder="Nama Produk"
-            class="p-3 rounded-xl border"
-          />
-          <input
-            v-model.number="newProduct.price"
-            type="number"
-            placeholder="Harga"
-            class="p-3 rounded-xl border"
-          />
-          <select v-model="newProduct.category" class="p-3 rounded-xl border">
-            <option>GAGDET</option>
-            <option>AUDIO</option>
-            <option>PHOTOGRAPHY</option>
-          </select>
-          <div class="space-y-2">
-            <label class="text-sm font-bold text-gray-700">Gambar Produk</label>
-            <input
-              type="file"
-              accept="image/*"
-              @change="uploadImage"
-              class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 transition-all cursor-pointer"
-            />
-            <p v-if="isUploading" class="text-xs text-blue-600 animate-pulse">
-              Mengunggah gambar...
-            </p>
-          </div>
-          <div
-            v-if="imageUrl"
-            class="mt-4 p-2 border-2 border-dashed border-blue-100 rounded-2xl"
-          >
-            <p class="text-[10px] font-bold text-blue-600 mb-2 uppercase">
-              Preview Foto:
-            </p>
-            <img
-              :src="imageUrl"
-              class="w-full h-40 object-cover rounded-xl shadow-md"
-            />
-          </div>
-          <p>
-            <button
-              @click="submitForm"
-              :disable="isSaving"
-              class="w-full py-3 rounded-xl font-black text-white transition-all"
-              :class="
-                isSaving
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700'
-              "
-            >
-              <span
-                v-if="isSaving"
-                class="flex items-center justify-center gap-2"
+      <div class="p-6 overflow-y-auto custom-scrollbar">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="space-y-4">
+            <div class="flex flex-col gap-1">
+              <label class="text-[10px] font-bold text-gray-400 ml-2"
+                >NAMA PRODUK</label
               >
-                <svg
-                  class="animate-spin h-5 w-5 text-white"
-                  viewBox="0 0 24 24"
+              <input
+                v-model="newProduct.name"
+                type="text"
+                placeholder="Contoh: iPhone 15 Pro"
+                class="p-4 rounded-2xl border-none bg-gray-100 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+              />
+            </div>
+
+            <div class="flex flex-col gap-1">
+              <label class="text-[10px] font-bold text-gray-400 ml-2"
+                >HARGA (RP)</label
+              >
+              <input
+                v-model.number="newProduct.price"
+                type="number"
+                placeholder="15000000"
+                class="p-4 rounded-2xl border-none bg-gray-100 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+              />
+            </div>
+
+            <div class="flex flex-col gap-1">
+              <label class="text-[10px] font-bold text-gray-400 ml-2"
+                >KATEGORI</label
+              >
+              <select
+                v-model="newProduct.category"
+                class="p-4 rounded-2xl border-none bg-gray-100 focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer"
+              >
+                <option value="GADGET">GADGET 📱</option>
+                <option value="AUDIO">AUDIO 🎧</option>
+                <option value="PHOTOGRAPHY">PHOTOGRAPHY 📷</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="flex flex-col gap-1">
+              <label class="text-[10px] font-bold text-gray-400 ml-2"
+                >FOTO PRODUK</label
+              >
+              <div class="relative group">
+                <input
+                  type="file"
+                  accept="image/*"
+                  @change="uploadImage"
+                  class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                />
+                <div
+                  class="p-8 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center group-hover:border-blue-400 transition-colors bg-gray-50"
                 >
-                  ...
-                </svg>
-                MENYIMPAN...
-              </span>
-              Simpan Produk
-            </button>
-          </p>
+                  <span class="text-2xl mb-2">📸</span>
+                  <span class="text-xs font-bold text-gray-500"
+                    >Klik untuk upload foto</span
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="imageUrl || isUploading"
+              class="relative rounded-2xl overflow-hidden shadow-inner bg-gray-100 h-40 flex items-center justify-center"
+            >
+              <div
+                v-if="isUploading"
+                class="absolute inset-0 bg-white/80 flex items-center justify-center z-10"
+              >
+                <div class="flex flex-col items-center">
+                  <div
+                    class="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"
+                  ></div>
+                  <p
+                    class="text-[10px] font-black text-blue-600 mt-2 tracking-widest"
+                  >
+                    UPLOADING...
+                  </p>
+                </div>
+              </div>
+              <img
+                v-if="imageUrl"
+                :src="imageUrl"
+                class="w-full h-full object-cover"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-10 border-t pt-8">
+          <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
+            📦 Daftar Inventaris
+            <span
+              class="bg-blue-100 text-blue-600 text-[10px] px-2 py-0.5 rounded-full"
+              >{{ products.length }}</span
+            >
+          </h3>
+          <div class="overflow-x-auto rounded-2xl border border-gray-100">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr
+                  class="bg-gray-50 text-gray-400 text-[10px] font-black uppercase tracking-widest"
+                >
+                  <th class="p-4">Produk</th>
+                  <th class="p-4">Harga</th>
+                  <th class="p-4 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="product in products"
+                  :key="product.id"
+                  class="border-b last:border-0 hover:bg-gray-50/50 transition-colors"
+                >
+                  <td class="p-4">
+                    <div class="font-bold text-sm text-gray-700">
+                      {{ product.name }}
+                    </div>
+                    <div class="text-[10px] text-gray-400 uppercase">
+                      {{ product.category }}
+                    </div>
+                  </td>
+                  <td class="p-4 text-sm font-medium text-gray-600">
+                    Rp {{ product.price.toLocaleString() }}
+                  </td>
+                  <td class="p-4">
+                    <div class="flex justify-center gap-2">
+                      <button
+                        @click.stop="$emit('edit-product', product)"
+                        class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg font-bold text-[10px] hover:bg-blue-600 hover:text-white transition-all"
+                      >
+                        EDIT
+                      </button>
+                      <button
+                        @click.stop="confirmDelete(product)"
+                        class="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg font-bold text-[10px] hover:bg-red-600 hover:text-white transition-all"
+                      >
+                        HAPUS
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      <div class="overflow-x-auto">
-        <table class="w-full text-left">
-          <thead>
-            <tr class="border-b text-gray-400 text-sm">
-              <th class="pb-4">Produk</th>
-              <th class="pb-4">Harga</th>
-              <th class="pb-4">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="product in products" :key="product.id" class="border-b">
-              <td class="py-4 font-bold text-sm">{{ product.name }}</td>
-              <td class="py-4 text-sm">
-                Rp {{ product.price.toLocaleString() }}
-              </td>
-              <td class="py-4">
-                <button
-                  @click="$emit('delete-product', product.id)"
-                  class="text-red-500 font-bold text-xs"
-                >
-                  Hapus
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="p-6 bg-gray-50 border-t flex gap-3">
+        <button
+          @click="$emit('close')"
+          class="flex-1 p-4 rounded-2xl bg-white border border-gray-200 font-bold text-gray-500 hover:bg-gray-100 transition-all"
+        >
+          BATAL
+        </button>
+        <button
+          @click="submitForm"
+          :disabled="isSaving || isUploading"
+          class="flex-[2] p-4 rounded-2xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2"
+          :class="
+            isSaving || isUploading
+              ? 'bg-gray-300 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'
+          "
+        >
+          <span
+            v-if="isSaving"
+            class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"
+          ></span>
+          {{
+            isSaving
+              ? "MENYIMPAN..."
+              : isEditMode
+                ? "SIMPAN PERUBAHAN"
+                : "TAMBAH KE KATALOG"
+          }}
+        </button>
       </div>
     </div>
   </div>

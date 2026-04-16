@@ -26,7 +26,7 @@ const banners = [
 const toast = ref({ show: false, message: "" });
 const isCartOpen = ref(false);
 const isCheckoutOpen = ref(false);
-const selectedProduct = ref(null);
+const isEditMode = ref(false);
 
 // --- DATA STATE ---
 const products = ref([]);
@@ -201,14 +201,56 @@ const handleOpenAdmin = () => {
 // Tambahkan ini di dalam script setup Mas
 const isModalOpen = ref(false);
 
-const openDetail = (product) => {
-  selectedProduct.value = product;
-  isModalOpen.value = true;
+//--Editing Form Product--
+const isEditing = ref(false);
+const currentProduct = ref(null);
+const editingProduct = ref(null);
+// Fungsi untuk membuka form edit dengan data produk yang dipilih
+const openEditForm = (product) => {
+  isEditMode.value = true;
+  editingProduct.value = { ...product }; // Clone data untuk diedit
+  isAdminOpen.value = true; // Pastikan admin panel terbuka
 };
 
-const closeDetail = () => {
-  isModalOpen.value = false;
-  selectedProduct.value = null;
+//Fungsi Reset kalau modal ditutup
+const closeAdminPanel = () => {
+  isEditMode.value = false;
+  editingProduct.value = null;
+  isAdminOpen.value = false;
+};
+
+// Fungsi untuk menyimpan perubahan produk setelah diedit
+const handleUpdateProduct = async (updatedData) => {
+  console.log("Data yang mau diupdate:", updatedData);
+  try {
+    //1. Update data di Supabase
+    const { error } = await supabase
+      .from("products")
+      .update({
+        name: updatedData.name,
+        price: updatedData.price,
+        category: updatedData.category,
+        image: updatedData.image,
+      })
+      .eq("id", updatedData.id);
+
+    if (error) throw error;
+
+    // 2. Jika sukses di DB, baru uppdate di web
+    const index = products.value.findIndex((p) => p.id === updatedData.id);
+    if (index !== -1) {
+      products.value[index] = { ...updatedData };
+    }
+
+    toast.value = { show: true, message: "Produk berhasil diperbarui!" };
+    setTimeout(() => (toast.value.show = false), 2000);
+    closeAdminPanel(); // Tutup form edit
+  } catch (error) {
+    toast.value = {
+      show: true,
+      message: "Gagal memperbarui produk: " + error.message,
+    };
+  }
 };
 </script>
 
@@ -417,7 +459,6 @@ const closeDetail = () => {
         :key="item.id"
         :item="item"
         :add-to-cart="addToCart"
-        :open-detail="openDetail"
       />
     </main>
   </section>
@@ -480,61 +521,6 @@ const closeDetail = () => {
     </div>
   </footer>
 
-  <div
-    v-if="selectedProduct"
-    class="fixed inset-0 z-[100] flex items-center justify-center p-4"
-  >
-    <div
-      @click="closeDetail"
-      class="absolute inset-0 bg-black/80 backdrop-blur-sm"
-    ></div>
-
-    <div
-      class="bg-white w-full max-w-lg rounded-3xl overflow-hidden relative z-10 animate-in fade-in zoom-in duration-300"
-    >
-      <img :src="selectedProduct.image" class="w-full h-72 object-cover" />
-      <div class="p-6">
-        <div class="flex justify-between items-start mb-4">
-          <div>
-            <span
-              class="text-xs font-bold px-2 py-1 bg-blue-100 text-blue-600 rounded-lg uppercase tracking-wider"
-            >
-              {{ selectedProduct.category }}
-            </span>
-            <h2 class="text-2xl font-black mt-2">{{ selectedProduct.name }}</h2>
-          </div>
-          <p class="text-xl font-black text-blue-600">
-            Rp {{ selectedProduct.price.toLocaleString() }}
-          </p>
-        </div>
-
-        <p class="text-gray-500 text-sm leading-relaxed mb-6">
-          Spesifikasi Pro: Produk ini adalah barang pilihan dari TOKOBERSAMA.
-          dengan kondisi prima. Cocok untuk kebutuhan profesional maupun harian.
-          Dijamin ori 100%!
-        </p>
-
-        <div class="flex gap-3">
-          <button
-            @click="closeDetail"
-            class="flex-1 bg-gray-100 py-4 rounded-2xl font-bold"
-          >
-            Tutup
-          </button>
-          <button
-            @click="
-              addToCart(selectedProduct);
-              closeDetail();
-            "
-            class="flex-[2] bg-blue-600 text-white py-4 rounded-2xl font-black"
-          >
-            Tambah ke Keranjang
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Modal Keranjang -->
   <CartModal
     :cart="cart"
@@ -549,10 +535,14 @@ const closeDetail = () => {
   <!-- Admin Panel -->
   <AdminPanel
     v-if="isAdminOpen"
+    :isEditMode="isEditMode"
+    :editData="editingProduct"
     :products="products"
     @close="isAdminOpen = false"
     @add-product="handleAddProduct"
     @delete-product="handleDeleteProduct"
+    @update-product="handleUpdateProduct"
+    @edit-product="openEditForm"
   />
 </template>
 

@@ -6,10 +6,7 @@ defineProps(["item", "addToCart", "openDetail"]);
   <div
     class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group"
   >
-    <div
-      class="relative overflow-hidden cursor-pointer"
-      @click="openDetail(item)"
-    >
+    <div class="relative overflow-hidden cursor-pointer">
       <img
         :src="item.image"
         class="w-full aspect-square object-cover transition-transform duration-500 group-hover:scale-110"
