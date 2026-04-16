@@ -181,6 +181,7 @@ const handleDeleteProduct = async (id) => {
     // Update tampilan lokal
     products.value = products.value.filter((p) => p.id !== id);
     toast.value = { show: true, message: "Produk berhasil dihapus!" };
+    setTimeout(() => (toast.value.show = false), 2000);
   } catch (error) {
     alert("Gagal Hapus Data: " + error.message);
   }
@@ -324,7 +325,7 @@ const handleUpdateProduct = async (updatedData) => {
             class="bg-white hover:bg-gray-50 text-gray-800 px-10 py-4 rounded-2xl font-bold text-lg border-2 border-gray-100 transition-all flex items-center justify-center gap-2"
           >
             <a
-              href="https://wa.me/6283153703725?text=Halo+Hary+saya+mau+tanya+untuk+ketersediaan+bekerja"
+              href="https://wa.me/6283153703725?text=Halo+Hary"
               target="_blank"
               class="bg-white ... flex items-center justify-center"
             >

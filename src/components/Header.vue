@@ -31,7 +31,7 @@ const updateCategory = (cat) => emit("update:selectedCategory", cat);
           <span class="text-white font-black text-xl">T</span>
         </div>
         <h1 class="font-black text-xl tracking-tighter hidden lg:block">
-          TOKO<span class="text-blue-600">BERASAMA</span>
+          TOKO<span class="text-blue-600">BERSAMA</span>
         </h1>
       </div>
 
