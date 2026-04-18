@@ -1,361 +1,295 @@
 <script setup>
-import { ref, watch, onMounted } from "vue";
+import { ref, onMounted } from "vue";
 import { supabase } from "../lib/supabase.js";
+import { useRouter } from "vue-router";
 
-const props = defineProps(["isEditMode", "editData", "products"]);
-const emit = defineEmits([
-  "add-product",
-  "delete-product",
-  "close",
-  "edit-product",
-  "update-product",
-]);
-
-const confirmDelete = (product) => {
-  if (
-    confirm(`Yakin mau hapus product "${product.name}"? Tindakan ini permanen`)
-  ) {
-    emit("delete-product", product.id);
-  }
-};
-
+const router = useRouter();
+const products = ref([]);
+const isLocked = ref(true); // Status terkunci
+const passcode = ref("");
 const isUploading = ref(false);
+const isSaving = ref(false);
 const imageUrl = ref("");
+const isEditMode = ref(false);
+const editingId = ref(null);
 
-const uploadImage = async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
+const startEdit = (product) => {
+  isEditMode.value = true;
+  editingId.value = product.id;
 
-  try {
-    isUploading.value = true;
-    const fileName = `${Date.now()}_${file.name}`;
-    const { data, error } = await supabase.storage
-      .from("product-images")
-      .upload(fileName, file);
+  // Masukkan data produk ke form input
+  newProduct.value = {
+    name: product.name,
+    price: product.price,
+    category: product.category,
+  };
+  imageUrl.value = product.image;
 
-    if (error) throw error;
-
-    const { data: publicUrlData } = supabase.storage
-      .from("product-images")
-      .getPublicUrl(fileName);
-
-    imageUrl.value = publicUrlData.publicUrl;
-    alert("Gambar berhasil diunggah!");
-  } catch (error) {
-    alert("Gagal mengunggah gambar: " + error.message);
-  } finally {
-    isUploading.value = false;
-  }
+  // Scroll otomatis ke atas biar kelihatan form-nya
+  window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
 const newProduct = ref({
   name: "",
   price: 0,
   category: "GADGET",
-  image: imageUrl, // Akan diupdate setelah upload
+  image: "",
 });
 
-const isSaving = ref(false);
+// --- SISTEM KEAMANAN ---
+const unlock = () => {
+  if (passcode.value === "1204") {
+    // Ganti password sesukamu di sini
+    isLocked.value = false;
+  } else {
+    alert("Passcode Salah!");
+    passcode.value = "";
+  }
+};
 
-const submitForm = () => {
-  const name = newProduct.value.name;
-  const price = Number(newProduct.value.price);
-  const category = newProduct.value.category;
+// --- AMBIL DATA INVENTARIS ---
+const fetchProducts = async () => {
+  const { data, error } = await supabase.from("products").select("*");
+  if (!error) products.value = data;
+};
 
-  if (name.trim() === "" || price <= 0) {
-    alert("Nama dan harga harus diisi dengan benar!");
+// --- LOGIC TOMBOL CLOSE/CANCEL ---
+const goBack = () => {
+  router.push("/"); // Kembali ke Home
+};
+
+const uploadImage = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    isUploading.value = true;
+    const fileName = `${Date.now()}_${file.name}`;
+    const { error } = await supabase.storage
+      .from("product-images")
+      .upload(fileName, file);
+    if (error) throw error;
+    const { data: publicUrlData } = supabase.storage
+      .from("product-images")
+      .getPublicUrl(fileName);
+    imageUrl.value = publicUrlData.publicUrl;
+  } catch (e) {
+    alert("Gagal upload: " + e.message);
+  } finally {
+    isUploading.value = false;
+  }
+};
+
+const submitForm = async () => {
+  if (
+    !newProduct.value.name ||
+    newProduct.value.price <= 0 ||
+    !imageUrl.value
+  ) {
+    alert("Isi semua data dengan benar!");
     return;
   }
-  if (!imageUrl.value) {
-    alert("Silakan unggah gambar produk terlebih dahulu!");
-    return;
-  }
-
   try {
     isSaving.value = true;
-
-    const productData = {
-      name: name,
-      price: price,
-      category: category,
-      image: imageUrl.value, // Pastikan URL gambar terbaru digunakan
-    };
-
-    if (props.isEditMode) {
-      emit("update-product", { ...productData, id: props.editData.id });
+    if (isEditMode.value) {
+      const { error } = await supabase
+        .from("products")
+        .update({ ...newProduct.value, image: imageUrl.value })
+        .eq("id", editingId.value);
+      if (error) throw error;
+      alert("Produk Berhasil Diperbarui!");
     } else {
-      emit("add-product", productData);
+      const { error } = await supabase
+        .from("products")
+        .insert({ ...newProduct.value, image: imageUrl.value });
+      if (error) throw error;
+      alert("Produk Berhasil Ditambah!");
     }
 
-    //Reset form setelah edit
-    if (!props.isEditMode) {
-      newProduct.value = {
-        name: "",
-        price: 0,
-        category: "GADGET",
-        image: "", // Reset URL gambar setelah submit
-      };
-    }
-
-    alert("Produk Berhasil Masuk Katalog! 🚀");
-    // Reset URL gambar setelah submit
-  } catch (error) {
-    alert("Gagal menyimpan produk: " + error.message);
+    //Reset status
+    isEditMode.value = false;
+    editingId.value = null;
+    fetchProducts();
+    resetForm();
+  } catch (e) {
+    alert(e.message);
   } finally {
     isSaving.value = false;
   }
 };
 
-//ResetForm
-const resetForm = () => {
-  newProduct.value = {
-    id: null,
-    name: "",
-    price: 0,
-    category: "GADGET",
-    image: "", // Reset URL gambar
-  };
-  imageUrl.value = ""; // Reset preview gambar
+const deleteProduct = async (id) => {
+  if (confirm("Yakin hapus?")) {
+    await supabase.from("products").delete().eq("id", id);
+    fetchProducts();
+  }
 };
 
-//Pantau perubahan props untuk update form edit
-watch(
-  () => props.editData,
-  (newVal) => {
-    if (props.isEditMode && newVal) {
-      // isi otomatis kotak input dengan data lama saat edit
-      newProduct.value = {
-        id: newVal.id,
-        name: newVal.name,
-        price: newVal.price,
-        category: newVal.category,
-        image: newVal.image,
-      };
-      //tampilkan gambar lama di preview
-      imageUrl.value = newVal.image; // Update URL gambar saat data edit berubah
-    } else {
-      // Reset form jika tidak dalam mode edit
-      resetForm();
-    }
-  },
-  { immediate: true },
-);
-
-onMounted(() => {
-  if (props.isEditMode && props.editData) {
-    newProduct.value = { ...props.editData };
-    imageUrl.value = props.editData.image; // Set URL gambar dari data yang diedit
-  }
-});
+onMounted(fetchProducts);
 </script>
 
 <template>
   <div
-    class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+    v-if="isLocked"
+    class="fixed inset-0 bg-slate-900 z-[10000] flex items-center justify-center p-6"
   >
     <div
-      class="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      class="bg-white p-8 rounded-[2rem] w-full max-w-sm text-center shadow-2xl"
     >
-      <div class="p-6 border-b flex justify-between items-center bg-gray-50/50">
-        <div>
-          <h1
-            class="text-xs font-black text-blue-600 uppercase tracking-widest"
-          >
-            Admin Dashboard
-          </h1>
-          <h2 class="text-2xl font-bold text-gray-800">
-            {{ isEditMode ? "🛠️ Edit Produk" : "➕ Tambah Produk" }}
-          </h2>
-        </div>
+      <div class="text-4xl mb-4">🔐</div>
+      <h2 class="text-xl font-black mb-2">Admin Access</h2>
+      <p class="text-gray-400 text-sm mb-6">Masukkan kode rahasia</p>
+      <input
+        v-model="passcode"
+        type="password"
+        @keyup.enter="unlock"
+        placeholder="****"
+        class="w-full p-4 bg-gray-100 rounded-2xl text-center text-2xl tracking-[1rem] outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+      />
+      <div class="grid grid-cols-2 gap-3">
         <button
-          @click="$emit('close')"
-          class="bg-gray-100 hover:bg-red-50 hover:text-red-500 w-10 h-10 rounded-full flex items-center justify-center transition-all text-2xl"
-        >
-          &times;
-        </button>
-      </div>
-
-      <div class="p-6 overflow-y-auto custom-scrollbar">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div class="space-y-4">
-            <div class="flex flex-col gap-1">
-              <label class="text-[10px] font-bold text-gray-400 ml-2"
-                >NAMA PRODUK</label
-              >
-              <input
-                v-model="newProduct.name"
-                type="text"
-                placeholder="Contoh: iPhone 15 Pro"
-                class="p-4 rounded-2xl border-none bg-gray-100 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              />
-            </div>
-
-            <div class="flex flex-col gap-1">
-              <label class="text-[10px] font-bold text-gray-400 ml-2"
-                >HARGA (RP)</label
-              >
-              <input
-                v-model.number="newProduct.price"
-                type="number"
-                placeholder="15000000"
-                class="p-4 rounded-2xl border-none bg-gray-100 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              />
-            </div>
-
-            <div class="flex flex-col gap-1">
-              <label class="text-[10px] font-bold text-gray-400 ml-2"
-                >KATEGORI</label
-              >
-              <select
-                v-model="newProduct.category"
-                class="p-4 rounded-2xl border-none bg-gray-100 focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer"
-              >
-                <option value="GADGET">GADGET 📱</option>
-                <option value="AUDIO">AUDIO 🎧</option>
-                <option value="PHOTOGRAPHY">PHOTOGRAPHY 📷</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="space-y-4">
-            <div class="flex flex-col gap-1">
-              <label class="text-[10px] font-bold text-gray-400 ml-2"
-                >FOTO PRODUK</label
-              >
-              <div class="relative group">
-                <input
-                  type="file"
-                  accept="image/*"
-                  @change="uploadImage"
-                  class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                />
-                <div
-                  class="p-8 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center group-hover:border-blue-400 transition-colors bg-gray-50"
-                >
-                  <span class="text-2xl mb-2">📸</span>
-                  <span class="text-xs font-bold text-gray-500"
-                    >Klik untuk upload foto</span
-                  >
-                </div>
-              </div>
-            </div>
-
-            <div
-              v-if="imageUrl || isUploading"
-              class="relative rounded-2xl overflow-hidden shadow-inner bg-gray-100 h-40 flex items-center justify-center"
-            >
-              <div
-                v-if="isUploading"
-                class="absolute inset-0 bg-white/80 flex items-center justify-center z-10"
-              >
-                <div class="flex flex-col items-center">
-                  <div
-                    class="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"
-                  ></div>
-                  <p
-                    class="text-[10px] font-black text-blue-600 mt-2 tracking-widest"
-                  >
-                    UPLOADING...
-                  </p>
-                </div>
-              </div>
-              <img
-                v-if="imageUrl"
-                :src="imageUrl"
-                class="w-full h-full object-cover"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div class="mt-10 border-t pt-8">
-          <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
-            📦 Daftar Inventaris
-            <span
-              class="bg-blue-100 text-blue-600 text-[10px] px-2 py-0.5 rounded-full"
-              >{{ products.length }}</span
-            >
-          </h3>
-          <div class="overflow-x-auto rounded-2xl border border-gray-100">
-            <table class="w-full text-left border-collapse">
-              <thead>
-                <tr
-                  class="bg-gray-50 text-gray-400 text-[10px] font-black uppercase tracking-widest"
-                >
-                  <th class="p-4">Produk</th>
-                  <th class="p-4">Harga</th>
-                  <th class="p-4 text-center">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="product in products"
-                  :key="product.id"
-                  class="border-b last:border-0 hover:bg-gray-50/50 transition-colors"
-                >
-                  <td class="p-4">
-                    <div class="font-bold text-sm text-gray-700">
-                      {{ product.name }}
-                    </div>
-                    <div class="text-[10px] text-gray-400 uppercase">
-                      {{ product.category }}
-                    </div>
-                  </td>
-                  <td class="p-4 text-sm font-medium text-gray-600">
-                    Rp {{ product.price.toLocaleString() }}
-                  </td>
-                  <td class="p-4">
-                    <div class="flex justify-center gap-2">
-                      <button
-                        @click.stop="$emit('edit-product', product)"
-                        class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg font-bold text-[10px] hover:bg-blue-600 hover:text-white transition-all"
-                      >
-                        EDIT
-                      </button>
-                      <button
-                        @click.stop="confirmDelete(product)"
-                        class="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg font-bold text-[10px] hover:bg-red-600 hover:text-white transition-all"
-                      >
-                        HAPUS
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div class="p-6 bg-gray-50 border-t flex gap-3">
-        <button
-          @click="$emit('close')"
-          class="flex-1 p-4 rounded-2xl bg-white border border-gray-200 font-bold text-gray-500 hover:bg-gray-100 transition-all"
+          @click="goBack"
+          class="p-4 bg-gray-100 rounded-2xl font-bold text-gray-500"
         >
           BATAL
         </button>
         <button
-          @click="submitForm"
-          :disabled="isSaving || isUploading"
-          class="flex-2 p-4 rounded-2xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2"
-          :class="
-            isSaving || isUploading
-              ? 'bg-gray-300 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'
-          "
+          @click="unlock"
+          class="p-4 bg-blue-600 rounded-2xl font-bold text-white"
         >
-          <span
-            v-if="isSaving"
-            class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"
-          ></span>
-          {{
-            isSaving
-              ? "MENYIMPAN..."
-              : isEditMode
-                ? "SIMPAN PERUBAHAN"
-                : "TAMBAH KE KATALOG"
-          }}
+          MASUK
         </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="min-h-screen bg-gray-50 pb-20">
+    <div
+      class="bg-white p-6 border-b flex justify-between items-center sticky top-0 z-50"
+    >
+      <div>
+        <h1 class="text-blue-600 font-black text-xs uppercase tracking-widest">
+          Dashboard
+        </h1>
+        <h2 class="text-xl font-bold">Manajemen Toko</h2>
+      </div>
+      <button
+        @click="goBack"
+        class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-xl font-bold"
+      >
+        ×
+      </button>
+    </div>
+
+    <div class="p-4 max-w-4xl mx-auto space-y-6">
+      <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
+        <h3 class="font-bold mb-4">Tambah Produk Baru</h3>
+        <div class="space-y-4">
+          <input
+            v-model="newProduct.name"
+            type="text"
+            placeholder="Nama Produk"
+            class="w-full p-4 bg-gray-50 rounded-2xl outline-none"
+          />
+          <input
+            v-model.number="newProduct.price"
+            type="number"
+            placeholder="Harga"
+            class="w-full p-4 bg-gray-50 rounded-2xl outline-none"
+          />
+          <select
+            v-model="newProduct.category"
+            class="w-full p-4 bg-gray-50 rounded-2xl outline-none"
+          >
+            <option value="GADGET">GADGET</option>
+            <option value="AUDIO">AUDIO</option>
+            <option value="PHOTOGRAPHY">PHOTOGRAPHY</option>
+          </select>
+          <div
+            class="border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center relative hover:bg-gray-50 transition-all"
+          >
+            <input
+              type="file"
+              @change="uploadImage"
+              class="absolute inset-0 opacity-0 cursor-pointer"
+            />
+            <p v-if="!imageUrl" class="text-gray-400 font-bold text-sm">
+              Klik untuk upload foto
+            </p>
+            <img
+              v-else
+              :src="imageUrl"
+              class="h-32 mx-auto rounded-xl object-cover"
+            />
+          </div>
+          <button
+            @click="submitForm"
+            :disabled="isSaving || isUploading"
+            class="w-full p-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 disabled:bg-gray-300"
+          >
+            {{ isSaving ? "MENYIMPAN..." : "POST KE TOKO" }}
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
+        <h3 class="font-bold mb-4">Stok Barang ({{ products.length }})</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr
+                class="text-[10px] text-gray-400 uppercase font-black border-b"
+              >
+                <th class="pb-4">Barang</th>
+                <th class="pb-4">Harga</th>
+                <th class="pb-4 text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody v-if="products && products.length > 0">
+              <tr
+                v-for="product in products"
+                :key="product.id"
+                class="border-b last:border-0 hover:bg-gray-50 transition-colors"
+              >
+                <td class="py-4">
+                  <div class="flex items-center gap-3">
+                    <img
+                      :src="product.image"
+                      class="w-10 h-10 rounded-lg object-cover border"
+                    />
+                    <div>
+                      <p class="font-bold text-sm text-gray-700 leading-none">
+                        {{ product.name }}
+                      </p>
+                      <p class="text-[10px] text-gray-400 uppercase mt-1">
+                        {{ product.category }}
+                      </p>
+                    </div>
+                  </div>
+                </td>
+                <td class="py-4 text-sm font-medium text-gray-600">
+                  Rp {{ product.price.toLocaleString() }}
+                </td>
+                <td class="py-4 text-center">
+                  <div class="flex justify-center gap-2">
+                    <button
+                      @click="startEdit(product)"
+                      class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg font-bold text-[10px] hover:bg-blue-600 hover:text-white transition-all uppercase"
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      @click="deleteProduct(product.id)"
+                      class="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg font-bold text-[10px] hover:bg-red-600 hover:text-white transition-all uppercase"
+                    >
+                      Hapus
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>

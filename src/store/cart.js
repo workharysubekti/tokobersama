@@ -1,77 +1,86 @@
+import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 
-// 1. STATE GLOBAL (Tetap di luar agar data tidak hilang saat pindah halaman)
-const cart = ref([]);
-const showToast = ref(false);
-const toastMsg = ref("");
+export const useCartStore = defineStore("cart", () => {
+  // --- STATE ---
+  const cart = ref([]);
+  const showToast = ref(false);
+  const toastMsg = ref("");
 
-// 2. HELPER: Fungsi pemicu Toast (Bisa dipakai semua fungsi lain)
-const triggerToast = (msg) => {
-  toastMsg.value = msg;
-  showToast.value = true;
-  setTimeout(() => {
-    showToast.value = false;
-  }, 3000);
-};
+  // --- ACTIONS ---
+  const triggerToast = (msg) => {
+    toastMsg.value = msg;
+    showToast.value = true;
+    // Gunakan durasi yang konsisten
+    setTimeout(() => {
+      showToast.value = false;
+    }, 3000);
+  };
 
-// 3. LOGIKA UTAMA (Berdiri sendiri-sendiri)
-const removeFromCart = (id) => {
-  cart.value = cart.value.filter((item) => item.id !== id);
-};
+  const addToCart = (product) => {
+    if (!product) return;
 
-const decreaseQuantity = (id) => {
-  const item = cart.value.find((item) => item.id === id);
-  if (item) {
-    if (item.quantity > 1) {
-      item.quantity--;
+    const existingItem = cart.value.find((item) => item.id === product.id);
+
+    if (existingItem) {
+      if (existingItem.quantity < 10) {
+        existingItem.quantity++;
+        // TAMBAHKAN INI BIAR TOAST MUNCUL SAAT QUANTITY BERTAMBAH
+        triggerToast(`${product.name} ditambahkan lagi!`);
+      } else {
+        triggerToast("Maksimal 10 barang ya!");
+      }
     } else {
-      removeFromCart(id);
+      // Tambah produk baru dengan quantity 1
+      cart.value.push({ ...product, quantity: 1 });
+      // PASTIKAN INI TERPANGGIL
+      triggerToast(`Berhasil menambah ${product.name}`);
     }
-  }
-};
+  };
 
-const increaseQuantity = (id) => {
-  const item = cart.value.find((item) => item.id === id);
-  // Cek apakah item ada DAN jumlahnya masih di bawah 10
-  if (item) {
-    if (item.quantity < 10) {
-      item.quantity++;
-    } else {
-      triggerToast("Kuantitas tidak boleh lebih dari 10");
+  const removeFromCart = (id) => {
+    const item = cart.value.find((p) => p.id === id);
+    if (item) triggerToast(`${item.name} dihapus.`);
+    cart.value = cart.value.filter((item) => item.id !== id);
+  };
+
+  const increaseQuantity = (id) => {
+    const item = cart.value.find((item) => item.id === id);
+    if (item && item.quantity < 10) item.quantity++;
+  };
+
+  const decreaseQuantity = (id) => {
+    const item = cart.value.find((item) => item.id === id);
+    if (item) {
+      if (item.quantity > 1) {
+        item.quantity--;
+      } else {
+        removeFromCart(id);
+      }
     }
-  }
-};
+  };
 
-const addToCart = (product) => {
-  const existingItem = cart.value.find((item) => item.id === product.id);
+  // --- GETTERS ---
+  const totalItems = computed(() => {
+    return cart.value.reduce((total, item) => total + item.quantity, 0);
+  });
 
-  if (existingItem) {
-    if (existingItem.quantity < 10) {
-      existingItem.quantity++;
-    } else {
-      triggerToast("Kuantitas tidak boleh lebih dari 10");
-    }
-  } else {
-    cart.value.push({ ...product, quantity: 1 });
-    triggerToast(`Berhasil menambah ${product.name}`);
-  }
-};
+  const totalPrice = computed(() => {
+    return cart.value.reduce(
+      (total, item) => total + item.price * item.quantity,
+      0,
+    );
+  });
 
-// 4. COMPUTED: Hitung total item di keranjang
-const totalItems = computed(() => {
-  return cart.value.reduce((total, item) => total + item.quantity, 0);
-});
-
-// 5. EXPORT: Gerbang utama untuk dipakai di Vue Component
-export function useCart() {
   return {
     cart,
     showToast,
     toastMsg,
     addToCart,
     removeFromCart,
-    decreaseQuantity,
     increaseQuantity,
+    decreaseQuantity,
     totalItems,
+    totalPrice,
   };
-}
+});

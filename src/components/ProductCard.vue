@@ -1,8 +1,8 @@
 <script setup>
-import { useCart } from "../store/cart.js";
+import { useCartStore } from "../store/cart.js";
 
 const props = defineProps(["item"]);
-const { addToCart } = useCart();
+const { addToCart } = useCartStore();
 </script>
 
 <template>

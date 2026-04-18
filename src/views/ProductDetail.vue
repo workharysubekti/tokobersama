@@ -2,12 +2,12 @@
 import { ref, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { supabase } from "../lib/supabase.js"; // Pastikan titiknya bener (../)
-import { useCart } from "../store/cart.js";
+import { useCartStore } from "../store/cart.js";
 
 const route = useRoute();
 const product = ref(null);
 const loading = ref(true);
-const { addToCart } = useCart();
+const { addToCart } = useCartStore();
 
 const fetchProductDetail = async () => {
   try {

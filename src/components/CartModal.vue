@@ -1,35 +1,35 @@
 <script setup>
-import { useCart } from "../store/cart.js";
 import { computed } from "vue";
-import { useRouter } from "vue-router"; // 1. Tambahkan import ini
+import { useRouter } from "vue-router";
+import { useCartStore } from "../store/cart.js";
 
-const router = useRouter(); // 2. Inisialisasi router
-const { cart, removeFromCart, decreaseQuantity, increaseQuantity, totalItems } =
-  useCart();
+const router = useRouter();
+const cartStore = useCartStore(); // Cukup satu referensi ini saja
+const emit = defineEmits(["close"]);
 
-const emit = defineEmits(["close", "close-sidebar"]);
-
-// 3. Pastikan fungsi ini memanggil router dengan benar
-const handleCheckout = () => {
-  localStorage.setItem("temp_cart", JSON.stringify(cart.value));
-  emit("close");
-  router.push("/checkout");
-};
-
-const totalPrice = computed(() => {
-  return cart.value.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0,
-  );
-});
+// Ambil data langsung dari store agar reaktif
+const cart = computed(() => cartStore.cart);
+const totalItems = computed(() => cartStore.totalItems);
+const totalPrice = computed(() => cartStore.totalPrice);
 
 const handleClose = () => {
   emit("close");
 };
-</script>
 
+const handleCheckout = () => {
+  // Simpan ke localStorage jika memang masih dibutuhkan sistem lamamu
+  localStorage.setItem("temp_cart", JSON.stringify(cartStore.cart));
+  emit("close");
+  router.push("/checkout");
+};
+
+// Actions langsung panggil fungsi di store
+const increase = (id) => cartStore.increaseQuantity(id);
+const decrease = (id) => cartStore.decreaseQuantity(id);
+const remove = (id) => cartStore.removeFromCart(id);
+</script>
 <template>
-  <div class="fixed inset-0 z-50 flex justify-end">
+  <div class="fixed inset-0 z-[150] flex justify-end">
     <div
       class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
       @click="handleClose"
@@ -47,9 +47,9 @@ const handleClose = () => {
         </div>
         <button
           @click="handleClose"
-          class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-100 hover:text-red-500 transition-all text-slate-400"
+          class="text-2xl text-slate-400 hover:text-red-500"
         >
-          <span class="text-2xl">×</span>
+          ×
         </button>
       </div>
 
@@ -59,15 +59,10 @@ const handleClose = () => {
           class="h-full flex flex-col items-center justify-center text-center"
         >
           <div class="text-6xl mb-4">🛒</div>
-          <h3 class="font-bold text-gray-800">
-            Wah, keranjang masih kosong nih.
-          </h3>
-          <p class="text-sm text-gray-500 mt-1 mb-6">
-            Ayo Segera Belanja Kebutuhanmu!
-          </p>
+          <h3 class="font-bold text-gray-800">Wah, keranjang kosong nih.</h3>
           <button
             @click="handleClose"
-            class="bg-blue-600 text-white px-8 py-3 rounded-xl text-sm font-bold shadow-lg shadow-blue-100 transition-transform active:scale-95"
+            class="mt-6 bg-blue-600 text-white px-8 py-3 rounded-xl font-bold"
           >
             Mulai Belanja
           </button>
@@ -78,12 +73,8 @@ const handleClose = () => {
             <div
               class="w-24 h-24 bg-slate-100 rounded-2xl overflow-hidden shrink-0"
             >
-              <img
-                :src="item.image"
-                class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-              />
+              <img :src="item.image" class="w-full h-full object-cover" />
             </div>
-
             <div class="flex-1 flex flex-col justify-between">
               <div>
                 <h4 class="font-bold text-slate-800 leading-tight">
@@ -93,14 +84,13 @@ const handleClose = () => {
                   Rp {{ (item.price * item.quantity).toLocaleString() }}
                 </p>
               </div>
-
               <div class="flex items-center justify-between mt-2">
                 <div
                   class="flex items-center gap-3 bg-slate-100 p-1 rounded-xl"
                 >
                   <button
-                    @click="decreaseQuantity(item.id)"
-                    class="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm hover:bg-red-500 hover:text-white transition-all font-bold"
+                    @click="decrease(item.id)"
+                    class="w-8 h-8 bg-white rounded-lg shadow-sm font-bold"
                   >
                     -
                   </button>
@@ -108,16 +98,15 @@ const handleClose = () => {
                     item.quantity
                   }}</span>
                   <button
-                    @click="increaseQuantity(item.id)"
-                    class="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm hover:bg-blue-600 hover:text-white transition-all font-bold"
+                    @click="increase(item.id)"
+                    class="w-8 h-8 bg-white rounded-lg shadow-sm font-bold"
                   >
                     +
                   </button>
                 </div>
-
                 <button
-                  @click="removeFromCart(item.id)"
-                  class="text-slate-300 hover:text-red-500 transition-colors"
+                  @click="remove(item.id)"
+                  class="text-slate-300 hover:text-red-500"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -143,14 +132,13 @@ const handleClose = () => {
       <div v-if="cart.length > 0" class="p-6 border-t bg-slate-50 space-y-4">
         <div class="flex justify-between items-center">
           <span class="font-bold text-slate-500">Total Bayar</span>
-          <span class="font-black text-2xl text-blue-600">
-            Rp {{ totalPrice.toLocaleString() }}
-          </span>
+          <span class="font-black text-2xl text-blue-600"
+            >Rp {{ totalPrice.toLocaleString() }}</span
+          >
         </div>
-
         <button
           @click="handleCheckout"
-          class="w-full bg-blue-600 text-white text-center py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+          class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-all"
         >
           Checkout Sekarang
         </button>

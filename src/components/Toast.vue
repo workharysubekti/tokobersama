@@ -1,6 +1,6 @@
 <script setup>
-import { useCart } from "../store/cart.js";
-const { showToast, toastMsg } = useCart();
+import { useCartStore } from "../store/cart.js";
+const cartStore = useCartStore(); // Ambil seluruh objek store
 </script>
 
 <template>
@@ -13,14 +13,14 @@ const { showToast, toastMsg } = useCart();
     leave-to-class="opacity-0"
   >
     <div
-      v-if="showToast"
+      v-if="cartStore.showToast"
       class="fixed bottom-10 left-1/2 -translate-x-1/2 z-[9999]"
     >
       <div
         class="bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10"
       >
         <span class="text-green-400">✅</span>
-        <span class="font-bold text-sm">{{ toastMsg }}</span>
+        <span class="font-bold text-sm">{{ cartStore.toastMsg }}</span>
       </div>
     </div>
   </Transition>
