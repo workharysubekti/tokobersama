@@ -1,41 +1,44 @@
 <script setup>
-defineProps(["item", "addToCart", "openDetail"]);
+import { useCart } from "../store/cart.js";
+
+const props = defineProps(["item"]);
+const { addToCart } = useCart();
 </script>
 
 <template>
   <div
-    class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group"
+    class="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col h-full hover:shadow-md transition-shadow"
   >
-    <div class="relative overflow-hidden cursor-pointer">
-      <img
-        :src="item.image"
-        class="w-full aspect-square object-cover transition-transform duration-500 group-hover:scale-110"
-        alt="product"
-      />
-      <div
-        class="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-      ></div>
+    <div
+      class="relative overflow-hidden rounded-2xl mb-4 aspect-square bg-gray-50"
+    >
+      <router-link :to="`/product/${item.id}`">
+        <img
+          :src="item.image"
+          class="w-full h-full object-cover hover:scale-110 transition-transform duration-500"
+        />
+      </router-link>
     </div>
 
-    <div class="p-2 flex flex-col flex-1">
-      <h3
-        class="text-[10px] md:text-sm font-medium line-clamp-2 mb-1 h-7 md:h-10 leading-tight text-slate-800"
-      >
-        {{ item.name }}
-      </h3>
-
-      <div class="mt-auto">
-        <p class="text-blue-600 font-bold text-[11px] md:text-base">
-          Rp {{ item.price.toLocaleString() }}
-        </p>
-
-        <button
-          @click="addToCart(item)"
-          class="w-full mt-2 bg-blue-50 text-blue-600 py-1.5 rounded-lg text-[10px] md:text-xs font-bold active:scale-90 transition-all border border-blue-100 hover:bg-blue-600 hover:text-white"
+    <div class="flex-1 flex flex-col">
+      <router-link :to="`/product/${item.id}`" class="block group">
+        <h3
+          class="font-bold text-slate-800 text-lg leading-tight mb-2 group-hover:text-blue-600 transition-colors"
         >
-          + Keranjang
-        </button>
-      </div>
+          {{ item.name }}
+        </h3>
+      </router-link>
+
+      <p class="text-blue-600 font-black text-xl mb-5 mt-auto">
+        Rp {{ Number(item.price).toLocaleString() }}
+      </p>
     </div>
+
+    <button
+      @click="addToCart(item)"
+      class="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+    >
+      <span>+</span> Keranjang
+    </button>
   </div>
 </template>

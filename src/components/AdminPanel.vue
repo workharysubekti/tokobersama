@@ -337,7 +337,7 @@ onMounted(() => {
         <button
           @click="submitForm"
           :disabled="isSaving || isUploading"
-          class="flex-[2] p-4 rounded-2xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2"
+          class="flex-2 p-4 rounded-2xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2"
           :class="
             isSaving || isUploading
               ? 'bg-gray-300 cursor-not-allowed'

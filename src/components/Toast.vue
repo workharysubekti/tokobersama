@@ -1,40 +1,29 @@
 <script setup>
-defineProps(["show", "message"]);
+import { useCart } from "../store/cart.js";
+const { showToast, toastMsg } = useCart();
 </script>
 
 <template>
-  <transition name="toast-fade">
-    <div v-if="show" class="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200]">
+  <Transition
+    enter-active-class="transform transition duration-300 ease-out"
+    enter-from-class="translate-y-10 opacity-0"
+    enter-to-class="translate-y-0 opacity-100"
+    leave-active-class="transform transition duration-200 ease-in"
+    leave-from-class="opacity-100"
+    leave-to-class="opacity-0"
+  >
+    <div
+      v-if="showToast"
+      class="fixed bottom-10 left-1/2 -translate-x-1/2 z-[9999]"
+    >
       <div
-        class="bg-slate-900/95 backdrop-blur-md text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 min-w-[280px] border border-white/10"
+        class="bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10"
       >
-        <div
-          class="bg-green-500 rounded-full p-1 shadow-lg shadow-green-500/20"
-        >
-          <svg
-            class="w-4 h-4 text-white"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="3"
-              d="M5 13l4 4L19 7"
-            ></path>
-          </svg>
-        </div>
-        <div class="flex flex-col">
-          <span
-            class="text-[11px] font-black tracking-widest uppercase opacity-50"
-            >Berhasil</span
-          >
-          <span class="text-xs font-bold leading-none">{{ message }}</span>
-        </div>
+        <span class="text-green-400">✅</span>
+        <span class="font-bold text-sm">{{ toastMsg }}</span>
       </div>
     </div>
-  </transition>
+  </Transition>
 </template>
 
 <style scoped>
