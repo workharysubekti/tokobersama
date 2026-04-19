@@ -1,24 +1,19 @@
 <script setup>
 import { ref, computed } from "vue"; // Tambahkan computed
-import { useCartStore } from "../store/cart.js";
 import { useSearchStore } from "../store/search.js";
 import { useRouter } from "vue-router";
+import { UserIcon } from "@heroicons/vue/24/outline";
 
 //Router
 const router = useRouter();
 // Fungsi Search
 const searchStore = useSearchStore();
 
-const cartStore = useCartStore();
 const props = defineProps({
   searchQuery: String,
 });
 
-const emit = defineEmits([
-  "open-cart",
-  "update:searchQuery",
-  "update:selectedCategory",
-]);
+const emit = defineEmits(["update:searchQuery", "update:selectedCategory"]);
 
 const isSearchFocused = ref(false);
 const categories = ["SEMUA", "GADGET", "PHOTOGRAPHY", "AUDIO"];
@@ -157,30 +152,18 @@ const handleSearch = () => {
         </transition>
       </div>
 
-      <div class="flex items-center shrink-0">
-        <button
-          @click="$emit('open-cart')"
-          class="relative p-3 rounded-2xl bg-slate-900 text-white shadow-lg shadow-slate-200 active:scale-95 transition-all hover:bg-slate-800"
-        >
-          <svg
-            class="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-            ></path>
-          </svg>
+      <div class="flex items-center space-x-4">
+        <div class="flex flex-col items-end">
           <span
-            v-if="cartStore.totalItems > 0"
-            class="absolute -top-1 -right-1 bg-blue-500 text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-white"
+            class="text-xs text-gray-400 uppercase tracking-widest font-bold"
+            >Reputasi</span
           >
-            {{ cartStore.totalItems }}
-          </span>
+          <span class="text-sm font-semibold text-yellow-500"
+            >⭐ 5.0 / 5.0</span
+          >
+        </div>
+        <button class="p-2 bg-gray-800 rounded-full border border-gray-700">
+          <UserIcon class="w-5 h-5 text-gray-300" />
         </button>
       </div>
     </div>

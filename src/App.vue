@@ -1,34 +1,18 @@
 <script setup>
 import { ref } from "vue";
 import Header from "./components/Header.vue";
-import CartModal from "./components/CartModal.vue";
 import Toast from "./components/Toast.vue";
-import { useCartStore } from "./store/cart.js";
-
-const isCartOpen = ref(false);
-const cartStore = useCartStore();
 </script>
 
 <template>
   <div class="min-h-screen flex flex-col relative bg-gray-50">
-    <Header @open-cart="isCartOpen = true" />
+    <Header />
 
     <main class="flex-1 pb-32 md:pb-0">
       <router-view />
     </main>
 
-    <Toast :show="cartStore.showToast" :message="cartStore.toastMsg" />
-    <CartModal v-if="isCartOpen" @close="isCartOpen = false" />
-
-    <nav
-      :class="[
-        'md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md transition-all duration-300',
-        // Logic: Jika keranjang buka, buat transparansi 0 dan turunkan sedikit (z-index diturunkan)
-        isCartOpen
-          ? 'opacity-0 pointer-events-none translate-y-10 z-0'
-          : 'opacity-100 z-[100] translate-y-0',
-      ]"
-    >
+    <nav>
       <div
         class="bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3 shadow-2xl flex items-center justify-around"
       >

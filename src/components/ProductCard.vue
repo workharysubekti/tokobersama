@@ -1,8 +1,5 @@
 <script setup>
-import { useCartStore } from "../store/cart.js";
-
 const props = defineProps(["item"]);
-const { addToCart } = useCartStore();
 </script>
 
 <template>
@@ -35,7 +32,6 @@ const { addToCart } = useCartStore();
     </div>
 
     <button
-      @click="addToCart(item)"
       class="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all active:scale-95 flex items-center justify-center gap-2"
     >
       <span>+</span> Keranjang

@@ -2,12 +2,10 @@
 import { ref, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { supabase } from "../lib/supabase.js"; // Pastikan titiknya bener (../)
-import { useCartStore } from "../store/cart.js";
 
 const route = useRoute();
 const product = ref(null);
 const loading = ref(true);
-const { addToCart } = useCartStore();
 
 const fetchProductDetail = async () => {
   try {
@@ -91,7 +89,6 @@ onMounted(() => {
 
             <div class="flex gap-4 mt-10">
               <button
-                @click="addToCart(product)"
                 class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-2xl font-black text-lg shadow-lg shadow-blue-200 transition-all active:scale-95"
               >
                 BELI SEKARANG
