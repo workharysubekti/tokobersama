@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from "vue-router";
 import Home from "./views/Home.vue";
 import ProductDetail from "./views/ProductDetail.vue";
+import Login from "./views/Login.vue";
+
 const routes = [
   { path: "/", component: Home },
   { path: "/product/:id", component: ProductDetail, props: true },
@@ -22,6 +24,7 @@ const routes = [
     path: "/admin",
     component: () => import("../src/components/AdminPanel.vue"),
   },
+  { path: "/login", component: Login },
 ];
 
 const router = createRouter({

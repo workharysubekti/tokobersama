@@ -23,21 +23,19 @@ const fetchProducts = async () => {
 onMounted(() => {
   fetchProducts();
 
-  // LOGIC REAL-TIME: Pantau perubahan di tabel products
   const productSubscription = supabase
-    .channel("any_channel_name")
+    .channel("room1") // Beri nama channel unik
     .on(
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "products" },
       (payload) => {
-        // Jika ada harga bid berubah di database, update state di UI tanpa refresh
         const index = products.value.findIndex((p) => p.id === payload.new.id);
         if (index !== -1) {
           products.value[index] = payload.new;
         }
       },
     )
-    .subscribe();
+    .subscribe(); // SUBSCRIBE WAJIB DI PALING BAWAH
 });
 </script>
 
@@ -84,21 +82,12 @@ onMounted(() => {
           </h2>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <div v-if="products.length > 0" class="grid ...">
           <AuctionCard
             v-for="product in products"
             :key="product.id"
             :product="product"
           />
-        </div>
-
-        <div
-          v-if="products.length === 0"
-          class="text-center py-32 border border-dashed border-gray-800 rounded-[40px] mt-10"
-        >
-          <p class="text-gray-600 italic font-light tracking-widest">
-            Belum ada barang yang dilelang...
-          </p>
         </div>
       </section>
     </div>

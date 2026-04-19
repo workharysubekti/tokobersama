@@ -1,8 +1,24 @@
 <script setup>
-import { ref, computed } from "vue"; // Tambahkan computed
+import { ref, computed, onMounted } from "vue"; // Tambahkan computed
 import { useSearchStore } from "../store/search.js";
 import { useRouter } from "vue-router";
 import { UserIcon } from "@heroicons/vue/24/outline";
+import { supabase } from "../lib/supabase.js";
+
+const userProfile = ref(null);
+const getProfile = async () => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+    userProfile.value = data;
+  }
+};
 
 //Router
 const router = useRouter();
@@ -54,6 +70,10 @@ const handleSearch = () => {
     router.push("/search");
   }
 };
+
+onMounted(() => {
+  getProfile();
+});
 </script>
 
 <template>
@@ -152,19 +172,32 @@ const handleSearch = () => {
         </transition>
       </div>
 
-      <div class="flex items-center space-x-4">
-        <div class="flex flex-col items-end">
-          <span
-            class="text-xs text-gray-400 uppercase tracking-widest font-bold"
-            >Reputasi</span
+      <div class="flex items-center space-x-6">
+        <div v-if="userProfile" class="flex items-center space-x-4">
+          <div class="text-right hidden md:block">
+            <p class="text-[10px] text-gray-500 uppercase tracking-widest">
+              Reputasi
+            </p>
+            <p class="text-sm font-bold text-yellow-500 italic">
+              ⭐ {{ userProfile.reputation_score }}
+            </p>
+          </div>
+          <button
+            @click="handleLogout"
+            class="p-2 bg-gray-900 rounded-full hover:bg-red-900 transition-colors"
           >
-          <span class="text-sm font-semibold text-yellow-500"
-            >⭐ 5.0 / 5.0</span
-          >
+            <UserIcon class="w-5 h-5 text-white" />
+          </button>
         </div>
-        <button class="p-2 bg-gray-800 rounded-full border border-gray-700">
-          <UserIcon class="w-5 h-5 text-gray-300" />
-        </button>
+
+        <div v-else>
+          <router-link
+            to="/login"
+            class="px-6 py-2 border border-yellow-500 text-yellow-500 text-xs font-bold uppercase tracking-widest hover:bg-yellow-500 hover:text-black transition-all"
+          >
+            Login
+          </router-link>
+        </div>
       </div>
     </div>
   </header>
