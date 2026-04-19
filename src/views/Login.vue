@@ -18,7 +18,9 @@ const handleLogin = async () => {
     notify.error("Gagal Login", error.message);
   } else {
     notify.success("Gacor!", "Selamat datang kembali, Mas!");
-    router.push("/"); // Balik ke Home
+    router.push("/").then(() => {
+      window.location.reload();
+    }); // Balik ke Home
   }
 };
 </script>

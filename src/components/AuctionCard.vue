@@ -89,11 +89,19 @@ const fetchBidHistory = async () => {
   if (data) bidHistory.value = data;
 };
 
+// Di AuctionCard.vue
 onMounted(() => {
   fetchBidHistory();
 
-  // REALTIME buat history: Kalau ada yang ngebid, list-nya langsung update
-  supabase
+  // Pantau kalau ada perubahan auth, tarik ulang data biar sinkron
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_IN") {
+      fetchBidHistory();
+    }
+  });
+
+  // Pastikan channel Real-time tetap aktif
+  const historyChannel = supabase
     .channel(`history-${props.product.id}`)
     .on(
       "postgres_changes",

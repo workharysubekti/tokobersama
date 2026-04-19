@@ -6,25 +6,27 @@ import AuctionCard from "../components/AuctionCard.vue";
 const products = ref([]);
 
 // Fungsi untuk ambil data awal
+// src/views/Home.vue
 const fetchProducts = async () => {
   const { data, error } = await supabase
     .from("products")
     .select("*")
-    .eq("status", "active")
+    // .eq("status", "active") // MATIKAN DULU BARIS INI buat ngetes
     .order("created_at", { ascending: false });
 
-  if (data) {
+  if (error) {
+    console.error("Waduh, gagal ambil produk:", error.message);
+  } else {
+    console.log("Produk ditemukan:", data.length);
     products.value = data;
-  } else if (error) {
-    console.error("Error fetch data:", error);
   }
 };
 
-onMounted(() => {
-  fetchProducts();
+onMounted(async () => {
+  await fetchProducts();
 
-  const productSubscription = supabase
-    .channel("room1") // Beri nama channel unik
+  const channel = supabase
+    .channel("room-produk")
     .on(
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "products" },
@@ -35,7 +37,7 @@ onMounted(() => {
         }
       },
     )
-    .subscribe(); // SUBSCRIBE WAJIB DI PALING BAWAH
+    .subscribe();
 });
 </script>
 
@@ -82,7 +84,7 @@ onMounted(() => {
           </h2>
         </div>
 
-        <div v-if="products.length > 0" class="grid ...">
+        <div v-if="products.length > 0" class="grid-cols-1 md:grid-cols-3">
           <AuctionCard
             v-for="product in products"
             :key="product.id"

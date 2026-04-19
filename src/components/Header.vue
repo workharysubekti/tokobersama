@@ -71,9 +71,24 @@ const handleSearch = () => {
   }
 };
 
+// src/components/Header.vue
 onMounted(() => {
   getProfile();
+
+  // Pantau perubahan login biar header langsung berubah
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_IN") {
+      getProfile();
+    } else if (event === "SIGNED_OUT") {
+      userProfile.value = null;
+    }
+  });
 });
+
+const handleLogout = async () => {
+  await supabase.auth.signOut();
+  router.push("/login");
+};
 </script>
 
 <template>
