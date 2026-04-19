@@ -75,7 +75,7 @@ onMounted(() => {
           <div v-if="route?.path === '/search'"></div>
           <span
             :class="[
-              'text-[9px] uppercase tracking-widest',
+              'text-[9px] uppercase tracking-widest font-bold italic',
               route?.path === '/search' ? 'text-yellow-500' : 'text-gray-400',
             ]"
             >Search</span
@@ -93,7 +93,7 @@ onMounted(() => {
             <PlusIcon class="w-5 h-5 font-bold" />
           </div>
           <span
-            class="text-[12px] uppercase tracking-widest text-gray-500 font-bold"
+            class="text-[10px] uppercase tracking-widest text-gray-500 font-bold"
             >Buka Lelang</span
           >
         </router-link>
