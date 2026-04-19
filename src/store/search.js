@@ -1,17 +1,13 @@
-// src/stores/search.js
+// src/stores/searchStore.js
 import { defineStore } from "pinia";
 
 export const useSearchStore = defineStore("search", {
   state: () => ({
-    query: "",
-    category: "SEMUA",
+    searchQuery: "", // Pastikan ada string kosong di sini
   }),
   actions: {
-    setQuery(val) {
-      this.query = val;
-    },
-    setCategory(val) {
-      this.category = val;
+    setSearch(query) {
+      this.searchQuery = query;
     },
   },
 });

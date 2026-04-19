@@ -2,7 +2,11 @@
 import { ref, computed, onMounted } from "vue"; // Tambahkan computed
 import { useSearchStore } from "../store/search.js";
 import { useRouter } from "vue-router";
-import { UserIcon } from "@heroicons/vue/24/outline";
+import {
+  UserIcon,
+  PlusIcon,
+  MagnifyingGlassIcon,
+} from "@heroicons/vue/24/outline";
 import { supabase } from "../lib/supabase.js";
 
 const userProfile = ref(null);
@@ -61,13 +65,10 @@ const handleBlur = () => {
 };
 
 // Handle Search Enter
+// Di dalam <script setup> Header.vue
 const handleSearch = () => {
-  if (searchStore.query.trim() !== "") {
-    isSearchFocused.value = false;
-    document.activeElement.blur();
-
-    //Pindah ke Halaman Search
-    router.push("/search");
+  if (searchStore.searchQuery) {
+    router.push({ name: "Search", query: { q: searchStore.searchQuery } });
   }
 };
 
@@ -92,128 +93,84 @@ const handleLogout = async () => {
 </script>
 
 <template>
-  <header
-    class="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-gray-100"
+  <nav
+    :class="[
+      'fixed top-0 inset-x-0 z-[100] transition-all duration-500 ease-in-out',
+      'bg-black/40 backdrop-blur-md border-b border-white/5',
+      'hover:bg-black/80',
+    ]"
   >
     <div
-      class="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between gap-4"
-    >
-      <router-link
-        to="/"
-        @click="resetToHome"
-        class="flex items-center gap-2 shrink-0 group"
-      >
-        <div
-          class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200 group-hover:scale-110 transition-transform"
+      class="h-[2px] w-full bg-gradient-to-r from-transparent via-yellow-500 to-transparent opacity-50"
+    ></div>
+
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <router-link to="/" class="group">
+        <h1
+          class="text-2xl font-black italic tracking-tighter text-white group-hover:text-yellow-500 transition-colors"
         >
-          <span class="text-white font-black text-xl">T</span>
-        </div>
-        <h1 class="font-black text-xl tracking-tighter hidden sm:block">
-          TOKO<span class="text-blue-600">BERSAMA</span>
+          TOKO<span class="text-yellow-500 group-hover:text-white"
+            >BERSAMA</span
+          >
         </h1>
       </router-link>
 
-      <div class="relative w-full max-w-xl">
+      <div class="hidden md:flex flex-1 max-w-md mx-10 relative group">
+        <div
+          class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"
+        >
+          <MagnifyingGlassIcon
+            class="h-4 w-4 text-gray-500 group-focus-within:text-yellow-500 transition-colors"
+          />
+        </div>
+
         <input
-          v-model="searchStore.query"
-          @focus="isSearchFocused = true"
-          @blur="handleBlur"
-          @keydown.enter="handleSearch"
+          v-model="searchStore.searchQuery"
+          @keyup.enter="handleSearch"
           type="text"
-          placeholder="Cari gadget impianmu..."
-          class="w-full px-6 py-4 rounded-2xl border-none bg-gray-100 focus:ring-2 focus:ring-blue-500 transition-all"
+          placeholder="Cari koleksi langka..."
+          class="w-full bg-white/5 border border-white/10 rounded-full py-2.5 pl-11 pr-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-yellow-500/50 focus:border-yellow-500/50 focus:bg-black transition-all"
         />
 
-        <transition
-          enter-active-class="transition duration-200 ease-out"
-          enter-from-class="transform scale-95 opacity-0"
-          enter-to-class="transform scale-100 opacity-100"
-          leave-active-class="transition duration-150 ease-in"
-          leave-from-class="transform scale-100 opacity-100"
-          leave-to-class="transform scale-95 opacity-0"
-        >
-          <div
-            v-if="showRecs"
-            key="search-box"
-            class="absolute top-full left-0 right-0 mt-2 bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 z-[110]"
+        <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+          <span
+            class="text-[9px] font-black text-gray-600 border border-white/10 px-1.5 py-0.5 rounded uppercase tracking-tighter"
           >
-            <p
-              class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4"
-            >
-              Pencarian Populer
-            </p>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="tag in [
-                  'iPhone 15',
-                  'Mechanical Keyboard',
-                  'Sony A7II',
-                  'Airpods Pro',
-                ]"
-                :key="tag"
-                @click="selectTag(tag)"
-                class="px-4 py-2 bg-gray-50 hover:bg-blue-50 hover:text-blue-600 rounded-xl text-xs font-bold transition-colors"
-              >
-                🔥 {{ tag }}
-              </button>
-            </div>
-
-            <div class="mt-6">
-              <p
-                class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4"
-              >
-                Kategori Cepat
-              </p>
-              <div class="grid grid-cols-2 gap-3">
-                <div
-                  v-for="c in categories"
-                  :key="c"
-                  @click="
-                    emit('update:selectedCategory', c);
-                    isSearchFocused = false;
-                  "
-                  class="p-3 bg-blue-50 rounded-2xl flex items-center gap-3 cursor-pointer hover:bg-blue-100 transition-all"
-                >
-                  <div
-                    class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xs"
-                  >
-                    {{ c[0] }}
-                  </div>
-                  <span class="text-xs font-bold text-blue-900">{{ c }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </transition>
+            Search
+          </span>
+        </div>
       </div>
 
-      <div class="flex items-center space-x-6">
-        <div v-if="userProfile" class="flex items-center space-x-4">
+      <div class="flex items-center space-x-8">
+        <router-link
+          v-if="userProfile"
+          to="/admin-tambah"
+          class="hidden md:flex items-center space-x-2 bg-yellow-500 hover:bg-white text-black px-5 py-2 rounded-full font-black uppercase text-[10px] tracking-widest transition-all shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+        >
+          <PlusIcon class="w-4 h-4" />
+          <span>Open Bid</span>
+        </router-link>
+
+        <div
+          v-if="userProfile"
+          class="flex items-center space-x-4 border-l border-white/10 pl-8"
+        >
           <div class="text-right hidden md:block">
-            <p class="text-[10px] text-gray-500 uppercase tracking-widest">
-              Reputasi
+            <p class="text-[8px] text-gray-500 uppercase tracking-[0.3em]">
+              Vault Status
             </p>
-            <p class="text-sm font-bold text-yellow-500 italic">
-              ⭐ {{ userProfile.reputation_score }}
+            <p class="text-xs font-bold text-yellow-500 uppercase italic">
+              ⭐ {{ userProfile.reputation_score }} PTS
             </p>
           </div>
           <button
             @click="handleLogout"
-            class="p-2 bg-gray-900 rounded-full hover:bg-red-900 transition-colors"
+            class="p-2 bg-white/5 hover:bg-red-500/20 rounded-xl transition-all border border-white/5"
           >
             <UserIcon class="w-5 h-5 text-white" />
           </button>
         </div>
-
-        <div v-else>
-          <router-link
-            to="/login"
-            class="px-6 py-2 border border-yellow-500 text-yellow-500 text-xs font-bold uppercase tracking-widest hover:bg-yellow-500 hover:text-black transition-all"
-          >
-            Login
-          </router-link>
-        </div>
       </div>
     </div>
-  </header>
+  </nav>
 </template>

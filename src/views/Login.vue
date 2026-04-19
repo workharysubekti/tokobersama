@@ -26,9 +26,11 @@ const handleLogin = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-black flex items-center justify-center px-4">
+  <div
+    class="fixed inset-0 h-screen w-full bg-black flex items-center justify-center px-4 overflow-hidden z-[110]"
+  >
     <div
-      class="max-w-md w-full bg-gray-900 p-10 rounded-[30px] border border-gray-800"
+      class="max-w-md w-full bg-gray-900 p-10 rounded-[30px] border border-gray-800 shadow-2xl"
     >
       <h2 class="text-3xl font-black text-white italic mb-2 tracking-tighter">
         MASUK KE AKUN
@@ -60,3 +62,11 @@ const handleLogin = async () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Paksa body tidak boleh scroll saat komponen ini muncul */
+:deep(body) {
+  overflow: hidden !important;
+  touch-action: none; /* Matikan gerakan sentuh untuk scroll */
+}
+</style>

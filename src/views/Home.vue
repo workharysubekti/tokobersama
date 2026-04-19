@@ -1,23 +1,20 @@
 <script setup>
-import { ref, onMounted } from "vue";
-import { supabase } from "../lib/supabase.js"; // Sesuaikan path ke file supabase.js Mas
+import { ref, onMounted, onUnmounted } from "vue"; // Tambahkan onUnmounted
+import { supabase } from "../lib/supabase.js";
 import AuctionCard from "../components/AuctionCard.vue";
 
 const products = ref([]);
+// 1. Buat variabel untuk menampung koneksi (di luar onMounted)
+let productSubscription = null;
 
-// Fungsi untuk ambil data awal
-// src/views/Home.vue
 const fetchProducts = async () => {
   const { data, error } = await supabase
     .from("products")
     .select("*")
-    // .eq("status", "active") // MATIKAN DULU BARIS INI buat ngetes
+    .eq("status", "active")
     .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error("Waduh, gagal ambil produk:", error.message);
-  } else {
-    console.log("Produk ditemukan:", data.length);
+  if (data) {
     products.value = data;
   }
 };
@@ -25,7 +22,8 @@ const fetchProducts = async () => {
 onMounted(async () => {
   await fetchProducts();
 
-  const channel = supabase
+  // 2. Simpan koneksi ke variabel productSubscription
+  productSubscription = supabase
     .channel("room-produk")
     .on(
       "postgres_changes",
@@ -38,6 +36,14 @@ onMounted(async () => {
       },
     )
     .subscribe();
+});
+
+// 3. INI KUNCINYA: Matikan koneksi pas Mas ninggalin halaman Home
+onUnmounted(() => {
+  if (productSubscription) {
+    supabase.removeChannel(productSubscription);
+    console.log("Koneksi Realtime Home dimatikan... (Cleanup)");
+  }
 });
 </script>
 
@@ -73,7 +79,7 @@ onMounted(async () => {
       ></div>
     </section>
 
-    <div class="bg-black min-h-screen text-white pb-20">
+    <div class="bg-black min-h-screen text-white pb-10">
       <section class="max-w-7xl mx-auto px-6 -mt-20 relative z-30">
         <div class="flex items-center justify-between mb-8">
           <h2

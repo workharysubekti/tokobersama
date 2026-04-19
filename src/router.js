@@ -14,6 +14,7 @@ const routes = [
   { path: "/profile", component: () => import("../src/views/ProfileView.vue") },
   {
     path: "/my-bids",
+    name: "MyBids",
     component: () => import("./views/BidsView.vue"),
   },
   {
@@ -25,6 +26,11 @@ const routes = [
     component: () => import("../src/components/AdminPanel.vue"),
   },
   { path: "/login", component: Login },
+  {
+    path: "/admin-tambah",
+    name: "AdminTambah",
+    component: () => import("../src/views/Home.vue"), // Sementara arahkan ke Home dulu biar gak error
+  },
 ];
 
 const router = createRouter({
