@@ -13,8 +13,8 @@ const routes = [
   },
   { path: "/profile", component: () => import("../src/views/ProfileView.vue") },
   {
-    path: "/notifications",
-    component: () => import("../src/views/NotificationView.vue"),
+    path: "/my-bids",
+    component: () => import("./views/BidsView.vue"),
   },
   {
     path: "/messages",
