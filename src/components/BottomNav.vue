@@ -84,7 +84,7 @@ onMounted(() => {
 
         <router-link
           v-if="userProfile"
-          to="/admin-tambah"
+          to="/admin"
           class="flex flex-col items-center gap-1 group"
         >
           <div

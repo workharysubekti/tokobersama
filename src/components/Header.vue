@@ -86,7 +86,7 @@ const handleLogout = async () => {
             class="flex items-center space-x-3 sm:space-x-6"
           >
             <router-link
-              to="/admin-tambah"
+              to="/admin"
               class="flex items-center justify-center bg-yellow-500 hover:bg-white text-black h-9 w-9 sm:w-auto sm:px-5 sm:py-2 rounded-xl sm:rounded-full transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)] active:scale-90"
             >
               <PlusIcon class="w-5 h-5 sm:w-4 sm:h-4" />

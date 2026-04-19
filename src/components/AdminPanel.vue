@@ -2,10 +2,22 @@
 import { ref, onMounted } from "vue";
 import { supabase } from "../lib/supabase.js";
 import { useRouter } from "vue-router";
+import {
+  LockClosedIcon,
+  PhotoIcon,
+  ArrowLeftIcon,
+  TrashIcon,
+  PencilSquareIcon,
+  ClockIcon,
+} from "@heroicons/vue/24/outline";
+
+const props = defineProps({
+  userProfile: Object,
+});
 
 const router = useRouter();
 const products = ref([]);
-const isLocked = ref(true); // Status terkunci
+const isLocked = ref(true);
 const passcode = ref("");
 const isUploading = ref(false);
 const isSaving = ref(false);
@@ -13,33 +25,17 @@ const imageUrl = ref("");
 const isEditMode = ref(false);
 const editingId = ref(null);
 
-const startEdit = (product) => {
-  isEditMode.value = true;
-  editingId.value = product.id;
-
-  // Masukkan data produk ke form input
-  newProduct.value = {
-    name: product.name,
-    price: product.price,
-    category: product.category,
-  };
-  imageUrl.value = product.image;
-
-  // Scroll otomatis ke atas biar kelihatan form-nya
-  window.scrollTo({ top: 0, behavior: "smooth" });
-};
-
+// Form Bid Baru (Sesuaikan kolom database Mas)
 const newProduct = ref({
   name: "",
-  price: 0,
+  current_bid: 0,
   category: "GADGET",
-  image: "",
+  image_url: "",
+  end_time: "", // Tambahan untuk limit lelang
 });
 
-// --- SISTEM KEAMANAN ---
 const unlock = () => {
   if (passcode.value === "1204") {
-    // Ganti password sesukamu di sini
     isLocked.value = false;
   } else {
     alert("Passcode Salah!");
@@ -47,15 +43,12 @@ const unlock = () => {
   }
 };
 
-// --- AMBIL DATA INVENTARIS ---
 const fetchProducts = async () => {
-  const { data, error } = await supabase.from("products").select("*");
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .order("created_at", { ascending: false });
   if (!error) products.value = data;
-};
-
-// --- LOGIC TOMBOL CLOSE/CANCEL ---
-const goBack = () => {
-  router.push("/"); // Kembali ke Home
 };
 
 const uploadImage = async (event) => {
@@ -68,10 +61,12 @@ const uploadImage = async (event) => {
       .from("product-images")
       .upload(fileName, file);
     if (error) throw error;
+
     const { data: publicUrlData } = supabase.storage
       .from("product-images")
       .getPublicUrl(fileName);
     imageUrl.value = publicUrlData.publicUrl;
+    newProduct.value.image_url = publicUrlData.publicUrl;
   } catch (e) {
     alert("Gagal upload: " + e.message);
   } finally {
@@ -82,34 +77,32 @@ const uploadImage = async (event) => {
 const submitForm = async () => {
   if (
     !newProduct.value.name ||
-    newProduct.value.price <= 0 ||
-    !imageUrl.value
+    newProduct.value.current_bid <= 0 ||
+    !newProduct.value.image_url
   ) {
-    alert("Isi semua data dengan benar!");
+    alert("Isi semua data termasuk foto!");
     return;
   }
+
   try {
     isSaving.value = true;
     if (isEditMode.value) {
       const { error } = await supabase
         .from("products")
-        .update({ ...newProduct.value, image: imageUrl.value })
+        .update(newProduct.value)
         .eq("id", editingId.value);
       if (error) throw error;
-      alert("Produk Berhasil Diperbarui!");
+      alert("Bid Berhasil Diperbarui!");
     } else {
       const { error } = await supabase
         .from("products")
-        .insert({ ...newProduct.value, image: imageUrl.value });
+        .insert([newProduct.value]);
       if (error) throw error;
-      alert("Produk Berhasil Ditambah!");
+      alert("Bid Berhasil Dibuka!");
     }
 
-    //Reset status
-    isEditMode.value = false;
-    editingId.value = null;
-    fetchProducts();
     resetForm();
+    fetchProducts();
   } catch (e) {
     alert(e.message);
   } finally {
@@ -117,180 +110,309 @@ const submitForm = async () => {
   }
 };
 
+const startEdit = (product) => {
+  isEditMode.value = true;
+  editingId.value = product.id;
+  newProduct.value = {
+    name: product.name,
+    current_bid: product.current_bid,
+    category: product.category,
+    image_url: product.image_url,
+    end_time: product.end_time || "",
+  };
+  imageUrl.value = product.image_url;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
+
 const deleteProduct = async (id) => {
-  if (confirm("Yakin hapus?")) {
+  if (confirm("Hapus item lelang ini?")) {
     await supabase.from("products").delete().eq("id", id);
     fetchProducts();
   }
 };
 
-onMounted(fetchProducts);
+const resetForm = () => {
+  newProduct.value = {
+    name: "",
+    current_bid: 0,
+    category: "GADGET",
+    image_url: "",
+    end_time: "",
+  };
+  imageUrl.value = "";
+  isEditMode.value = false;
+  editingId.value = null;
+};
+
+onMounted(() => {
+  fetchProducts();
+
+  //untuk sekarang cuman owner yang bisa
+  if (props.userProfile?.username !== "harysubekti20@gmail.com") {
+    router.push("/");
+  }
+});
 </script>
 
 <template>
   <div
     v-if="isLocked"
-    class="fixed inset-0 bg-slate-900 z-[10000] flex items-center justify-center p-6"
+    class="fixed inset-0 bg-[#0a0a0a] z-[10000] flex items-center justify-center p-6"
   >
     <div
-      class="bg-white p-8 rounded-[2rem] w-full max-w-sm text-center shadow-2xl"
+      class="bg-[#16191e] border border-white/5 p-8 rounded-[2.5rem] w-full max-w-sm text-center shadow-2xl"
     >
-      <div class="text-4xl mb-4">🔐</div>
-      <h2 class="text-xl font-black mb-2">Admin Access</h2>
-      <p class="text-gray-400 text-sm mb-6">Masukkan kode rahasia</p>
+      <div
+        class="w-16 h-16 bg-yellow-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-yellow-500/20"
+      >
+        <LockClosedIcon class="w-8 h-8 text-yellow-500" />
+      </div>
+      <h2
+        class="text-xl font-black text-white italic uppercase tracking-tighter mb-2"
+      >
+        Vault Access
+      </h2>
+      <p class="text-gray-500 text-[10px] uppercase tracking-widest mb-8">
+        Masukkan Kode Otoritas
+      </p>
+
       <input
         v-model="passcode"
         type="password"
         @keyup.enter="unlock"
         placeholder="****"
-        class="w-full p-4 bg-gray-100 rounded-2xl text-center text-2xl tracking-[1rem] outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+        class="w-full p-4 bg-black/40 border border-white/5 rounded-2xl text-center text-2xl tracking-[1rem] text-yellow-500 outline-none focus:border-yellow-500/50 mb-6 font-black"
       />
-      <div class="grid grid-cols-2 gap-3">
+
+      <div class="grid grid-cols-2 gap-4">
         <button
-          @click="goBack"
-          class="p-4 bg-gray-100 rounded-2xl font-bold text-gray-500"
+          @click="router.push('/')"
+          class="p-4 bg-white/5 rounded-2xl font-black text-gray-500 text-[11px] uppercase italic tracking-widest"
         >
-          BATAL
+          Batal
         </button>
         <button
           @click="unlock"
-          class="p-4 bg-blue-600 rounded-2xl font-bold text-white"
+          class="p-4 bg-yellow-500 rounded-2xl font-black text-black text-[11px] uppercase italic tracking-widest"
         >
-          MASUK
+          Unlock
         </button>
       </div>
     </div>
   </div>
 
-  <div class="min-h-screen bg-gray-50 pb-20">
+  <div class="min-h-screen bg-[#0a0a0a] text-white pb-32">
     <div
-      class="bg-white p-6 border-b flex justify-between items-center sticky top-0 z-50"
+      class="bg-black/60 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50 px-6 py-5"
     >
-      <div>
-        <h1 class="text-blue-600 font-black text-xs uppercase tracking-widest">
-          Dashboard
-        </h1>
-        <h2 class="text-xl font-bold">Manajemen Toko</h2>
+      <div class="max-w-4xl mx-auto flex justify-between items-center">
+        <div>
+          <p
+            class="text-yellow-500 font-black text-[9px] uppercase tracking-[0.4em] mb-1"
+          >
+            Command Center
+          </p>
+          <h2 class="text-xl font-black italic uppercase tracking-tighter">
+            Auction <span class="text-gray-500">Manager</span>
+          </h2>
+        </div>
+        <button
+          @click="router.push('/')"
+          class="p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-red-500/20 transition-all"
+        >
+          <ArrowLeftIcon class="w-5 h-5" />
+        </button>
       </div>
-      <button
-        @click="goBack"
-        class="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-xl font-bold"
-      >
-        ×
-      </button>
     </div>
 
-    <div class="p-4 max-w-4xl mx-auto space-y-6">
-      <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
-        <h3 class="font-bold mb-4">Tambah Produk Baru</h3>
-        <div class="space-y-4">
-          <input
-            v-model="newProduct.name"
-            type="text"
-            placeholder="Nama Produk"
-            class="w-full p-4 bg-gray-50 rounded-2xl outline-none"
-          />
-          <input
-            v-model.number="newProduct.price"
-            type="number"
-            placeholder="Harga"
-            class="w-full p-4 bg-gray-50 rounded-2xl outline-none"
-          />
-          <select
-            v-model="newProduct.category"
-            class="w-full p-4 bg-gray-50 rounded-2xl outline-none"
-          >
-            <option value="GADGET">GADGET</option>
-            <option value="AUDIO">AUDIO</option>
-            <option value="PHOTOGRAPHY">PHOTOGRAPHY</option>
-          </select>
-          <div
-            class="border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center relative hover:bg-gray-50 transition-all"
-          >
-            <input
-              type="file"
-              @change="uploadImage"
-              class="absolute inset-0 opacity-0 cursor-pointer"
-            />
-            <p v-if="!imageUrl" class="text-gray-400 font-bold text-sm">
-              Klik untuk upload foto
-            </p>
-            <img
-              v-else
-              :src="imageUrl"
-              class="h-32 mx-auto rounded-xl object-cover"
-            />
+    <div class="p-6 max-w-4xl mx-auto space-y-8">
+      <div
+        class="bg-[#16191e] border border-white/5 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden"
+      >
+        <div
+          class="absolute top-0 right-0 w-32 h-32 bg-yellow-500/5 blur-[50px]"
+        ></div>
+
+        <h3
+          class="font-black italic uppercase tracking-tighter text-lg mb-6 flex items-center"
+        >
+          <span class="w-2 h-6 bg-yellow-500 mr-3 rounded-full"></span>
+          {{ isEditMode ? "Modify" : "Launch" }} New Bid
+        </h3>
+
+        <div class="grid md:grid-cols-2 gap-6">
+          <div class="space-y-4">
+            <div>
+              <label
+                class="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-2 mb-2 block"
+                >Nama Koleksi</label
+              >
+              <input
+                v-model="newProduct.name"
+                type="text"
+                class="w-full p-4 bg-black/40 border border-white/5 rounded-2xl outline-none focus:border-yellow-500/50 text-sm font-bold uppercase italic tracking-tight"
+              />
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label
+                  class="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-2 mb-2 block"
+                  >Starting Bid</label
+                >
+                <input
+                  v-model.number="newProduct.current_bid"
+                  type="number"
+                  class="w-full p-4 bg-black/40 border border-white/5 rounded-2xl outline-none focus:border-yellow-500/50 text-sm font-black text-yellow-500"
+                />
+              </div>
+              <div>
+                <label
+                  class="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-2 mb-2 block"
+                  >Kategori</label
+                >
+                <select
+                  v-model="newProduct.category"
+                  class="w-full p-4 bg-black/40 border border-white/5 rounded-2xl outline-none focus:border-yellow-500/50 text-xs font-bold uppercase"
+                >
+                  <option value="GADGET">GADGET</option>
+                  <option value="AUDIO">AUDIO</option>
+                  <option value="PHOTOGRAPHY">PHOTOGRAPHY</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label
+                class="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-2 mb-2 block flex items-center gap-2"
+              >
+                <ClockIcon class="w-3 h-3" /> End Date/Time
+              </label>
+              <input
+                v-model="newProduct.end_time"
+                type="datetime-local"
+                class="w-full p-4 bg-black/40 border border-white/5 rounded-2xl outline-none focus:border-yellow-500/50 text-xs font-mono uppercase"
+              />
+            </div>
           </div>
+
+          <div class="flex flex-col">
+            <label
+              class="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-2 mb-2 block"
+              >Visual Data</label
+            >
+            <div
+              class="flex-1 border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center relative hover:bg-white/5 transition-all min-h-[200px]"
+            >
+              <input
+                type="file"
+                @change="uploadImage"
+                class="absolute inset-0 opacity-0 cursor-pointer z-10"
+              />
+              <div v-if="!imageUrl" class="text-center">
+                <PhotoIcon class="w-10 h-10 text-gray-700 mx-auto mb-2" />
+                <p
+                  class="text-[10px] font-black text-gray-500 uppercase tracking-widest"
+                >
+                  Drop Image Here
+                </p>
+              </div>
+              <img
+                v-else
+                :src="imageUrl"
+                class="w-full h-full object-cover rounded-2xl p-2"
+              />
+              <div
+                v-if="isUploading"
+                class="absolute inset-0 bg-black/80 flex items-center justify-center rounded-2xl"
+              >
+                <div
+                  class="animate-spin h-6 w-6 border-2 border-yellow-500 border-t-transparent rounded-full"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-8 flex gap-4">
+          <button
+            v-if="isEditMode"
+            @click="resetForm"
+            class="flex-1 p-4 bg-white/5 text-gray-500 rounded-2xl font-black text-[11px] uppercase italic tracking-widest"
+          >
+            Batal Edit
+          </button>
           <button
             @click="submitForm"
             :disabled="isSaving || isUploading"
-            class="w-full p-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-200 disabled:bg-gray-300"
+            class="flex-[2] p-4 bg-yellow-500 text-black rounded-2xl font-[900] text-[11px] uppercase italic tracking-[0.2em] shadow-[0_0_20px_rgba(234,179,8,0.3)] active:scale-95 transition-all disabled:opacity-50"
           >
-            {{ isSaving ? "MENYIMPAN..." : "POST KE TOKO" }}
+            {{
+              isSaving
+                ? "SYNCING..."
+                : isEditMode
+                  ? "UPDATE AUCTION"
+                  : "OPEN BID NOW"
+            }}
           </button>
         </div>
       </div>
 
-      <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
-        <h3 class="font-bold mb-4">Stok Barang ({{ products.length }})</h3>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr
-                class="text-[10px] text-gray-400 uppercase font-black border-b"
+      <div class="bg-[#16191e] border border-white/5 rounded-[2.5rem] p-8">
+        <h3 class="font-black italic uppercase tracking-tighter text-lg mb-6">
+          Live <span class="text-yellow-500">Vault</span> ({{
+            products.length
+          }})
+        </h3>
+        <div class="space-y-3">
+          <div
+            v-for="product in products"
+            :key="product.id"
+            class="flex items-center bg-black/40 border border-white/5 p-4 rounded-2xl group hover:border-yellow-500/30 transition-all"
+          >
+            <img
+              :src="product.image_url"
+              class="w-12 h-12 rounded-xl object-cover border border-white/10"
+            />
+            <div class="flex-1 ml-4">
+              <p
+                class="font-black text-xs text-white uppercase italic tracking-tight"
               >
-                <th class="pb-4">Barang</th>
-                <th class="pb-4">Harga</th>
-                <th class="pb-4 text-center">Aksi</th>
-              </tr>
-            </thead>
-            <tbody v-if="products && products.length > 0">
-              <tr
-                v-for="product in products"
-                :key="product.id"
-                class="border-b last:border-0 hover:bg-gray-50 transition-colors"
+                {{ product.name }}
+              </p>
+              <p class="text-[9px] text-gray-600 font-mono mt-1 uppercase">
+                {{ product.category }} //
+                {{ product.end_time ? "Timed" : "Open" }}
+              </p>
+            </div>
+            <div class="text-right mr-6">
+              <p class="text-yellow-500 font-black text-sm italic">
+                Rp {{ product.current_bid?.toLocaleString() }}
+              </p>
+            </div>
+            <div class="flex gap-2">
+              <button
+                @click="startEdit(product)"
+                class="p-2 bg-white/5 rounded-lg text-gray-400 hover:text-yellow-500 transition-colors"
               >
-                <td class="py-4">
-                  <div class="flex items-center gap-3">
-                    <img
-                      :src="product.image"
-                      class="w-10 h-10 rounded-lg object-cover border"
-                    />
-                    <div>
-                      <p class="font-bold text-sm text-gray-700 leading-none">
-                        {{ product.name }}
-                      </p>
-                      <p class="text-[10px] text-gray-400 uppercase mt-1">
-                        {{ product.category }}
-                      </p>
-                    </div>
-                  </div>
-                </td>
-                <td class="py-4 text-sm font-medium text-gray-600">
-                  Rp {{ product.price.toLocaleString() }}
-                </td>
-                <td class="py-4 text-center">
-                  <div class="flex justify-center gap-2">
-                    <button
-                      @click="startEdit(product)"
-                      class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg font-bold text-[10px] hover:bg-blue-600 hover:text-white transition-all uppercase"
-                    >
-                      Edit
-                    </button>
-
-                    <button
-                      @click="deleteProduct(product.id)"
-                      class="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg font-bold text-[10px] hover:bg-red-600 hover:text-white transition-all uppercase"
-                    >
-                      Hapus
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                <PencilSquareIcon class="w-4 h-4" />
+              </button>
+              <button
+                @click="deleteProduct(product.id)"
+                class="p-2 bg-white/5 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
+              >
+                <TrashIcon class="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+</style>
