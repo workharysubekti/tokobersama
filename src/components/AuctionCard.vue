@@ -2,12 +2,20 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import { supabase } from "../lib/supabase.js";
 import { notify } from "../utils/notify.js";
+import { useRouter } from "vue-router";
+import { EyeIcon, BanknotesIcon, ClockIcon } from "@heroicons/vue/24/outline";
 
 const props = defineProps(["product"]);
 const timeLeft = ref("");
 const bidHistory = ref([]);
+const router = useRouter();
 
-// --- LOGIKA FUNGSI (TIDAK BERUBAH) ---
+// --- LOGIKA NAVIGASI (Logika Baru) ---
+const goToDetail = () => {
+  router.push(`/product/${props.product.id}`);
+};
+
+// --- LOGIKA FUNGSI (TIDAK BERUBAH/KEPAKE) ---
 const placeBid = async () => {
   const {
     data: { user },
@@ -40,183 +48,127 @@ const placeBid = async () => {
       ]);
 
     if (!historyError) {
-      notify.success("GACOR!", "Bid kamu berhasil dicatat!");
+      notify.success(
+        "Berhasil!",
+        `Bid Rp ${amount.toLocaleString()} terpasang.`,
+      );
     }
   }
 };
 
-const calculateTime = () => {
-  const diff = new Date(props.product.end_time) - new Date();
-  if (diff <= 0) {
-    timeLeft.value = "LELANG BERAKHIR";
+const formatPrice = (price) => {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(price);
+};
+
+// Logika Timer Bawaan
+const updateTimer = () => {
+  if (!props.product.end_time) {
+    timeLeft.value = "OPEN";
     return;
   }
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-  timeLeft.value = `${hours}j ${minutes}m ${seconds}d`;
-};
+  const end = new Date(props.product.end_time).getTime();
+  const now = new Date().getTime();
+  const diff = end - now;
 
-let historySubscription = null;
-
-onMounted(() => {
-  fetchBidHistory();
-  setInterval(calculateTime, 1000);
-
-  historySubscription = supabase
-    .channel(`history-${props.product.id}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "bids",
-        filter: `product_id=eq.${props.product.id}`,
-      },
-      () => {
-        fetchBidHistory();
-      },
-    )
-    .subscribe();
-});
-
-onUnmounted(() => {
-  if (historySubscription) {
-    supabase.removeChannel(historySubscription);
+  if (diff <= 0) {
+    timeLeft.value = "ENDED";
+    return;
   }
+
+  const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  const s = Math.floor((diff % (1000 * 60)) / 1000);
+  timeLeft.value = `${h}h ${m}m ${s}s`;
+};
+
+let timer;
+onMounted(() => {
+  updateTimer();
+  timer = setInterval(updateTimer, 1000);
 });
 
-const fetchBidHistory = async () => {
-  const { data } = await supabase
-    .from("bids")
-    .select(`amount, created_at, profiles (username)`)
-    .eq("product_id", props.product.id)
-    .order("created_at", { ascending: false })
-    .limit(2); // Cukup 2 di mobile agar lega
-
-  if (data) bidHistory.value = data;
-};
-
-const formatPrice = (price) => {
-  return price ? price.toLocaleString("id-ID") : "0";
-};
+onUnmounted(() => clearInterval(timer));
 </script>
 
 <template>
   <div
-    class="bg-[#16191e] border border-white/5 rounded-[30px] overflow-hidden hover:border-yellow-500/30 transition-all shadow-xl group"
+    class="group relative bg-[#16191e] border border-white/5 rounded-[32px] overflow-hidden hover:border-yellow-500/30 transition-all duration-500 shadow-2xl"
   >
-    <div class="relative h-60 overflow-hidden">
+    <div
+      class="relative aspect-square overflow-hidden cursor-pointer"
+      @click="goToDetail"
+    >
       <img
         :src="product.image_url"
-        loading="lazy"
         class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
       />
       <div
-        class="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-black px-3 py-1.5 rounded-full border border-white/10 italic"
+        class="absolute inset-0 bg-gradient-to-t from-[#16191e] via-transparent to-transparent opacity-60"
+      ></div>
+
+      <div
+        class="absolute top-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-md border border-white/10 rounded-xl"
       >
-        {{ timeLeft }}
+        <p
+          class="text-[8px] font-black text-yellow-500 uppercase italic tracking-widest"
+        >
+          {{ product.category }}
+        </p>
       </div>
     </div>
 
-    <div class="p-5 space-y-5">
-      <h3
-        class="font-black text-xl text-white italic truncate tracking-tighter uppercase"
-      >
-        {{ product.name }}
-      </h3>
-
-      <div class="flex justify-between items-end">
-        <div class="space-y-1">
-          <p
-            class="text-gray-500 text-[10px] uppercase tracking-[0.2em] font-bold"
+    <div class="p-5">
+      <div class="mb-4">
+        <h3
+          class="text-white font-black italic uppercase tracking-tighter text-sm truncate mb-1"
+        >
+          {{ product.name }}
+        </h3>
+        <div class="flex items-center text-gray-500 space-x-2">
+          <ClockIcon class="w-3 h-3 text-yellow-500/50" />
+          <span
+            class="text-[13px] font-bold uppercase tracking-widest"
+            :class="timeLeft === 'ENDED' ? 'text-red-500' : 'text-yellow-500'"
           >
-            Current Bid
-          </p>
-          <p
-            class="text-yellow-500 font-black text-2xl italic tracking-tighter leading-none"
-          >
-            IDR {{ formatPrice(product.current_bid) }}
-          </p>
-        </div>
-        <div class="text-right pb-1">
-          <p
-            class="text-gray-600 text-[9px] uppercase font-bold tracking-widest"
-          >
-            Live Auction
-          </p>
+            {{ timeLeft === "ENDED" ? "Auction Ended" : "Sisa: " + timeLeft }}
+          </span>
         </div>
       </div>
 
-      <div class="pt-4 border-t border-white/5">
+      <div class="bg-black/40 border border-white/5 rounded-2xl p-3 mb-5">
         <p
-          class="text-[9px] text-gray-600 uppercase tracking-[0.2em] mb-3 font-bold italic"
+          class="text-[8px] font-black text-gray-600 uppercase tracking-widest mb-1"
         >
-          Recent Activity
+          Highest Bid
         </p>
-
-        <div v-if="bidHistory.length > 0" class="space-y-2">
-          <div
-            v-for="(bid, index) in bidHistory"
-            :key="index"
-            class="flex justify-between items-center text-[11px]"
-          >
-            <span class="text-gray-400 font-mono italic"
-              >@{{ bid.profiles?.username.split("@")[0] }}</span
-            >
-            <span
-              :class="
-                index === 0
-                  ? 'text-yellow-500 font-black'
-                  : 'text-gray-500 font-bold'
-              "
-            >
-              IDR {{ formatPrice(bid.amount) }}
-            </span>
-          </div>
-        </div>
-        <div
-          v-else
-          class="text-[10px] text-gray-700 py-1 italic uppercase tracking-widest"
-        >
-          No bids yet...
-        </div>
+        <p class="text-yellow-500 font-[900] italic text-lg tracking-tighter">
+          {{ formatPrice(product.current_bid) }}
+        </p>
       </div>
 
-      <div class="pt-1">
+      <div class="flex gap-2">
+        <button
+          @click="goToDetail"
+          class="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/5 transition-all active:scale-95"
+        >
+          <EyeIcon class="w-4 h-4" />
+          <span class="text-[9px] font-black uppercase italic tracking-widest"
+            >Info Lengkap</span
+          >
+        </button>
+
         <button
           @click="placeBid"
-          class="relative w-full group/btn overflow-hidden transition-all active:scale-95"
+          class="flex-[1.5] flex items-center justify-center gap-2 py-3 bg-yellow-500 hover:bg-white text-black rounded-xl font-[900] transition-all shadow-[0_5px_15px_rgba(234,179,8,0.2)] active:scale-95"
         >
-          <div
-            class="absolute inset-0 bg-yellow-500 blur-lg opacity-0 group-hover/btn:opacity-20 transition-opacity"
-          ></div>
-
-          <div
-            class="relative flex items-center justify-between bg-gradient-to-r from-yellow-500 to-yellow-600 p-1 rounded-xl"
+          <BanknotesIcon class="w-4 h-4" />
+          <span class="text-[9px] font-black uppercase italic tracking-widest"
+            >Place Bid</span
           >
-            <span
-              class="flex-1 text-center py-2.5 text-black font-black uppercase italic tracking-tighter text-sm"
-            >
-              Place Bid Now
-            </span>
-            <div class="bg-black p-2 rounded-lg ml-1">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="h-4 w-4 text-yellow-500"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="3"
-                  d="M13 7l5 5m0 0l-5 5m5-5H6"
-                />
-              </svg>
-            </div>
-          </div>
         </button>
       </div>
     </div>
