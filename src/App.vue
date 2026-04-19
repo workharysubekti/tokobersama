@@ -1,24 +1,21 @@
 <script setup>
 import { ref, onMounted } from "vue";
-import { useRoute } from "vue-router"; // Ditambah untuk cek path
+import { useRoute } from "vue-router";
+import { supabase } from "./lib/supabase.js";
 import Header from "./components/Header.vue";
 import BottomNav from "./components/BottomNav.vue";
-import { supabase } from "./lib/supabase.js";
 
-// 1. DEFINISIKAN STATE (Penting biar gak error undefined)
 const userProfile = ref(null);
 const isInitialLoading = ref(true);
 const route = useRoute();
+const authReady = ref(false);
 
 onMounted(async () => {
   try {
-    // Cek session secara asinkron
     const {
       data: { session },
     } = await supabase.auth.getSession();
-
     if (session) {
-      // Ambil data profil kalau ada session
       const { data } = await supabase
         .from("profiles")
         .select("*")
@@ -26,20 +23,14 @@ onMounted(async () => {
         .single();
       userProfile.value = data;
     }
-  } catch (error) {
-    console.error("Auth Error:", error);
   } finally {
-    // Apapun hasilnya, matikan loading setelah proses selesai
-    isInitialLoading.value = false;
+    authReady.value = true; // Tandai auth sudah siap
+    // Kasih jeda dikit biar DOM gak kaget
+    setTimeout(() => {
+      isInitialLoading.value = false;
+    }, 100);
   }
 });
-
-// Fungsi Logout untuk dilempar ke Header
-const handleLogout = async () => {
-  await supabase.auth.signOut();
-  userProfile.value = null;
-  window.location.href = "/"; // Refresh ke home agar state bersih
-};
 </script>
 
 <template>
@@ -52,7 +43,7 @@ const handleLogout = async () => {
         class="w-12 h-12 border-4 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin"
       ></div>
       <p
-        class="mt-4 text-[10px] font-[900] text-yellow-500 uppercase tracking-[0.5em] animate-pulse italic"
+        class="mt-4 text-[10px] font-[900] text-yellow-500 uppercase tracking-[0.5em] animate-pulse"
       >
         Synchronizing Vault...
       </p>
@@ -63,32 +54,13 @@ const handleLogout = async () => {
     <Header
       v-if="route.path !== '/login'"
       :userProfile="userProfile"
-      :handleLogout="handleLogout"
+      :authReady="!isInitialLoading"
     />
 
-    <main
-      :class="[
-        'flex-1',
-        { 'pb-24': route.path !== '/login' && route.path !== '/register' },
-      ]"
-    >
+    <main :class="['flex-1', { 'pb-24': route.path !== '/login' }]">
       <router-view :userProfile="userProfile" />
     </main>
 
     <BottomNav v-if="route.path !== '/login'" :userProfile="userProfile" />
   </div>
 </template>
-
-<style>
-/* Reset global biar font tebelnya merata di semua device */
-body {
-  background-color: black;
-  color: white;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.font-black {
-  font-weight: 900 !important;
-}
-</style>
