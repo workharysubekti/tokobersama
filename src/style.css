@@ -1,1 +1,23 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+
+:root {
+  font-family: 'Inter', sans-serif;
+  /* Paksa rendering font lebih tajam di mobile */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Paksa font black italic biar gak balik ke default */
+.font-black {
+  font-weight: 900 !important;
+}
+
+.italic {
+  font-style: italic !important;
+}
+
+/* Tambahkan ini supaya di Android gak kelihatan cungkring */
+h1, h2, h3, h4, button {
+  text-rendering: optimizeLegibility;
+}
