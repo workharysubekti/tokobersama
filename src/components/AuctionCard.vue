@@ -7,7 +7,9 @@ import {
   BanknotesIcon,
   ClockIcon,
   SparklesIcon,
+  UserCircleIcon,
 } from "@heroicons/vue/24/outline";
+import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 
 const props = defineProps({
   product: Object,
@@ -32,10 +34,17 @@ const goToDetail = () => {
   router.push(`/product/${props.product.id}`);
 };
 
+const goToSellerProfile = () => {
+  if (props.product.profiles?.username) {
+    router.push(`/user/${props.product.profiles.username}`);
+  }
+};
+
 const placeBid = () => {
   router.push(`/product/${props.product.id}?action=bid`);
 };
 
+// --- LOGIKA TIMER DENGAN HARI (DAYS) ---
 const updateTimer = () => {
   if (!props.product.end_time) {
     timeLeft.value = "OPEN";
@@ -50,124 +59,141 @@ const updateTimer = () => {
     return;
   }
 
+  // Hitung Hari, Jam, Menit, Detik
   const d = Math.floor(diff / (1000 * 60 * 60 * 24));
   const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   const s = Math.floor((diff % (1000 * 60)) / 1000);
 
+  // Tampilkan Hari kalau masih > 0
   if (d > 0) {
-    timeLeft.value = `${d}D ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    timeLeft.value = `${d}d ${h}h ${m}m`;
   } else {
-    timeLeft.value = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    timeLeft.value = `${h}h ${m}m ${s}s`;
   }
 };
 
-let timer = null;
+let timerInterval;
 onMounted(() => {
   updateTimer();
-  timer = setInterval(updateTimer, 1000);
+  timerInterval = setInterval(updateTimer, 1000);
 });
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer);
+  clearInterval(timerInterval);
 });
 </script>
 
 <template>
   <div
-    class="group relative flex flex-col rounded-[32px] transition-all duration-500 overflow-hidden h-full"
-    :class="[
-      isPremium
-        ? 'bg-[#0f0f0f] border-2 border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.15)]'
-        : 'bg-white/5 border border-white/5 hover:border-white/10',
-    ]"
+    class="relative group bg-white/[0.03] border border-white/5 rounded-[32px] overflow-hidden transition-all duration-500 hover:border-yellow-500/30 hover:bg-white/[0.05]"
+    :class="{
+      'border-yellow-500/20 bg-yellow-500/[0.02] shadow-[0_20px_50px_rgba(234,179,8,0.1)]':
+        isPremium,
+    }"
   >
     <div
       v-if="isPremium"
-      class="absolute -inset-4 bg-yellow-500/5 rounded-[40px] blur-3xl opacity-0 group-hover:opacity-100 transition-opacity"
-    ></div>
+      class="absolute top-4 left-4 z-10 bg-yellow-500 text-black text-[8px] font-black px-3 py-1 rounded-full flex items-center gap-1 shadow-lg italic uppercase tracking-widest"
+    >
+      <SparklesIcon class="w-3 h-3" />
+      Premium Slot
+    </div>
 
-    <div class="relative aspect-square overflow-hidden m-2 rounded-[24px]">
+    <div
+      class="relative h-56 overflow-hidden cursor-pointer"
+      @click="goToDetail"
+    >
       <img
         :src="product.image_url"
         class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
       />
-
       <div
-        class="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 to-transparent"
+        class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent opacity-60"
       ></div>
 
-      <div v-if="!isPremium" class="absolute top-3 right-3 z-20">
-        <div
-          class="bg-black/50 backdrop-blur-md border border-white/10 px-2 py-1 rounded-lg"
-        >
-          <span
-            class="text-[8px] font-black uppercase tracking-[0.2em] text-white/90"
-          >
-            {{ product.category || "General" }}
-          </span>
-        </div>
-      </div>
-
       <div
-        v-if="isPremium"
-        class="absolute top-3 left-3 bg-yellow-500 text-black px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-2xl z-20"
+        class="absolute bottom-4 left-4 right-4 flex justify-between items-center"
       >
-        <SparklesIcon class="w-3 h-3 fill-current" />
-        <span class="text-[8px] font-black uppercase tracking-tighter italic"
-          >Elite</span
-        >
-      </div>
-
-      <div class="absolute bottom-3 left-3 z-10">
         <div
-          class="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10"
+          class="bg-black/60 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-2xl flex items-center gap-2"
         >
-          <ClockIcon class="w-3 h-3 text-yellow-500" />
+          <ClockIcon class="w-3.5 h-3.5 text-yellow-500" />
           <span
-            class="text-[9px] font-[1000] text-white uppercase tracking-wider"
+            class="text-[10px] text-white font-black italic tracking-tighter"
+            >{{ timeLeft }}</span
           >
-            {{ timeLeft }}
-          </span>
+        </div>
+        <div
+          class="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-white/5"
+        >
+          <span
+            class="text-[9px] text-gray-400 font-bold uppercase tracking-widest"
+            >{{ product.category }}</span
+          >
         </div>
       </div>
-
-      <div
-        v-if="isPremium"
-        class="absolute inset-0 shine-effect z-10 pointer-events-none"
-      ></div>
     </div>
 
-    <div class="px-4 pb-4 flex flex-col flex-1 relative z-20">
-      <h3
-        class="font-black italic uppercase tracking-tighter mb-3 leading-tight truncate"
-        :class="
-          isPremium
-            ? 'text-sm text-yellow-500'
-            : 'text-xs text-white group-hover:text-yellow-500 transition-colors'
-        "
+    <div class="p-5">
+      <div
+        @click.stop="goToSellerProfile"
+        class="flex items-center gap-2 mb-3 cursor-pointer group/seller w-fit"
       >
-        {{ product.name }}
-      </h3>
+        <div
+          class="w-6 h-6 rounded-full overflow-hidden border border-white/10 group-hover/seller:border-yellow-500 transition-colors bg-gray-900"
+        >
+          <img
+            v-if="product.profiles?.avatar_url"
+            :src="product.profiles.avatar_url"
+            class="w-full h-full object-cover"
+          />
+          <UserCircleIcon v-else class="w-full h-full text-gray-700" />
+        </div>
+        <div class="flex flex-col">
+          <span
+            class="text-[9px] font-black uppercase italic tracking-tighter group-hover/seller:text-yellow-500 transition-colors text-white leading-none"
+          >
+            {{
+              product.profiles?.full_name ||
+              product.profiles?.username ||
+              "Unknown Seller"
+            }}
+          </span>
+          <div class="flex items-center gap-0.5 mt-0.5">
+            <StarIconSolid class="w-2 h-2 text-yellow-500" />
+            <span class="text-[7px] text-gray-500 font-bold tracking-tighter">
+              {{ product.profiles?.reputation_score?.toFixed(1) || "5.0" }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <h3
+          class="text-sm font-black text-white uppercase italic leading-tight group-hover:text-yellow-500 transition-colors"
+        >
+          {{ product.name }}
+        </h3>
+        <p
+          class="text-[10px] text-gray-600 font-bold uppercase mt-1 tracking-[0.2em] italic opacity-60"
+        >
+          Live Transmission
+        </p>
+      </div>
 
       <div
-        class="border rounded-2xl p-3 mb-4 mt-auto transition-colors"
-        :class="
-          isPremium
-            ? 'bg-yellow-500/10 border-yellow-500/20'
-            : 'bg-black/40 border-white/5'
-        "
+        class="bg-white/[0.03] border border-white/5 rounded-2xl p-3 mb-5 shadow-inner"
       >
         <p
-          class="text-[7px] font-black text-gray-600 uppercase tracking-[0.2em] mb-1"
+          class="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1 italic"
         >
-          Current Bid
+          Highest Bid
         </p>
         <p
-          class="font-[1000] italic text-sm tracking-tighter truncate leading-none"
-          :class="isPremium ? 'text-yellow-500' : 'text-white'"
+          class="text-lg font-[1000] text-yellow-500 italic tracking-tighter leading-none"
         >
-          {{ formatPrice(product.current_bid || product.start_price) }}
+          {{ formatPrice(product.current_bid || product.price) }}
         </p>
       </div>
 
@@ -178,7 +204,6 @@ onUnmounted(() => {
         >
           <EyeIcon class="w-4 h-4" />
         </button>
-
         <button
           @click="placeBid"
           class="flex-[2.5] flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest italic transition-all active:scale-95"
@@ -195,32 +220,3 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-.shine-effect {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0) 30%,
-    rgba(255, 255, 255, 0.15) 40%,
-    rgba(255, 255, 255, 0) 50%
-  );
-  background-size: 200% 100%;
-  animation: shine 5s infinite;
-}
-
-@keyframes shine {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-input::-webkit-outer-spin-button,
-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-</style>

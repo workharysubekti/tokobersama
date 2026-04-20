@@ -30,7 +30,8 @@ const routes = [
   },
   {
     path: "/messages",
-    component: () => import("../src/views/MessageView.vue"),
+    name: "Messages",
+    component: () => import("./views/MessagesView.vue"),
     meta: { showBottomNav: true },
   },
   {
@@ -42,6 +43,26 @@ const routes = [
     path: "/admin-tambah",
     name: "AdminTambah",
     component: () => import("../src/views/Home.vue"), // Sementara arahkan ke Home dulu biar gak error
+  },
+  {
+    path: "/vault",
+    component: () => import("../src/views/VaultView.vue"),
+    meta: { showBottomNav: true },
+  },
+  {
+    path: "/create-listing",
+    component: () => import("../src/views/CreateListing.vue"),
+  },
+  {
+    path: "/user/:username",
+    name: "PublicProfile",
+    component: () => import("../src/views/PublicProfileView.vue"),
+    meta: { showBottomNav: true },
+  },
+  {
+    path: "/messages/:userId",
+    name: "ChatDetail",
+    component: () => import("../src/views/ChatDetailView.vue"),
   },
 ];
 

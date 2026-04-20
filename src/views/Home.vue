@@ -33,13 +33,26 @@ const startBannerAutoplay = () => {
 };
 
 const fetchProducts = async () => {
-  const { data } = await supabase
+  // Kita tambahkan tanda ! agar Supabase tahu ini relasi foreign key
+  const { data, error } = await supabase
     .from("products")
-    .select("*")
+    .select(
+      `
+      *,
+      profiles!owner_id (
+        username,
+        full_name,
+        avatar_url,
+        reputation_score
+      )
+    `,
+    )
     .eq("status", "active")
     .order("created_at", { ascending: false });
 
-  if (data) {
+  if (error) {
+    console.error("Gagal tarik produk:", error.message);
+  } else {
     products.value = data;
   }
 };

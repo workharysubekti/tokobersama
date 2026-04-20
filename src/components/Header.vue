@@ -38,7 +38,7 @@ const handleSearch = () => {
 
 const handleLogout = async () => {
   await supabase.auth.signOut();
-  window.location.href = "/";
+  router.push("/").then(() => window.location.reload());
 };
 </script>
 
@@ -82,7 +82,7 @@ const handleLogout = async () => {
           <div v-if="authReady" class="flex items-center space-x-6">
             <div v-if="userProfile" class="flex items-center space-x-6">
               <router-link
-                to="/admin"
+                to="/create-listing"
                 class="hidden md:flex items-center space-x-2 bg-yellow-500 hover:bg-white text-black px-4 py-2 rounded-xl transition-all duration-300 shadow-[0_5px_15px_rgba(234,179,8,0.2)] active:scale-95 group"
               >
                 <PlusIcon class="w-5 h-5 stroke-[3px]" />

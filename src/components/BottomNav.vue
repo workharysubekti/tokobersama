@@ -95,7 +95,11 @@ onMounted(async () => {
         </router-link>
 
         <div class="flex flex-col items-center">
-          <router-link v-if="userProfile" to="/admin" class="relative -top-6">
+          <router-link
+            v-if="userProfile"
+            to="/create-listing"
+            class="relative -top-6"
+          >
             <div
               class="p-3 bg-yellow-500 rounded-2xl border-[6px] border-black active:scale-90 transition-transform"
             >
