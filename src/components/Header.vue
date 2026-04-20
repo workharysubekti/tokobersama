@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import { useSearchStore } from "../store/search.js";
 import { useRouter } from "vue-router";
 import {
@@ -7,29 +7,32 @@ import {
   PlusIcon,
   MagnifyingGlassIcon,
   ArrowRightOnRectangleIcon,
+  TrophyIcon,
+  ChevronDownIcon,
 } from "@heroicons/vue/24/outline";
 import { supabase } from "../lib/supabase.js";
 
-// Props dari App.vue
 const props = defineProps({
-  userProfile: Object, // Terima data profil dari App.vue
-  authReady: Boolean, // Terima status loading dari App.vue
+  userProfile: Object,
+  authReady: Boolean,
 });
 
 const router = useRouter();
 const searchStore = useSearchStore();
+const isProfileOpen = ref(false);
 
-const isSearchFocused = ref(false);
-const categories = ["SEMUA", "GADGET", "PHOTOGRAPHY", "AUDIO"];
-
-const showRecs = computed(() => {
-  return isSearchFocused.value && searchStore.searchQuery.length > 0;
-});
+const categories = [
+  "TCG",
+  "FIGURE",
+  "DIECAST",
+  "THRIFT",
+  "VIRTUAL",
+  "EKSKLUSIF",
+];
 
 const handleSearch = () => {
   if (searchStore.searchQuery.trim()) {
     router.push({ name: "Search", query: { q: searchStore.searchQuery } });
-    isSearchFocused.value = false;
   }
 };
 
@@ -41,104 +44,159 @@ const handleLogout = async () => {
 
 <template>
   <nav
-    class="fixed top-0 inset-x-0 z-[100] transition-all duration-500 ease-in-out bg-black/60 backdrop-blur-xl border-b border-white/10 hover:bg-black/90"
+    class="fixed top-0 inset-x-0 z-[100] bg-black/80 backdrop-blur-xl border-b border-white/5"
   >
-    <div
-      class="h-[2px] w-full bg-gradient-to-r from-transparent via-yellow-500 to-transparent shadow-[0_0_15px_#eab308]"
-    ></div>
-
-    <div
-      class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between"
-    >
-      <router-link to="/" class="shrink-0 group">
-        <h1
-          class="text-xl sm:text-2xl font-[900] italic tracking-tighter text-white group-hover:text-yellow-500 transition-all uppercase leading-none"
-        >
-          TOKO<span class="text-yellow-500 group-hover:text-white"
-            >BERSAMA</span
-          >
-        </h1>
-      </router-link>
-
-      <div class="hidden md:flex flex-1 max-w-md mx-8 relative group">
-        <div
-          class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"
-        >
-          <MagnifyingGlassIcon
-            class="h-4 w-4 text-gray-500 group-focus-within:text-yellow-500 transition-colors"
-          />
-        </div>
-        <input
-          v-model="searchStore.searchQuery"
-          @focus="isSearchFocused = true"
-          @blur="setTimeout(() => (isSearchFocused = false), 200)"
-          @keyup.enter="handleSearch"
-          type="text"
-          placeholder="Cari koleksi langka..."
-          class="w-full bg-white/5 border border-white/10 rounded-full py-2.5 pl-11 pr-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-yellow-500/50 focus:bg-black transition-all font-medium"
-        />
-      </div>
-
-      <div class="flex items-center space-x-3 sm:space-x-6">
-        <template v-if="authReady">
-          <div
-            v-if="userProfile"
-            class="flex items-center space-x-3 sm:space-x-6"
-          >
-            <router-link
-              to="/admin"
-              class="flex items-center justify-center bg-yellow-500 hover:bg-white text-black h-9 w-9 sm:w-auto sm:px-5 sm:py-2 rounded-xl sm:rounded-full transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)] active:scale-90"
-            >
-              <PlusIcon class="w-5 h-5 sm:w-4 sm:h-4" />
-              <span
-                class="hidden sm:block ml-2 text-[10px] font-[900] uppercase italic tracking-widest"
-                >Open Bid</span
-              >
-            </router-link>
-
+    <div class="max-w-[1440px] mx-auto px-4 sm:px-8">
+      <div class="grid grid-cols-3 items-center h-20">
+        <div class="flex justify-start">
+          <router-link to="/" class="flex items-center space-x-3 group">
             <div
-              class="flex items-center space-x-3 border-l border-white/10 pl-3 sm:pl-6"
+              class="w-9 h-9 bg-yellow-500 rounded-xl flex items-center justify-center transform group-hover:rotate-12 transition-all duration-300 shadow-[0_0_15px_rgba(234,179,8,0.3)]"
             >
-              <div class="text-right">
+              <span class="text-black font-black text-xl italic">T</span>
+            </div>
+            <span
+              class="hidden lg:block text-xl font-[1000] italic tracking-tighter uppercase text-white"
+            >
+              TOKO<span class="text-yellow-500">BERSAMA</span>
+            </span>
+          </router-link>
+        </div>
+
+        <div class="flex justify-center">
+          <div class="w-full max-w-md relative group">
+            <MagnifyingGlassIcon
+              class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-yellow-500 transition-colors"
+            />
+            <input
+              v-model="searchStore.searchQuery"
+              @keyup.enter="handleSearch"
+              type="text"
+              placeholder="Cari lelang idaman..."
+              class="w-full bg-white/5 border border-white/10 rounded-2xl py-2.5 pl-12 pr-4 text-xs font-bold tracking-widest uppercase text-white placeholder:text-gray-500 focus:placeholder:text-transparent focus:outline-none focus:border-yellow-500/50 focus:bg-white/10 transition-all shadow-inner"
+            />
+          </div>
+        </div>
+
+        <div class="flex justify-end items-center space-x-6">
+          <div v-if="authReady" class="flex items-center space-x-6">
+            <div v-if="userProfile" class="flex items-center space-x-6">
+              <router-link
+                to="/admin"
+                class="hidden md:flex items-center space-x-2 bg-yellow-500 hover:bg-white text-black px-4 py-2 rounded-xl transition-all duration-300 shadow-[0_5px_15px_rgba(234,179,8,0.2)] active:scale-95 group"
+              >
+                <PlusIcon class="w-5 h-5 stroke-[3px]" />
+                <span
+                  class="text-[10px] font-black uppercase tracking-widest italic"
+                  >Buka Lelang</span
+                >
+              </router-link>
+
+              <div
+                class="hidden xl:block text-right border-l border-white/10 pl-6"
+              >
                 <p
-                  class="text-[8px] text-gray-600 uppercase font-black tracking-widest leading-none mb-1"
+                  class="text-[8px] text-gray-500 uppercase font-black tracking-widest mb-0.5"
                 >
                   Reputation
                 </p>
                 <p
-                  class="text-[11px] sm:text-xs font-[900] text-yellow-500 uppercase italic leading-none"
+                  class="text-[11px] font-black text-yellow-500 uppercase italic leading-none"
                 >
                   {{ userProfile.reputation_score }}
                   <span class="text-[8px] text-gray-400">PTS</span>
                 </p>
               </div>
 
-              <button
-                @click="handleLogout"
-                class="p-2 bg-white/5 hover:bg-red-500/20 text-white hover:text-red-500 rounded-xl transition-all border border-white/5"
-              >
-                <ArrowRightOnRectangleIcon class="w-5 h-5" />
-              </button>
+              <div class="relative">
+                <button
+                  @click="isProfileOpen = !isProfileOpen"
+                  class="flex items-center space-x-3 p-1 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-all group"
+                >
+                  <div
+                    class="w-9 h-9 rounded-xl bg-gray-800 border border-white/10 flex items-center justify-center font-black text-yellow-500 italic shadow-lg"
+                  >
+                    {{ userProfile.username?.charAt(0).toUpperCase() }}
+                  </div>
+                  <ChevronDownIcon
+                    class="w-3 h-3 text-gray-500 group-hover:text-white transition-colors mr-2"
+                  />
+                </button>
+
+                <transition
+                  enter-active-class="transition duration-100 ease-out"
+                  enter-from-class="transform scale-95 opacity-0"
+                  enter-to-class="transform scale-100 opacity-100"
+                  leave-active-class="transition duration-75 ease-in"
+                  leave-from-class="transform scale-100 opacity-100"
+                  leave-to-class="transform scale-95 opacity-0"
+                >
+                  <div
+                    v-if="isProfileOpen"
+                    class="absolute right-0 mt-3 w-52 bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden py-2 z-[110]"
+                  >
+                    <div class="px-4 py-2 border-b border-white/5 mb-2">
+                      <p
+                        class="text-[8px] text-gray-500 uppercase font-black tracking-tighter"
+                      >
+                        Signed in as
+                      </p>
+                      <p
+                        class="text-[10px] text-white font-bold truncate italic"
+                      >
+                        {{ userProfile.username }}
+                      </p>
+                    </div>
+
+                    <router-link
+                      to="/profile"
+                      @click="isProfileOpen = false"
+                      class="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+                    >
+                      <UserCircleIcon class="w-5 h-5 text-yellow-500" />
+                      <span
+                        class="text-[10px] font-black uppercase tracking-widest italic"
+                        >Profil Saya</span
+                      >
+                    </router-link>
+
+                    <router-link
+                      to="/my-bids"
+                      @click="isProfileOpen = false"
+                      class="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-gray-400 hover:text-white transition-colors border-b border-white/5"
+                    >
+                      <TrophyIcon class="w-5 h-5 text-yellow-500" />
+                      <span
+                        class="text-[10px] font-black uppercase tracking-widest italic"
+                        >Riwayat Bids</span
+                      >
+                    </router-link>
+
+                    <button
+                      @click="handleLogout"
+                      class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-red-500/10 text-gray-500 hover:text-red-500 transition-colors"
+                    >
+                      <ArrowRightOnRectangleIcon class="w-5 h-5" />
+                      <span
+                        class="text-[10px] font-black uppercase tracking-widest italic"
+                        >Log Out</span
+                      >
+                    </button>
+                  </div>
+                </transition>
+              </div>
             </div>
+
+            <router-link
+              v-else
+              to="/login"
+              class="bg-yellow-500 text-black px-6 py-2.5 rounded-xl font-[1000] text-[11px] uppercase italic tracking-widest active:scale-95 hover:bg-white transition-all shadow-[0_10px_20px_rgba(234,179,8,0.2)]"
+            >
+              Login Member
+            </router-link>
           </div>
-
-          <router-link
-            v-else
-            to="/login"
-            class="bg-yellow-500 text-black px-6 py-2 rounded-xl font-[900] text-[11px] uppercase italic tracking-widest active:scale-95 transition-all"
-          >
-            Login
-          </router-link>
-        </template>
-
-        <div v-else class="w-24 h-9 bg-white/5 animate-pulse rounded-xl"></div>
+        </div>
       </div>
     </div>
   </nav>
 </template>
-
-<style scoped>
-.font-black {
-  font-weight: 900 !important;
-}
-</style>

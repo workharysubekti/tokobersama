@@ -2,10 +2,21 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { supabase } from "../lib/supabase.js";
-import { notify } from "../utils/notify.js";
-import { EyeIcon, BanknotesIcon, ClockIcon } from "@heroicons/vue/24/outline";
+import {
+  EyeIcon,
+  BanknotesIcon,
+  ClockIcon,
+  SparklesIcon,
+} from "@heroicons/vue/24/outline";
 
-const props = defineProps(["product"]);
+const props = defineProps({
+  product: Object,
+  isPremium: {
+    type: Boolean,
+    default: false,
+  },
+});
+
 const timeLeft = ref("");
 const router = useRouter();
 
@@ -14,11 +25,15 @@ const formatPrice = (price) => {
     style: "currency",
     currency: "IDR",
     minimumFractionDigits: 0,
-  }).format(price);
+  }).format(price || 0);
 };
 
 const goToDetail = () => {
   router.push(`/product/${props.product.id}`);
+};
+
+const placeBid = () => {
+  router.push(`/product/${props.product.id}?action=bid`);
 };
 
 const updateTimer = () => {
@@ -35,131 +50,146 @@ const updateTimer = () => {
     return;
   }
 
-  // LOGIKA HARI (DAYS) - Biar muncul 2D, 1D, dst
   const d = Math.floor(diff / (1000 * 60 * 60 * 24));
   const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   const s = Math.floor((diff % (1000 * 60)) / 1000);
 
-  timeLeft.value = `${d > 0 ? d + "D " : ""}${h}H ${m}M ${s}S`;
-};
-
-const placeBid = async () => {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    notify.error("Akses Ditolak", "Login dulu ya!");
-    return;
-  }
-
-  const { value: bidAmount } = await notify.confirmBid(
-    props.product.current_bid,
-  );
-
-  if (bidAmount) {
-    const amount = parseInt(bidAmount);
-    const { error: productError } = await supabase
-      .from("products")
-      .update({ current_bid: amount })
-      .eq("id", props.product.id);
-
-    if (productError) return notify.error("Gagal!", "Sistem menolak bid.");
-
-    await supabase
-      .from("bids")
-      .insert([
-        { product_id: props.product.id, user_id: user.id, amount: amount },
-      ]);
-    notify.success("GACOR!", "Bid berhasil terpasang!");
+  if (d > 0) {
+    timeLeft.value = `${d}D ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  } else {
+    timeLeft.value = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   }
 };
 
-let timer;
+let timer = null;
 onMounted(() => {
   updateTimer();
   timer = setInterval(updateTimer, 1000);
 });
 
-onUnmounted(() => clearInterval(timer));
+onUnmounted(() => {
+  if (timer) clearInterval(timer);
+});
 </script>
 
 <template>
   <div
-    class="bg-[#16191e] border border-white/5 rounded-[24px] overflow-hidden flex flex-col h-full shadow-2xl transition-all hover:border-yellow-500/30"
+    class="group relative flex flex-col rounded-[32px] transition-all duration-500 overflow-hidden h-full"
+    :class="[
+      isPremium
+        ? 'bg-[#0f0f0f] border-2 border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.15)]'
+        : 'bg-white/5 border border-white/5 hover:border-white/10',
+    ]"
   >
     <div
-      class="relative aspect-square overflow-hidden cursor-pointer"
-      @click="goToDetail"
-    >
+      v-if="isPremium"
+      class="absolute -inset-4 bg-yellow-500/5 rounded-[40px] blur-3xl opacity-0 group-hover:opacity-100 transition-opacity"
+    ></div>
+
+    <div class="relative aspect-square overflow-hidden m-2 rounded-[24px]">
       <img
         :src="product.image_url"
-        class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+        class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
       />
+
       <div
-        class="absolute inset-0 bg-gradient-to-t from-[#16191e] via-transparent to-transparent opacity-60"
+        class="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 to-transparent"
       ></div>
 
-      <div
-        class="absolute top-3 left-3 px-2 py-0.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-lg"
-      >
-        <p
-          class="text-[7px] font-black text-yellow-500 uppercase italic tracking-widest"
+      <div v-if="!isPremium" class="absolute top-3 right-3 z-20">
+        <div
+          class="bg-black/50 backdrop-blur-md border border-white/10 px-2 py-1 rounded-lg"
         >
-          {{ product.category }}
-        </p>
-      </div>
-    </div>
-
-    <div class="p-3 md:p-4 flex flex-col flex-grow">
-      <div class="mb-3">
-        <h3
-          class="text-white font-black italic uppercase tracking-tighter text-[10px] md:text-xs truncate mb-1"
-        >
-          {{ product.name }}
-        </h3>
-        <div class="flex items-center text-yellow-500/80 space-x-1.5">
-          <ClockIcon class="w-3 h-3" />
           <span
-            class="text-[8px] md:text-[9px] font-bold uppercase tracking-wider truncate"
+            class="text-[8px] font-black uppercase tracking-[0.2em] text-white/90"
           >
-            {{ timeLeft === "ENDED" ? "ENDED" : timeLeft }}
+            {{ product.category || "General" }}
           </span>
         </div>
       </div>
 
       <div
-        class="bg-black/40 border border-white/5 rounded-xl p-2 md:p-3 mb-4 mt-auto"
+        v-if="isPremium"
+        class="absolute top-3 left-3 bg-yellow-500 text-black px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-2xl z-20"
+      >
+        <SparklesIcon class="w-3 h-3 fill-current" />
+        <span class="text-[8px] font-black uppercase tracking-tighter italic"
+          >Elite</span
+        >
+      </div>
+
+      <div class="absolute bottom-3 left-3 z-10">
+        <div
+          class="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10"
+        >
+          <ClockIcon class="w-3 h-3 text-yellow-500" />
+          <span
+            class="text-[9px] font-[1000] text-white uppercase tracking-wider"
+          >
+            {{ timeLeft }}
+          </span>
+        </div>
+      </div>
+
+      <div
+        v-if="isPremium"
+        class="absolute inset-0 shine-effect z-10 pointer-events-none"
+      ></div>
+    </div>
+
+    <div class="px-4 pb-4 flex flex-col flex-1 relative z-20">
+      <h3
+        class="font-black italic uppercase tracking-tighter mb-3 leading-tight truncate"
+        :class="
+          isPremium
+            ? 'text-sm text-yellow-500'
+            : 'text-xs text-white group-hover:text-yellow-500 transition-colors'
+        "
+      >
+        {{ product.name }}
+      </h3>
+
+      <div
+        class="border rounded-2xl p-3 mb-4 mt-auto transition-colors"
+        :class="
+          isPremium
+            ? 'bg-yellow-500/10 border-yellow-500/20'
+            : 'bg-black/40 border-white/5'
+        "
       >
         <p
-          class="text-[7px] font-black text-gray-600 uppercase tracking-widest mb-0.5"
+          class="text-[7px] font-black text-gray-600 uppercase tracking-[0.2em] mb-1"
         >
-          Highest Bid
+          Current Bid
         </p>
         <p
-          class="text-yellow-500 font-[900] italic text-xs md:text-sm tracking-tighter truncate leading-none"
+          class="font-[1000] italic text-sm tracking-tighter truncate leading-none"
+          :class="isPremium ? 'text-yellow-500' : 'text-white'"
         >
-          {{ formatPrice(product.current_bid) }}
+          {{ formatPrice(product.current_bid || product.start_price) }}
         </p>
       </div>
 
-      <div class="flex gap-1.5">
+      <div class="flex gap-2">
         <button
           @click="goToDetail"
-          class="flex-1 flex justify-center items-center py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-lg border border-white/10 transition-all active:scale-95"
+          class="flex-1 flex justify-center items-center py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all active:scale-95"
         >
           <EyeIcon class="w-4 h-4" />
         </button>
 
         <button
           @click="placeBid"
-          class="flex-[2] flex items-center justify-center gap-1.5 py-2.5 bg-yellow-500 hover:bg-white text-black rounded-lg font-[1000] transition-all active:scale-95"
+          class="flex-[2.5] flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest italic transition-all active:scale-95"
+          :class="
+            isPremium
+              ? 'bg-yellow-500 text-black shadow-[0_5px_15px_rgba(234,179,8,0.3)]'
+              : 'bg-white text-black hover:bg-yellow-500'
+          "
         >
-          <BanknotesIcon class="w-3.5 h-3.5" />
-          <span
-            class="text-[8px] md:text-[9px] uppercase italic tracking-widest"
-            >Bid</span
-          >
+          <BanknotesIcon class="w-4 h-4" />
+          Bid Now
         </button>
       </div>
     </div>
@@ -167,5 +197,30 @@ onUnmounted(() => clearInterval(timer));
 </template>
 
 <style scoped>
-/* CSS dibersihkan agar tidak berat */
+.shine-effect {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(255, 255, 255, 0.15) 40%,
+    rgba(255, 255, 255, 0) 50%
+  );
+  background-size: 200% 100%;
+  animation: shine 5s infinite;
+}
+
+@keyframes shine {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 </style>
