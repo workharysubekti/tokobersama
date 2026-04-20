@@ -12,6 +12,9 @@ const route = useRoute();
 const authReady = ref(false);
 const globalNotification = ref(null);
 
+// --- KUNCI UTAMA: Variabel di luar agar tidak kena re-render ---
+let globalChannel = null;
+
 const triggerGlobalNotif = (message) => {
   globalNotification.value = { message };
   setTimeout(() => { globalNotification.value = null; }, 6000);
@@ -19,9 +22,14 @@ const triggerGlobalNotif = (message) => {
 
 const setupGlobalRealtime = (userId) => {
   if (!userId) return;
-  supabase.removeAllChannels();
 
-  const channel = supabase.channel("global-bids-tracker")
+  // JIKA SUDAH ADA CHANNEL, JANGAN BIKIN LAGI (Cegah Multiple Join)
+  if (globalChannel) {
+    console.log("Channel sudah aktif, skip setup.");
+    return;
+  }
+
+  globalChannel = supabase.channel("global-bids-tracker")
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "bids" }, 
       async (payload) => {
         if (payload.new.user_id !== userId) {
@@ -44,8 +52,11 @@ const setupGlobalRealtime = (userId) => {
         }
     });
   
-  channel.subscribe((status) => {
-    if (status === 'CLOSED') channel.subscribe(); 
+  globalChannel.subscribe((status) => {
+    console.log("Realtime Status:", status);
+    if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+      globalChannel = null; // Reset agar bisa re-subscribe nanti
+    }
   });
 };
 
@@ -65,10 +76,15 @@ const fetchSessionData = async () => {
       }
     } else {
       userProfile.value = null;
+      if (globalChannel) {
+        supabase.removeChannel(globalChannel);
+        globalChannel = null;
+      }
     }
   } catch (e) {
     console.error("Auth Sync Error:", e);
   } finally {
+    // Memastikan loading mati apapun kondisinya
     authReady.value = true;
     isInitialLoading.value = false;
   }
@@ -77,11 +93,23 @@ const fetchSessionData = async () => {
 const handleVisibilityChange = () => {
   if (document.visibilityState === "visible") {
     console.log("App active, refreshing state...");
-    fetchSessionData();
+    // Gunakan getSession saja untuk cek cepat tanpa trigger loading berat
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setupGlobalRealtime(session.user.id);
+    });
   }
 };
 
 onMounted(async () => {
+  // SEKRING DARURAT: Paksa loading mati maksimal dalam 4 detik
+  const safetyTimer = setTimeout(() => {
+    if (isInitialLoading.value) {
+      console.warn("Safety trigger: forcing loader off");
+      isInitialLoading.value = false;
+      authReady.value = true;
+    }
+  }, 4000);
+
   await fetchSessionData();
 
   supabase.auth.onAuthStateChange(async (event, session) => {
@@ -90,22 +118,24 @@ onMounted(async () => {
     }
     if (event === 'SIGNED_OUT') {
       userProfile.value = null;
-      supabase.removeAllChannels();
+      if (globalChannel) {
+        supabase.removeChannel(globalChannel);
+        globalChannel = null;
+      }
     }
   });
 
   document.addEventListener("visibilitychange", handleVisibilityChange);
   window.addEventListener("online", fetchSessionData);
-
-  setTimeout(() => {
-    isInitialLoading.value = false;
-    authReady.value = true;
-  }, 6000);
+  
+  // Bersihkan timer jika loading sudah selesai normal
+  if (!isInitialLoading.value) clearTimeout(safetyTimer);
 });
 
 onUnmounted(() => {
   document.removeEventListener("visibilitychange", handleVisibilityChange);
   window.removeEventListener("online", fetchSessionData);
+  if (globalChannel) supabase.removeChannel(globalChannel);
 });
 </script>
 
@@ -157,4 +187,4 @@ onUnmounted(() => {
 .notif-leave-to { transform: translateX(100%); opacity: 0; }
 
 body { background-color: black; color: white; -webkit-tap-highlight-color: transparent; }
-</style> 
+</style>
