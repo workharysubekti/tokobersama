@@ -9,9 +9,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storageKey: 'tokobersama-auth',
+    // --- TAMBAHKAN BARIS INI UNTUK FIX BENGONG 5 DETIK ---
+    skipStorageLock: true, 
   },
   global: {
-    // Memberikan waktu nafas lebih panjang untuk sinyal HP yang naik-turun
     fetch: (...args) => fetch(...args),
   },
   realtime: {
