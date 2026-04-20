@@ -12,15 +12,17 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: window.localStorage
   },
   global: {
-    // Timeout 10 detik agar tidak bengong selamanya jika sinyal putus
+    // Timeout 10 detik agar tidak bengong selamanya jika sinyal ampas
     fetch: (...args) => {
       const options = args[1] || {};
       return fetch(args[0], { ...options, signal: AbortSignal.timeout(10000) });
     },
   },
   realtime: {
-    params: { eventsPerSecond: 10 },
-    // Otomatis nyambung lagi kalau kabel lepas
+    params: {
+      eventsPerSecond: 20,
+    },
+    // Otomatis nyambung lagi kalau kabel lepas (reconnect)
     reconnectAfterMs: (retries) => Math.min(retries * 1000, 5000),
   },
 });
