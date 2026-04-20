@@ -9,12 +9,16 @@ import {
   PlusIcon,
 } from "@heroicons/vue/24/outline";
 
-const props = defineProps({ userProfile: Object });
+// INI DIA MAS, JANGAN SAMPAI KETINGGALAN
+const props = defineProps({
+  userProfile: Object,
+  authReady: Boolean
+});
 
 const products = ref([]);
 const loading = ref(true);
-const scrollContainer = ref(null); // Ref untuk Live Auction
-const priorityContainer = ref(null); // Ref untuk Elite Section
+const scrollContainer = ref(null);
+const priorityContainer = ref(null);
 let productSubscription = null;
 
 const MAX_PREMIUM_SLOTS = 5;
@@ -33,20 +37,30 @@ const startBannerAutoplay = () => {
 };
 
 const fetchProducts = async () => {
-  const { data } = await supabase
-    .from("products")
-    .select("*, profiles!owner_id(username, full_name, avatar_url, reputation_score)")
-    .eq("status", "active")
-    .order("created_at", { ascending: false });
-  
-  if (data) products.value = data;
-  loading.value = false;
+  try {
+    const { data } = await supabase
+      .from("products")
+      .select(`
+        *,
+        profiles!owner_id (
+          username,
+          full_name,
+          avatar_url,
+          reputation_score
+        )
+      `)
+      .eq("status", "active")
+      .order("created_at", { ascending: false });
+    
+    if (data) products.value = data;
+  } finally {
+    loading.value = false;
+  }
 };
 
-// Fungsi scroll universal buat Elite & Live
 const scroll = (containerRef, direction) => {
   if (containerRef) {
-    const cardWidth = containerRef.querySelector(".card-container").offsetWidth + 20;
+    const cardWidth = containerRef.querySelector(".card-container").offsetWidth + 12;
     containerRef.scrollBy({ 
       left: direction === "left" ? -cardWidth * 2 : cardWidth * 2, 
       behavior: "smooth" 
@@ -57,7 +71,7 @@ const scroll = (containerRef, direction) => {
 onMounted(async () => {
   await fetchProducts();
   startBannerAutoplay();
-  productSubscription = supabase.channel(`home-live-${Date.now()}`)
+  productSubscription = supabase.channel('home-live')
     .on("postgres_changes", { event: "*", schema: "public", table: "products" }, fetchProducts)
     .subscribe();
 });
@@ -92,65 +106,54 @@ const isSlotAvailable = computed(() => priorityProducts.value.length < MAX_PREMI
       <div class="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent"></div>
     </section>
 
-    <div class="relative z-30 -mt-10 pb-32 space-y-16">
+    <div class="relative z-30 -mt-10 pb-32 space-y-12">
       
-      <div v-if="loading && products.length === 0" class="py-20 flex flex-col items-center gap-4">
-        <div class="w-8 h-8 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
+      <section class="max-w-[1440px] mx-auto px-4">
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center space-x-3">
+            <div class="w-1.5 h-6 bg-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.5)]"></div>
+            <h2 class="text-xl md:text-3xl font-[1000] italic uppercase tracking-tighter">Elite <span class="text-yellow-500">Selection</span></h2>
+          </div>
+          <div class="hidden md:flex items-center space-x-2">
+            <button @click="scroll(priorityContainer, 'left')" class="p-2 bg-white/5 rounded-xl border border-white/10"><ChevronLeftIcon class="w-4 h-4"/></button>
+            <button @click="scroll(priorityContainer, 'right')" class="p-2 bg-white/5 rounded-xl border border-white/10"><ChevronRightIcon class="w-4 h-4"/></button>
+          </div>
+        </div>
 
-      <template v-else>
-        <section class="max-w-[1440px] mx-auto px-6">
-          <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center space-x-4">
-              <div class="w-2 h-8 bg-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.5)]"></div>
-              <h2 class="text-2xl md:text-4xl font-[1000] italic uppercase tracking-tighter">Elite <span class="text-yellow-500">Selections</span></h2>
-            </div>
-            <div class="hidden md:flex items-center space-x-3">
-              <button @click="scroll(priorityContainer, 'left')" class="p-2 bg-white/5 rounded-xl border border-white/10"><ChevronLeftIcon class="w-5 h-5"/></button>
-              <button @click="scroll(priorityContainer, 'right')" class="p-2 bg-white/5 rounded-xl border border-white/10"><ChevronRightIcon class="w-5 h-5"/></button>
+        <div ref="priorityContainer" class="carousel-wrapper no-scrollbar">
+          <div v-for="product in priorityProducts" :key="product.id" class="card-container">
+            <AuctionCard :product="product" :isPremium="true" />
+          </div>
+          <div v-if="isSlotAvailable" class="card-container">
+            <div class="h-full min-h-[200px] border border-dashed border-yellow-500/20 bg-yellow-500/[0.02] rounded-[24px] flex flex-col items-center justify-center p-4">
+              <PlusIcon class="w-8 h-8 mb-2 text-yellow-500 opacity-30" />
+              <p class="text-[7px] font-black uppercase text-yellow-500/30">Slot Tersedia</p>
             </div>
           </div>
+        </div>
+      </section>
 
-          <div ref="priorityContainer" class="carousel-wrapper no-scrollbar">
-            <div v-for="product in priorityProducts" :key="product.id" class="card-container">
-              <div class="relative p-1 rounded-[32px] bg-gradient-to-br from-yellow-500/30 to-transparent">
-                <AuctionCard :product="product" :isPremium="true" />
-                <StarIcon class="absolute top-4 right-4 w-4 h-4 text-yellow-500 fill-current" />
-              </div>
-            </div>
-            <div v-if="isSlotAvailable" class="card-container min-h-[300px]">
-              <div class="h-full border border-dashed border-yellow-500/20 bg-yellow-500/[0.02] rounded-[32px] flex flex-col items-center justify-center p-6">
-                <PlusIcon class="w-10 h-10 mb-3 text-yellow-500" />
-                <a href="#" class="bg-yellow-500/10 text-yellow-500 px-4 py-2 rounded-lg text-[8px] font-black uppercase">Hubungi Admin</a>
-              </div>
-            </div>
+      <section class="max-w-[1440px] mx-auto px-4">
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center space-x-3">
+            <div class="w-1.5 h-6 bg-white/20"></div>
+            <h2 class="text-xl md:text-3xl font-[1000] italic uppercase tracking-tighter text-white">Live <span class="text-gray-500">Auctions</span></h2>
           </div>
-        </section>
-
-        <section class="max-w-[1440px] mx-auto px-6">
-          <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center space-x-4">
-              <div class="w-2 h-8 bg-white/20"></div>
-              <h2 class="text-2xl md:text-4xl font-[1000] italic uppercase tracking-tighter text-white">Live <span class="text-gray-500">Auctions</span></h2>
-            </div>
-            <div class="hidden md:flex items-center space-x-3">
-              <button @click="scroll(scrollContainer, 'left')" class="p-2 bg-white/5 rounded-xl border border-white/10"><ChevronLeftIcon class="w-5 h-5"/></button>
-              <button @click="scroll(scrollContainer, 'right')" class="p-2 bg-white/5 rounded-xl border border-white/10"><ChevronRightIcon class="w-5 h-5"/></button>
-            </div>
+          <div class="hidden md:flex items-center space-x-2">
+            <button @click="scroll(scrollContainer, 'left')" class="p-2 bg-white/5 rounded-xl border border-white/10"><ChevronLeftIcon class="w-4 h-4"/></button>
+            <button @click="scroll(scrollContainer, 'right')" class="p-2 bg-white/5 rounded-xl border border-white/10"><ChevronRightIcon class="w-4 h-4"/></button>
           </div>
+        </div>
 
-          <div ref="scrollContainer" class="carousel-wrapper no-scrollbar">
-            <div v-for="product in regularProducts" :key="product.id" class="card-container">
-              <AuctionCard :product="product" />
-            </div>
-            
-            <div v-if="regularProducts.length === 0" class="w-full py-20 text-center opacity-30">
-              <p class="text-[9px] font-black uppercase italic tracking-widest">No Active Transmissions Found</p>
-            </div>
+        <div ref="scrollContainer" class="carousel-wrapper no-scrollbar">
+          <div v-for="product in regularProducts" :key="product.id" class="card-container">
+            <AuctionCard :product="product" />
           </div>
-        </section>
-
-      </template>
+          <div v-if="regularProducts.length === 0 && !loading" class="w-full py-20 text-center opacity-20">
+            <p class="text-[8px] font-black uppercase tracking-[0.4em]">Signal Lost</p>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </template>
@@ -160,17 +163,23 @@ const isSlotAvailable = computed(() => priorityProducts.value.length < MAX_PREMI
   display: flex !important;
   overflow-x: auto !important;
   scroll-behavior: smooth !important;
-  gap: 16px !important; /* Jarak antar kartu */
+  gap: 12px !important;
   padding: 10px 0;
   -webkit-overflow-scrolling: touch;
 }
+
 .card-container {
   flex: 0 0 auto !important;
-  width: 70% !important; /* Di HP kartu kelihatan 1.5 biar user tau bisa digeser */
+  /* UKURAN PATEN: 45% supaya muat banyak di layar HP Mas */
+  width: 45% !important; 
 }
+
 @media (min-width: 1024px) {
-  .card-container { width: 23% !important; } /* Di PC tetep 4 kartu per baris */
+  .card-container { 
+    width: 23.5% !important; 
+  }
 }
+
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
