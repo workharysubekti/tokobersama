@@ -21,7 +21,7 @@ const newMessage = ref("");
 const targetProfile = ref(null);
 const currentUser = ref(null);
 const chatContainer = ref(null);
-const isTargetOnline = ref(false); // State status online
+const isTargetOnline = ref(false);
 
 const scrollToBottom = async () => {
   await nextTick();
@@ -32,9 +32,7 @@ const scrollToBottom = async () => {
 
 const fetchChatData = async () => {
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
     if (!session) return router.push("/login");
     currentUser.value = session.user;
 
@@ -48,9 +46,7 @@ const fetchChatData = async () => {
     const { data: msgData, error } = await supabase
       .from("messages")
       .select("*")
-      .or(
-        `and(sender_id.eq.${currentUser.value.id},receiver_id.eq.${targetId}),and(sender_id.eq.${targetId},receiver_id.eq.${currentUser.value.id})`,
-      )
+      .or(`and(sender_id.eq.${currentUser.value.id},receiver_id.eq.${targetId}),and(sender_id.eq.${targetId},receiver_id.eq.${currentUser.value.id})`)
       .order("created_at", { ascending: true });
 
     if (error) throw error;
@@ -58,7 +54,6 @@ const fetchChatData = async () => {
     loading.value = false;
     scrollToBottom();
 
-    // --- LOGIKA PRESENCE (TRACKER ONLINE) ---
     const channel = supabase.channel(`room_${targetId}`, {
       config: { presence: { key: currentUser.value.id } },
     });
@@ -66,28 +61,18 @@ const fetchChatData = async () => {
     channel
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState();
-        // Cek apakah targetId ada di dalam daftar user yang sedang online di channel ini
         isTargetOnline.value = !!state[targetId];
       })
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        (payload) => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
           const newMsg = payload.new;
-          if (
-            (newMsg.sender_id === currentUser.value.id &&
-              newMsg.receiver_id === targetId) ||
-            (newMsg.sender_id === targetId &&
-              newMsg.receiver_id === currentUser.value.id)
-          ) {
+          if ((newMsg.sender_id === currentUser.value.id && newMsg.receiver_id === targetId) || 
+              (newMsg.sender_id === targetId && newMsg.receiver_id === currentUser.value.id)) {
             messages.value.push(newMsg);
             scrollToBottom();
           }
-        },
-      )
+      })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          // Daftarkan diri saya sebagai online di channel ini
           await channel.track({ online_at: new Date().toISOString() });
         }
       });
@@ -126,133 +111,83 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    class="h-screen bg-[#050505] text-white font-sans italic font-black uppercase overflow-hidden flex justify-center pt-20"
-  >
-    <div
-      class="relative w-full max-w-2xl bg-[#0a0a0a] border-x border-white/5 flex flex-col shadow-[0_0_100px_rgba(0,0,0,1)] mb-4 rounded-t-[30px]"
-    >
-      <div
-        class="shrink-0 z-10 bg-[#0a0a0a] border-b border-white/5 px-6 py-4 flex items-center justify-between rounded-t-[30px]"
-      >
-        <div class="flex items-center gap-4">
-          <button
-            @click="router.back()"
-            class="p-2.5 bg-white/5 rounded-xl border border-white/10 text-gray-500 hover:text-yellow-500 transition-colors"
-          >
-            <ArrowLeftIcon class="w-5 h-5" />
+  <div class="fixed inset-0 bg-[#050505] flex justify-center overflow-hidden touch-none pt-16 md:pt-20">
+    
+    <div class="relative w-full max-w-2xl bg-[#0a0a0a] md:border-x border-white/5 flex flex-col h-full shadow-2xl">
+      
+      <header class="shrink-0 z-30 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-white/5 px-4 py-3 md:px-6 md:py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <button @click="router.back()" class="p-2 bg-white/5 rounded-lg border border-white/10 text-gray-500 active:scale-90 transition-transform">
+            <ArrowLeftIcon class="w-4 h-4 md:w-5 md:h-5" />
           </button>
 
           <div v-if="targetProfile" class="flex items-center gap-3">
-            <div
-              class="w-10 h-10 rounded-full overflow-hidden border bg-black shadow-lg"
-              :class="
-                isTargetOnline ? 'border-green-500/50' : 'border-white/10'
-              "
-            >
-              <img
-                v-if="targetProfile.avatar_url"
-                :src="targetProfile.avatar_url"
-                class="w-full h-full object-cover"
-              />
+            <div class="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden border bg-black shadow-lg"
+                 :class="isTargetOnline ? 'border-green-500/50' : 'border-white/10'">
+              <img v-if="targetProfile.avatar_url" :src="targetProfile.avatar_url" class="w-full h-full object-cover" />
               <UserCircleIcon v-else class="w-full h-full text-gray-800 p-1" />
             </div>
             <div>
-              <h2
-                class="text-xs tracking-tight leading-none mb-1 text-white uppercase italic font-[1000]"
-              >
+              <h2 class="text-[10px] md:text-xs font-[1000] text-white uppercase italic leading-none mb-1">
                 {{ targetProfile.full_name || targetProfile.username }}
               </h2>
               <div class="flex items-center gap-1">
-                <div
-                  class="w-1.5 h-1.5 rounded-full"
-                  :class="
-                    isTargetOnline
-                      ? 'bg-green-500 animate-pulse'
-                      : 'bg-gray-700'
-                  "
-                ></div>
-                <p
-                  class="text-[7px] tracking-widest font-black uppercase"
-                  :class="isTargetOnline ? 'text-green-500' : 'text-gray-600'"
-                >
-                  {{ isTargetOnline ? "Channel Active" : "Offline" }}
+                <div class="w-1 h-1 rounded-full" :class="isTargetOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-700'"></div>
+                <p class="text-[6px] font-black uppercase tracking-widest" :class="isTargetOnline ? 'text-green-500' : 'text-gray-600'">
+                  {{ isTargetOnline ? "Active" : "Offline" }}
                 </p>
               </div>
             </div>
           </div>
         </div>
-        <ShieldCheckIcon class="w-5 h-5 opacity-20" />
-      </div>
+        <ShieldCheckIcon class="w-4 h-4 md:w-5 md:h-5 opacity-20 text-yellow-500" />
+      </header>
 
-      <div
-        ref="chatContainer"
-        class="flex-1 overflow-y-auto p-6 no-scrollbar scroll-smooth"
-      >
-        <div class="space-y-6">
-          <div v-if="loading" class="flex justify-center py-20 text-yellow-500">
-            <ArrowPathIcon class="w-8 h-8 animate-spin" />
-          </div>
+      <main ref="chatContainer" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 md:space-y-6 no-scrollbar touch-pan-y">
+        <div v-if="loading" class="flex justify-center py-10">
+          <ArrowPathIcon class="w-8 h-8 animate-spin text-yellow-500" />
+        </div>
 
-          <div
-            v-else
-            v-for="msg in messages"
-            :key="msg.id"
+        <template v-else>
+          <div v-for="msg in messages" :key="msg.id"
             :class="msg.sender_id === currentUser.id ? 'flex-row-reverse' : ''"
-            class="flex items-end gap-3"
+            class="flex items-end gap-2"
           >
-            <div
-              :class="
-                msg.sender_id === currentUser.id
-                  ? 'bg-yellow-500 text-black rounded-2xl rounded-tr-none'
-                  : 'bg-white/[0.03] text-white border border-white/5 rounded-2xl rounded-tl-none'
-              "
-              class="max-w-[85%] px-5 py-4"
-            >
-              <p
-                class="text-[11px] normal-case font-bold italic tracking-tight leading-relaxed"
-              >
-                {{ msg.text }}
-              </p>
-              <p
-                class="text-[6px] opacity-30 mt-2 text-right uppercase tracking-widest"
-              >
-                {{
-                  new Date(msg.created_at).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
-                }}
+            <div :class="msg.sender_id === currentUser.id 
+                 ? 'bg-yellow-500 text-black rounded-tr-none' 
+                 : 'bg-white/[0.03] text-white border border-white/5 rounded-tl-none'"
+                 class="max-w-[80%] px-4 py-3 rounded-2xl shadow-lg">
+              <p class="text-[11px] normal-case font-bold italic leading-relaxed">{{ msg.text }}</p>
+              <p class="text-[6px] opacity-30 mt-1.5 text-right uppercase font-black">
+                {{ new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }}
               </p>
             </div>
           </div>
-        </div>
-      </div>
+        </template>
+        <div class="h-4 w-full shrink-0"></div>
+      </main>
 
-      <div class="p-6 bg-[#0a0a0a] border-t border-white/5 pb-10">
+      <footer class="p-4 md:p-6 bg-[#0a0a0a] border-t border-white/5 shrink-0 pb-6 md:pb-8">
         <div class="relative flex items-center">
           <input
             v-model="newMessage"
             @keyup.enter="sendMessage"
             type="text"
-            placeholder="ENTER ENCRYPTED TRANSMISSION..."
-            class="w-full bg-black border border-white/10 rounded-2xl py-5 pl-6 pr-20 text-[10px] outline-none focus:border-yellow-500/40 font-[1000] italic text-white shadow-inner"
+            placeholder="TYPE MESSAGE..."
+            class="w-full bg-black border border-white/10 rounded-xl py-4 pl-5 pr-14 text-[10px] outline-none focus:border-yellow-500/40 font-black italic text-white shadow-inner"
           />
-          <button
-            @click="sendMessage"
-            :disabled="!newMessage.trim()"
-            class="absolute right-2 bg-yellow-500 text-black px-5 py-3 rounded-xl hover:scale-105 active:scale-95 transition-all"
-          >
-            <PaperAirplaneIcon class="w-5 h-5" />
+          <button @click="sendMessage" :disabled="!newMessage.trim()" 
+            class="absolute right-1.5 bg-yellow-500 text-black p-2.5 rounded-lg active:scale-90 transition-all">
+            <PaperAirplaneIcon class="w-4 h-4" />
           </button>
         </div>
-      </div>
+      </footer>
+
     </div>
   </div>
 </template>
 
 <style scoped>
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
