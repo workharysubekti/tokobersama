@@ -77,27 +77,40 @@ const scroll = (containerRef, direction) => {
 };
 
 onMounted(async () => {
+  // 1. Ambil data awal
   await fetchProducts();
   startBannerAutoplay();
 
-  // Pastikan tidak ada channel ganda
-  supabase.removeAllChannels();
+  // 2. BERSIHKAN TOTAL: Pastikan tidak ada channel ganda yang nyangkut
+  await supabase.removeAllChannels();
 
+  // 3. KUNCI REALTIME: Gunakan ID unik (Timestamp) biar tidak bentrok saat balik dari WA
+  const channelName = `home-realtime-${Date.now()}`;
+  
   productSubscription = supabase
-    .channel("room-produk")
+    .channel(channelName)
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "products" },
-      fetchProducts,
+      () => {
+        console.log("Ada perubahan produk, manggil fetch...");
+        fetchProducts();
+      }
     )
     .subscribe((status) => {
-      if (status === 'CHANNEL_ERROR') productSubscription.subscribe();
+      console.log(`Realtime Home Status: ${status}`);
+      if (status === 'CHANNEL_ERROR') {
+        // Jika error, jangan langsung tembak, tapi bersihkan dulu
+        supabase.removeChannel(productSubscription);
+      }
     });
 });
 
 onUnmounted(() => {
-  if (productSubscription) supabase.removeChannel(productSubscription);
-  supabase.removeAllChannels();
+  // Bersihkan kabel saat pindah halaman
+  if (productSubscription) {
+    supabase.removeChannel(productSubscription);
+  }
   if (bannerInterval) clearInterval(bannerInterval);
 });
 </script>
