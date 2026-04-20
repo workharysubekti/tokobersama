@@ -1,60 +1,13 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from "vue";
+import { useRouter } from "vue-router";
 import { supabase } from "../lib/supabase.js";
 import { notify } from "../utils/notify.js";
-import { useRouter } from "vue-router";
 import { EyeIcon, BanknotesIcon, ClockIcon } from "@heroicons/vue/24/outline";
 
 const props = defineProps(["product"]);
 const timeLeft = ref("");
-const bidHistory = ref([]);
 const router = useRouter();
-
-// --- LOGIKA NAVIGASI (Logika Baru) ---
-const goToDetail = () => {
-  router.push(`/product/${props.product.id}`);
-};
-
-// --- LOGIKA FUNGSI (TIDAK BERUBAH/KEPAKE) ---
-const placeBid = async () => {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    notify.error("Akses Ditolak", "Login dulu ya buat ikutan lelang!");
-    return;
-  }
-
-  const { value: bidAmount } = await notify.confirmBid(
-    props.product.current_bid,
-  );
-
-  if (bidAmount) {
-    const amount = parseInt(bidAmount);
-    const { error: productError } = await supabase
-      .from("products")
-      .update({ current_bid: amount })
-      .eq("id", props.product.id);
-
-    if (productError) {
-      notify.error("Gagal!", "Sistem menolak bid kamu.");
-      return;
-    }
-
-    const { error: historyError } = await supabase
-      .from("bids")
-      .insert([
-        { product_id: props.product.id, user_id: user.id, amount: amount },
-      ]);
-
-    if (!historyError) {
-      notify.success(
-        "Berhasil!",
-        `Bid Rp ${amount.toLocaleString()} terpasang.`,
-      );
-    }
-  }
-};
 
 const formatPrice = (price) => {
   return new Intl.NumberFormat("id-ID", {
@@ -64,7 +17,10 @@ const formatPrice = (price) => {
   }).format(price);
 };
 
-// Logika Timer Bawaan
+const goToDetail = () => {
+  router.push(`/product/${props.product.id}`);
+};
+
 const updateTimer = () => {
   if (!props.product.end_time) {
     timeLeft.value = "OPEN";
@@ -79,10 +35,44 @@ const updateTimer = () => {
     return;
   }
 
+  // LOGIKA HARI (DAYS) - Biar muncul 2D, 1D, dst
+  const d = Math.floor(diff / (1000 * 60 * 60 * 24));
   const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   const s = Math.floor((diff % (1000 * 60)) / 1000);
-  timeLeft.value = `${h}h ${m}m ${s}s`;
+
+  timeLeft.value = `${d > 0 ? d + "D " : ""}${h}H ${m}M ${s}S`;
+};
+
+const placeBid = async () => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    notify.error("Akses Ditolak", "Login dulu ya!");
+    return;
+  }
+
+  const { value: bidAmount } = await notify.confirmBid(
+    props.product.current_bid,
+  );
+
+  if (bidAmount) {
+    const amount = parseInt(bidAmount);
+    const { error: productError } = await supabase
+      .from("products")
+      .update({ current_bid: amount })
+      .eq("id", props.product.id);
+
+    if (productError) return notify.error("Gagal!", "Sistem menolak bid.");
+
+    await supabase
+      .from("bids")
+      .insert([
+        { product_id: props.product.id, user_id: user.id, amount: amount },
+      ]);
+    notify.success("GACOR!", "Bid berhasil terpasang!");
+  }
 };
 
 let timer;
@@ -96,7 +86,7 @@ onUnmounted(() => clearInterval(timer));
 
 <template>
   <div
-    class="group relative bg-[#16191e] border border-white/5 rounded-[32px] overflow-hidden hover:border-yellow-500/30 transition-all duration-500 shadow-2xl"
+    class="bg-[#16191e] border border-white/5 rounded-[24px] overflow-hidden flex flex-col h-full shadow-2xl transition-all hover:border-yellow-500/30"
   >
     <div
       class="relative aspect-square overflow-hidden cursor-pointer"
@@ -111,63 +101,64 @@ onUnmounted(() => clearInterval(timer));
       ></div>
 
       <div
-        class="absolute top-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-md border border-white/10 rounded-xl"
+        class="absolute top-3 left-3 px-2 py-0.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-lg"
       >
         <p
-          class="text-[8px] font-black text-yellow-500 uppercase italic tracking-widest"
+          class="text-[7px] font-black text-yellow-500 uppercase italic tracking-widest"
         >
           {{ product.category }}
         </p>
       </div>
     </div>
 
-    <div class="p-5">
-      <div class="mb-4">
+    <div class="p-3 md:p-4 flex flex-col flex-grow">
+      <div class="mb-3">
         <h3
-          class="text-white font-black italic uppercase tracking-tighter text-sm truncate mb-1"
+          class="text-white font-black italic uppercase tracking-tighter text-[10px] md:text-xs truncate mb-1"
         >
           {{ product.name }}
         </h3>
-        <div class="flex items-center text-gray-500 space-x-2">
-          <ClockIcon class="w-3 h-3 text-yellow-500/50" />
+        <div class="flex items-center text-yellow-500/80 space-x-1.5">
+          <ClockIcon class="w-3 h-3" />
           <span
-            class="text-[13px] font-bold uppercase tracking-widest"
-            :class="timeLeft === 'ENDED' ? 'text-red-500' : 'text-yellow-500'"
+            class="text-[8px] md:text-[9px] font-bold uppercase tracking-wider truncate"
           >
-            {{ timeLeft === "ENDED" ? "Auction Ended" : "Sisa: " + timeLeft }}
+            {{ timeLeft === "ENDED" ? "ENDED" : timeLeft }}
           </span>
         </div>
       </div>
 
-      <div class="bg-black/40 border border-white/5 rounded-2xl p-3 mb-5">
+      <div
+        class="bg-black/40 border border-white/5 rounded-xl p-2 md:p-3 mb-4 mt-auto"
+      >
         <p
-          class="text-[8px] font-black text-gray-600 uppercase tracking-widest mb-1"
+          class="text-[7px] font-black text-gray-600 uppercase tracking-widest mb-0.5"
         >
           Highest Bid
         </p>
-        <p class="text-yellow-500 font-[900] italic text-lg tracking-tighter">
+        <p
+          class="text-yellow-500 font-[900] italic text-xs md:text-sm tracking-tighter truncate leading-none"
+        >
           {{ formatPrice(product.current_bid) }}
         </p>
       </div>
 
-      <div class="flex gap-2">
+      <div class="flex gap-1.5">
         <button
           @click="goToDetail"
-          class="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/5 transition-all active:scale-95"
+          class="flex-1 flex justify-center items-center py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-lg border border-white/10 transition-all active:scale-95"
         >
           <EyeIcon class="w-4 h-4" />
-          <span class="text-[9px] font-black uppercase italic tracking-widest"
-            >Info Lengkap</span
-          >
         </button>
 
         <button
           @click="placeBid"
-          class="flex-[1.5] flex items-center justify-center gap-2 py-3 bg-yellow-500 hover:bg-white text-black rounded-xl font-[900] transition-all shadow-[0_5px_15px_rgba(234,179,8,0.2)] active:scale-95"
+          class="flex-[2] flex items-center justify-center gap-1.5 py-2.5 bg-yellow-500 hover:bg-white text-black rounded-lg font-[1000] transition-all active:scale-95"
         >
-          <BanknotesIcon class="w-4 h-4" />
-          <span class="text-[9px] font-black uppercase italic tracking-widest"
-            >Place Bid</span
+          <BanknotesIcon class="w-3.5 h-3.5" />
+          <span
+            class="text-[8px] md:text-[9px] uppercase italic tracking-widest"
+            >Bid</span
           >
         </button>
       </div>
@@ -176,29 +167,5 @@ onUnmounted(() => clearInterval(timer));
 </template>
 
 <style scoped>
-@keyframes shine {
-  from {
-    left: -100%;
-  }
-  to {
-    left: 100%;
-  }
-}
-
-.group\/btn:hover::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 50%;
-  height: 100%;
-  background: linear-gradient(
-    to right,
-    transparent,
-    rgba(255, 255, 255, 0.4),
-    transparent
-  );
-  transform: skewX(-25deg);
-  animation: shine 0.8s infinite;
-}
+/* CSS dibersihkan agar tidak berat */
 </style>
