@@ -44,7 +44,6 @@ const placeBid = () => {
   router.push(`/product/${props.product.id}?action=bid`);
 };
 
-// --- LOGIKA TIMER DENGAN HARI (DAYS) ---
 const updateTimer = () => {
   if (!props.product.end_time) {
     timeLeft.value = "OPEN";
@@ -59,17 +58,15 @@ const updateTimer = () => {
     return;
   }
 
-  // Hitung Hari, Jam, Menit, Detik
   const d = Math.floor(diff / (1000 * 60 * 60 * 24));
   const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   const s = Math.floor((diff % (1000 * 60)) / 1000);
 
-  // Tampilkan Hari kalau masih > 0
   if (d > 0) {
-    timeLeft.value = `${d}d ${h}h ${m}m`;
+    timeLeft.value = `${d}D ${h}H`;
   } else {
-    timeLeft.value = `${h}h ${m}m ${s}s`;
+    timeLeft.value = `${h}H ${m}M ${s}S`;
   }
 };
 
@@ -86,137 +83,81 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="relative group bg-white/[0.03] border border-white/5 rounded-[32px] overflow-hidden transition-all duration-500 hover:border-yellow-500/30 hover:bg-white/[0.05]"
-    :class="{
-      'border-yellow-500/20 bg-yellow-500/[0.02] shadow-[0_20px_50px_rgba(234,179,8,0.1)]':
-        isPremium,
-    }"
+    class="relative group bg-white/[0.03] border border-white/5 rounded-[24px] overflow-hidden transition-all duration-500 hover:border-yellow-500/30 flex flex-col h-full"
+    :class="{ 'border-yellow-500/20 bg-yellow-500/[0.01] shadow-2xl': isPremium }"
   >
     <div
       v-if="isPremium"
-      class="absolute top-4 left-4 z-10 bg-yellow-500 text-black text-[8px] font-black px-3 py-1 rounded-full flex items-center gap-1 shadow-lg italic uppercase tracking-widest"
+      class="absolute top-2 left-2 z-20 bg-yellow-500 text-black text-[7px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-lg italic uppercase tracking-tighter"
     >
-      <SparklesIcon class="w-3 h-3" />
-      Premium Slot
+      <SparklesIcon class="w-2.5 h-2.5" />
+      <span>Premium</span>
     </div>
 
-    <div
-      class="relative h-56 overflow-hidden cursor-pointer"
-      @click="goToDetail"
-    >
-      <img
-        :src="product.image_url"
-        class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-      />
-      <div
-        class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent opacity-60"
-      ></div>
+    <div class="relative h-44 md:h-56 overflow-hidden cursor-pointer shrink-0" @click="goToDetail">
+      <img :src="product.image_url" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+      <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent opacity-80"></div>
 
-      <div
-        class="absolute bottom-4 left-4 right-4 flex justify-between items-center"
-      >
-        <div
-          class="bg-black/60 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-2xl flex items-center gap-2"
-        >
-          <ClockIcon class="w-3.5 h-3.5 text-yellow-500" />
-          <span
-            class="text-[10px] text-white font-black italic tracking-tighter"
-            >{{ timeLeft }}</span
-          >
+      <div class="absolute bottom-2 left-2 right-2 flex justify-between items-center gap-1">
+        <div class="bg-black/60 backdrop-blur-md border border-white/10 px-2 py-1 rounded-xl flex items-center gap-1.5 shrink-0">
+          <ClockIcon class="w-3 h-3 text-yellow-500" />
+          <span class="text-[8px] md:text-[10px] text-white font-black italic tracking-tighter">{{ timeLeft }}</span>
         </div>
-        <div
-          class="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-white/5"
-        >
-          <span
-            class="text-[9px] text-gray-400 font-bold uppercase tracking-widest"
-            >{{ product.category }}</span
-          >
+        <div class="bg-white/10 backdrop-blur-md px-2 py-1 rounded-xl border border-white/5 truncate max-w-[40%]">
+          <span class="text-[7px] md:text-[9px] text-gray-300 font-bold uppercase tracking-widest truncate block">{{ product.category }}</span>
         </div>
       </div>
     </div>
 
-    <div class="p-5">
-      <div
-        @click.stop="goToSellerProfile"
-        class="flex items-center gap-2 mb-3 cursor-pointer group/seller w-fit"
-      >
-        <div
-          class="w-6 h-6 rounded-full overflow-hidden border border-white/10 group-hover/seller:border-yellow-500 transition-colors bg-gray-900"
-        >
-          <img
-            v-if="product.profiles?.avatar_url"
-            :src="product.profiles.avatar_url"
-            class="w-full h-full object-cover"
-          />
+    <div class="p-3 md:p-5 flex flex-col flex-1">
+      <div @click.stop="goToSellerProfile" class="flex items-center gap-2 mb-2 cursor-pointer group/seller w-fit">
+        <div class="w-5 h-5 rounded-full overflow-hidden border border-white/10 bg-gray-900 shrink-0">
+          <img v-if="product.profiles?.avatar_url" :src="product.profiles.avatar_url" class="w-full h-full object-cover" />
           <UserCircleIcon v-else class="w-full h-full text-gray-700" />
         </div>
-        <div class="flex flex-col">
-          <span
-            class="text-[9px] font-black uppercase italic tracking-tighter group-hover/seller:text-yellow-500 transition-colors text-white leading-none"
-          >
-            {{
-              product.profiles?.full_name ||
-              product.profiles?.username ||
-              "Unknown Seller"
-            }}
+        <div class="flex flex-col min-w-0">
+          <span class="text-[8px] font-black uppercase italic tracking-tighter text-white/70 group-hover/seller:text-yellow-500 truncate">
+            {{ product.profiles?.username || "Unknown" }}
           </span>
-          <div class="flex items-center gap-0.5 mt-0.5">
-            <StarIconSolid class="w-2 h-2 text-yellow-500" />
-            <span class="text-[7px] text-gray-500 font-bold tracking-tighter">
-              {{ product.profiles?.reputation_score?.toFixed(1) || "5.0" }}
-            </span>
-          </div>
         </div>
       </div>
 
-      <div class="mb-4">
-        <h3
-          class="text-sm font-black text-white uppercase italic leading-tight group-hover:text-yellow-500 transition-colors"
-        >
+      <div class="mb-3">
+        <h3 class="text-[11px] md:text-sm font-black text-white uppercase italic leading-tight group-hover:text-yellow-500 transition-colors line-clamp-2 min-h-[2.4em]">
           {{ product.name }}
         </h3>
-        <p
-          class="text-[10px] text-gray-600 font-bold uppercase mt-1 tracking-[0.2em] italic opacity-60"
-        >
-          Live Transmission
-        </p>
       </div>
 
-      <div
-        class="bg-white/[0.03] border border-white/5 rounded-2xl p-3 mb-5 shadow-inner"
-      >
-        <p
-          class="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1 italic"
-        >
-          Highest Bid
-        </p>
-        <p
-          class="text-lg font-[1000] text-yellow-500 italic tracking-tighter leading-none"
-        >
+      <div class="bg-white/[0.03] border border-white/5 rounded-xl p-2 md:p-3 mb-4 mt-auto">
+        <p class="text-[7px] md:text-[9px] text-gray-600 font-black uppercase tracking-widest mb-0.5 italic">Highest Bid</p>
+        <p class="text-[11px] md:text-lg font-[1000] text-yellow-500 italic tracking-tighter leading-none truncate">
           {{ formatPrice(product.current_bid || product.price) }}
         </p>
       </div>
 
-      <div class="flex gap-2">
-        <button
-          @click="goToDetail"
-          class="flex-1 flex justify-center items-center py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all active:scale-95"
-        >
+      <div class="flex gap-1.5">
+        <button @click="goToDetail" class="p-2 bg-white/5 hover:bg-white/10 text-white rounded-lg border border-white/10 transition-all shrink-0">
           <EyeIcon class="w-4 h-4" />
         </button>
         <button
           @click="placeBid"
-          class="flex-[2.5] flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest italic transition-all active:scale-95"
-          :class="
-            isPremium
-              ? 'bg-yellow-500 text-black shadow-[0_5px_15px_rgba(234,179,8,0.3)]'
-              : 'bg-white text-black hover:bg-yellow-500'
-          "
+          class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg font-black text-[9px] md:text-[10px] uppercase tracking-tighter italic transition-all"
+          :class="isPremium ? 'bg-yellow-500 text-black' : 'bg-white text-black hover:bg-yellow-500'"
         >
-          <BanknotesIcon class="w-4 h-4" />
-          Bid Now
+          <BanknotesIcon class="w-3.5 h-3.5" />
+          <span>Bid Now</span>
         </button>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Tambahan biar line-clamp jalan di semua browser */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+</style>
