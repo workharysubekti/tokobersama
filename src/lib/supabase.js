@@ -9,20 +9,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storageKey: 'tokobersama-auth',
-    storage: window.localStorage
   },
   global: {
-    // Timeout 10 detik agar tidak bengong selamanya jika sinyal ampas
-    fetch: (...args) => {
-      const options = args[1] || {};
-      return fetch(args[0], { ...options, signal: AbortSignal.timeout(10000) });
-    },
+    // Memberikan waktu nafas lebih panjang untuk sinyal HP yang naik-turun
+    fetch: (...args) => fetch(...args),
   },
   realtime: {
-    params: {
-      eventsPerSecond: 20,
-    },
-    // Otomatis nyambung lagi kalau kabel lepas (reconnect)
-    reconnectAfterMs: (retries) => Math.min(retries * 1000, 5000),
+    params: { eventsPerSecond: 10 },
   },
 });
