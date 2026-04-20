@@ -12,7 +12,6 @@ const route = useRoute();
 const authReady = ref(false);
 const globalNotification = ref(null);
 
-// --- KUNCI UTAMA: Variabel di luar agar tidak kena re-render ---
 let globalChannel = null;
 
 const triggerGlobalNotif = (message) => {
@@ -21,18 +20,13 @@ const triggerGlobalNotif = (message) => {
 };
 
 const setupGlobalRealtime = (userId) => {
-  if (!userId) return;
+  if (!userId || globalChannel) return;
 
-  // JIKA SUDAH ADA CHANNEL, JANGAN BIKIN LAGI (Cegah Multiple Join)
-  if (globalChannel) {
-    console.log("Channel sudah aktif, skip setup.");
-    return;
-  }
-
-  globalChannel = supabase.channel("global-bids-tracker")
+  globalChannel = supabase.channel("global-notif")
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "bids" }, 
       async (payload) => {
         if (payload.new.user_id !== userId) {
+          // Hanya cek jika user ini pernah bid di produk yang sama
           const { data: history } = await supabase
             .from("bids")
             .select("id")
@@ -42,149 +36,93 @@ const setupGlobalRealtime = (userId) => {
 
           if (history && history.length > 0) {
             const { data: prod } = await supabase
-              .from("products")
-              .select("name")
-              .eq("id", payload.new.product_id)
-              .single();
-
+              .from("products").select("name").eq("id", payload.new.product_id).single();
             if (prod) triggerGlobalNotif(`⚡ OUTBID: Seseorang menyalip bid Mas di "${prod.name}"!`);
           }
         }
+    })
+    .subscribe((status) => {
+      if (status === 'CLOSED') globalChannel = null;
     });
-  
-  globalChannel.subscribe((status) => {
-    console.log("Realtime Status:", status);
-    if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-      globalChannel = null; // Reset agar bisa re-subscribe nanti
-    }
-  });
 };
 
-const fetchSessionData = async () => {
+const syncSession = async () => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
-      
-      if (!error && data) {
+      const { data } = await supabase
+        .from("profiles").select("*").eq("id", session.user.id).single();
+      if (data) {
         userProfile.value = data;
         setupGlobalRealtime(session.user.id);
       }
     } else {
       userProfile.value = null;
-      if (globalChannel) {
-        supabase.removeChannel(globalChannel);
-        globalChannel = null;
-      }
     }
-  } catch (e) {
-    console.error("Auth Sync Error:", e);
   } finally {
-    // Memastikan loading mati apapun kondisinya
     authReady.value = true;
     isInitialLoading.value = false;
   }
 };
 
-const handleVisibilityChange = () => {
-  if (document.visibilityState === "visible") {
-    console.log("App active, refreshing state...");
-    // Gunakan getSession saja untuk cek cepat tanpa trigger loading berat
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setupGlobalRealtime(session.user.id);
-    });
-  }
-};
-
 onMounted(async () => {
-  // SEKRING DARURAT: Paksa loading mati maksimal dalam 4 detik
-  const safetyTimer = setTimeout(() => {
-    if (isInitialLoading.value) {
-      console.warn("Safety trigger: forcing loader off");
-      isInitialLoading.value = false;
-      authReady.value = true;
-    }
-  }, 4000);
+  // SEKRING: Loading wajib mati dalam 3 detik!
+  const safetyTimeout = setTimeout(() => {
+    isInitialLoading.value = false;
+    authReady.value = true;
+  }, 3000);
 
-  await fetchSessionData();
+  await syncSession();
 
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-      await fetchSessionData();
-    }
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN') syncSession();
     if (event === 'SIGNED_OUT') {
       userProfile.value = null;
-      if (globalChannel) {
-        supabase.removeChannel(globalChannel);
-        globalChannel = null;
-      }
+      if (globalChannel) supabase.removeChannel(globalChannel);
+      globalChannel = null;
     }
   });
 
-  document.addEventListener("visibilitychange", handleVisibilityChange);
-  window.addEventListener("online", fetchSessionData);
-  
-  // Bersihkan timer jika loading sudah selesai normal
-  if (!isInitialLoading.value) clearTimeout(safetyTimer);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("visibilitychange", handleVisibilityChange);
-  window.removeEventListener("online", fetchSessionData);
-  if (globalChannel) supabase.removeChannel(globalChannel);
+  // Saat Mas balik dari WA, cukup cek session tanpa muter loading
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") syncSession();
+  });
 });
 </script>
 
 <template>
-  <transition name="fade">
-    <div v-if="isInitialLoading" class="fixed inset-0 bg-[#0a0a0a] z-[9999] flex items-center justify-center pointer-events-none">
-      <div class="flex flex-col items-center">
-        <div class="w-12 h-12 border-4 border-yellow-500/10 border-t-yellow-500 rounded-full animate-spin"></div>
-        <p class="mt-4 text-[10px] font-black text-yellow-500 uppercase tracking-[0.5em] animate-pulse italic">
-          Verifying Signal...
-        </p>
+  <div class="bg-black min-h-screen text-white">
+    <transition name="fade">
+      <div v-if="isInitialLoading" class="fixed inset-0 bg-black z-[9999] flex items-center justify-center">
+        <div class="flex flex-col items-center">
+          <div class="w-10 h-10 border-4 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin"></div>
+          <p class="mt-4 text-[8px] font-black text-yellow-500 uppercase tracking-[0.4em] animate-pulse italic">Connecting...</p>
+        </div>
       </div>
-    </div>
-  </transition>
+    </transition>
 
-  <div class="bg-black min-h-screen selection:bg-yellow-500 selection:text-black">
-    <Header :userProfile="userProfile" :authReady="authReady" :key="userProfile?.id || 'guest'" />
-
+    <Header :userProfile="userProfile" :authReady="authReady" />
     <router-view v-if="authReady" :userProfile="userProfile" :key="route.fullPath" />
-
     <BottomNav v-if="route.meta.showBottomNav" :userProfile="userProfile" />
 
     <transition name="notif">
-      <div v-if="globalNotification" class="fixed bottom-24 right-4 left-4 sm:left-auto sm:right-6 z-[1000] max-w-[400px] bg-[#111]/90 backdrop-blur-xl border border-red-500/50 rounded-2xl p-4 shadow-2xl flex items-center gap-4">
-        <div class="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center shrink-0">
-          <div class="w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
-        </div>
+      <div v-if="globalNotification" class="fixed bottom-24 right-4 left-4 sm:left-auto z-[1000] max-w-[400px] bg-[#111]/90 backdrop-blur-xl border border-red-500/50 rounded-2xl p-4 shadow-2xl flex items-center gap-4">
         <div class="flex-1 min-w-0">
-          <p class="text-[8px] font-black text-red-500 uppercase tracking-[0.2em] mb-1 italic text-left">Market Alert</p>
-          <p class="text-[11px] font-bold text-white leading-tight italic text-left truncate sm:whitespace-normal">
-            {{ globalNotification.message }}
-          </p>
+          <p class="text-[8px] font-black text-red-500 uppercase tracking-[0.2em] mb-1 italic">Market Alert</p>
+          <p class="text-[11px] font-bold text-white italic truncate">{{ globalNotification.message }}</p>
         </div>
-        <button @click="globalNotification = null" class="p-1 hover:bg-white/5 rounded-lg shrink-0">
-          <XMarkIcon class="w-4 h-4 text-gray-500" />
-        </button>
+        <button @click="globalNotification = null"><XMarkIcon class="w-5 h-5 text-gray-500" /></button>
       </div>
     </transition>
   </div>
 </template>
 
 <style>
-.fade-leave-active { transition: opacity 0.4s ease; }
+.fade-leave-active { transition: opacity 0.5s ease; }
 .fade-leave-to { opacity: 0; }
-
 .notif-enter-active { transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 .notif-leave-active { transition: all 0.4s ease-in; }
 .notif-enter-from { transform: translateY(100px); opacity: 0; }
 .notif-leave-to { transform: translateX(100%); opacity: 0; }
-
-body { background-color: black; color: white; -webkit-tap-highlight-color: transparent; }
+body { background-color: black; margin: 0; -webkit-tap-highlight-color: transparent; }
 </style>
