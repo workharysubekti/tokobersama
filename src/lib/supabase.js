@@ -8,14 +8,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storageKey: 'tokobersama-auth',
-    // --- TAMBAHKAN BARIS INI UNTUK FIX BENGONG 5 DETIK ---
-    skipStorageLock: true, 
-  },
-  global: {
-    fetch: (...args) => fetch(...args),
-  },
-  realtime: {
-    params: { eventsPerSecond: 10 },
-  },
+    storageKey: 'tokobersama-auth-v2', // Ganti nama key agar browser anggap ini kunci baru
+    skipStorageLock: true, // Abaikan antrean tab
+  }
 });
