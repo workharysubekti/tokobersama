@@ -157,4 +157,4 @@ onUnmounted(() => {
 .notif-leave-to { transform: translateX(100%); opacity: 0; }
 
 body { background-color: black; color: white; -webkit-tap-highlight-color: transparent; }
-</style>
+</style> 
