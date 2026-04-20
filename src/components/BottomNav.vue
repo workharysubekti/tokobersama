@@ -3,7 +3,7 @@ import { ref, onMounted } from "vue";
 import { supabase } from "../lib/supabase.js";
 import {
   HomeIcon,
-  MagnifyingGlassIcon,
+  ChatBubbleLeftRightIcon, // Icon baru buat Pesan
   TrophyIcon,
   UserIcon,
   PlusIcon,
@@ -57,9 +57,9 @@ onMounted(async () => {
           <span :class="[route.path === '/' ? 'text-yellow-500' : 'text-gray-500', 'text-[7px] uppercase font-black italic tracking-tighter']">Home</span>
         </router-link>
 
-        <router-link to="/search" class="flex flex-col items-center gap-1 group">
-          <MagnifyingGlassIcon :class="[route.path === '/search' ? 'text-yellow-500 scale-110' : 'text-gray-500', 'w-6 h-6 transition-all']" />
-          <span :class="[route.path === '/search' ? 'text-yellow-500' : 'text-gray-500', 'text-[7px] uppercase font-black italic tracking-tighter']">Search</span>
+        <router-link to="/messages" class="flex flex-col items-center gap-1 group">
+          <ChatBubbleLeftRightIcon :class="[route.path.includes('/messages') ? 'text-yellow-500 scale-110' : 'text-gray-500', 'w-6 h-6 transition-all']" />
+          <span :class="[route.path.includes('/messages') ? 'text-yellow-500' : 'text-gray-500', 'text-[7px] uppercase font-black italic tracking-tighter']">Comms</span>
         </router-link>
 
         <div v-if="userProfile" class="flex flex-col items-center">
@@ -86,8 +86,3 @@ onMounted(async () => {
     </div>
   </div>
 </template>
-
-<style scoped>
-div { -webkit-tap-highlight-color: transparent; }
-.router-link-active span { text-shadow: 0 0 10px rgba(234, 179, 8, 0.4); }
-</style>
