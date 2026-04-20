@@ -48,23 +48,23 @@ onMounted(async () => {
     <div class="max-w-md mx-auto pointer-events-auto">
       <nav
         :class="[
-          'bg-black/90 backdrop-blur-xl border border-white/5 px-2 py-3 rounded-[32px] grid items-end shadow-[0_20px_50px_rgba(0,0,0,0.8)] transition-all duration-500',
+          'bg-[#0f0f0f]/95 backdrop-blur-2xl border border-white/10 px-2 py-3 rounded-[32px] grid items-end shadow-[0_-10px_40px_rgba(0,0,0,0.8)] transition-all duration-500',
           userProfile ? 'grid-cols-5' : 'grid-cols-4'
         ]"
       >
         <router-link to="/" class="flex flex-col items-center gap-1 group">
-          <HomeIcon :class="[route.path === '/' ? 'text-yellow-500 scale-110' : 'text-gray-600', 'w-6 h-6 transition-all']" />
-          <span :class="[route.path === '/' ? 'text-yellow-500' : 'text-gray-600', 'text-[7px] uppercase font-black italic tracking-tighter']">Home</span>
+          <HomeIcon :class="[route.path === '/' ? 'text-yellow-500 scale-110' : 'text-gray-500', 'w-6 h-6 transition-all']" />
+          <span :class="[route.path === '/' ? 'text-yellow-500' : 'text-gray-500', 'text-[7px] uppercase font-black italic tracking-tighter']">Home</span>
         </router-link>
 
         <router-link to="/search" class="flex flex-col items-center gap-1 group">
-          <MagnifyingGlassIcon :class="[route.path === '/search' ? 'text-yellow-500 scale-110' : 'text-gray-600', 'w-6 h-6 transition-all']" />
-          <span :class="[route.path === '/search' ? 'text-yellow-500' : 'text-gray-600', 'text-[7px] uppercase font-black italic tracking-tighter']">Search</span>
+          <MagnifyingGlassIcon :class="[route.path === '/search' ? 'text-yellow-500 scale-110' : 'text-gray-500', 'w-6 h-6 transition-all']" />
+          <span :class="[route.path === '/search' ? 'text-yellow-500' : 'text-gray-500', 'text-[7px] uppercase font-black italic tracking-tighter']">Search</span>
         </router-link>
 
         <div v-if="userProfile" class="flex flex-col items-center">
           <router-link to="/create-listing" class="relative -top-6">
-            <div class="p-3 bg-yellow-500 rounded-2xl border-[6px] border-[#050505] active:scale-90 transition-transform shadow-lg">
+            <div class="p-3 bg-yellow-500 rounded-2xl border-[6px] border-[#0f0f0f] active:scale-90 transition-transform shadow-[0_10px_20px_rgba(234,179,8,0.3)]">
               <PlusIcon class="w-6 h-6 text-black stroke-[3px]" />
             </div>
           </router-link>
@@ -72,13 +72,13 @@ onMounted(async () => {
         </div>
 
         <router-link to="/my-bids" class="flex flex-col items-center gap-1 group">
-          <TrophyIcon :class="[route.path === '/my-bids' ? 'text-yellow-500 scale-110' : 'text-gray-600', 'w-6 h-6 transition-all']" />
-          <span :class="[route.path === '/my-bids' ? 'text-yellow-500' : 'text-gray-600', 'text-[7px] uppercase font-black italic tracking-tighter']">Bids</span>
+          <TrophyIcon :class="[route.path === '/my-bids' ? 'text-yellow-500 scale-110' : 'text-gray-500', 'w-6 h-6 transition-all']" />
+          <span :class="[route.path === '/my-bids' ? 'text-yellow-500' : 'text-gray-500', 'text-[7px] uppercase font-black italic tracking-tighter']">Bids</span>
         </router-link>
 
         <router-link :to="userProfile ? '/profile' : '/login'" class="flex flex-col items-center gap-1 group">
-          <UserIcon :class="[route.path === '/profile' || route.path === '/login' ? 'text-yellow-500 scale-110' : 'text-gray-600', 'w-6 h-6 transition-all']" />
-          <span :class="[route.path === '/profile' || route.path === '/login' ? 'text-yellow-500' : 'text-gray-600', 'text-[7px] uppercase font-black italic tracking-tighter']">
+          <UserIcon :class="[route.path === '/profile' || route.path === '/login' ? 'text-yellow-500 scale-110' : 'text-gray-500', 'w-6 h-6 transition-all']" />
+          <span :class="[route.path === '/profile' || route.path === '/login' ? 'text-yellow-500' : 'text-gray-500', 'text-[7px] uppercase font-black italic tracking-tighter']">
             {{ userProfile ? 'User' : 'Login' }}
           </span>
         </router-link>
