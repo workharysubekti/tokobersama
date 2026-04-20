@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
-import { supabase } from "../lib/supabase.js";
+// Kita tidak import supabase di sini lagi untuk menjaga performa
 import {
   EyeIcon,
   BanknotesIcon,
@@ -9,7 +9,6 @@ import {
   SparklesIcon,
   UserCircleIcon,
 } from "@heroicons/vue/24/outline";
-import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 
 const props = defineProps({
   product: Object,
@@ -84,21 +83,24 @@ onUnmounted(() => {
 <template>
   <div
     class="relative group bg-white/[0.03] border border-white/5 rounded-[24px] overflow-hidden transition-all duration-500 hover:border-yellow-500/30 flex flex-col h-full"
-    :class="{ 'border-yellow-500/20 bg-yellow-500/[0.01] shadow-2xl': isPremium }"
+    :class="{ 'border-yellow-500/40 bg-yellow-500/[0.02] shadow-[0_0_30px_rgba(234,179,8,0.05)]': isPremium }"
   >
     <div
       v-if="isPremium"
-      class="absolute top-2 left-2 z-20 bg-yellow-500 text-black text-[7px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-lg italic uppercase tracking-tighter"
+      class="absolute top-2 left-2 z-30 bg-yellow-500 text-black text-[7px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-lg italic uppercase tracking-tighter"
     >
       <SparklesIcon class="w-2.5 h-2.5" />
-      <span>Premium</span>
+      <span>Elite Item</span>
     </div>
 
     <div class="relative h-44 md:h-56 overflow-hidden cursor-pointer shrink-0" @click="goToDetail">
       <img :src="product.image_url" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+      
+      <div v-if="isPremium" class="glossy-overlay"></div>
+
       <div class="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent opacity-80"></div>
 
-      <div class="absolute bottom-2 left-2 right-2 flex justify-between items-center gap-1">
+      <div class="absolute bottom-2 left-2 right-2 flex justify-between items-center gap-1 z-20">
         <div class="bg-black/60 backdrop-blur-md border border-white/10 px-2 py-1 rounded-xl flex items-center gap-1.5 shrink-0">
           <ClockIcon class="w-3 h-3 text-yellow-500" />
           <span class="text-[8px] md:text-[10px] text-white font-black italic tracking-tighter">{{ timeLeft }}</span>
@@ -117,7 +119,7 @@ onUnmounted(() => {
         </div>
         <div class="flex flex-col min-w-0">
           <span class="text-[8px] font-black uppercase italic tracking-tighter text-white/70 group-hover/seller:text-yellow-500 truncate">
-            {{ product.profiles?.username || "Unknown" }}
+            {{ product.profiles?.username || "Anonymous" }}
           </span>
         </div>
       </div>
@@ -129,9 +131,9 @@ onUnmounted(() => {
       </div>
 
       <div class="bg-white/[0.03] border border-white/5 rounded-xl p-2 md:p-3 mb-4 mt-auto">
-        <p class="text-[7px] md:text-[9px] text-gray-600 font-black uppercase tracking-widest mb-0.5 italic">Highest Bid</p>
+        <p class="text-[7px] md:text-[9px] text-gray-600 font-black uppercase tracking-widest mb-0.5 italic">Current High Bid</p>
         <p class="text-[11px] md:text-lg font-[1000] text-yellow-500 italic tracking-tighter leading-none truncate">
-          {{ formatPrice(product.current_bid || product.price) }}
+          {{ formatPrice(product.current_bid || product.starting_bid) }}
         </p>
       </div>
 
@@ -141,11 +143,11 @@ onUnmounted(() => {
         </button>
         <button
           @click="placeBid"
-          class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg font-black text-[9px] md:text-[10px] uppercase tracking-tighter italic transition-all"
-          :class="isPremium ? 'bg-yellow-500 text-black' : 'bg-white text-black hover:bg-yellow-500'"
+          class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg font-black text-[9px] md:text-[10px] uppercase tracking-tighter italic transition-all shadow-lg active:scale-95"
+          :class="isPremium ? 'bg-yellow-500 text-black shadow-yellow-500/10' : 'bg-white text-black hover:bg-yellow-500'"
         >
           <BanknotesIcon class="w-3.5 h-3.5" />
-          <span>Bid Now</span>
+          <span>Place Bid</span>
         </button>
       </div>
     </div>
@@ -153,11 +155,41 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* Tambahan biar line-clamp jalan di semua browser */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* --- ANIMASI GLOSSY / SHINE --- */
+.glossy-overlay {
+  position: absolute;
+  top: 0;
+  left: -150%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    120deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.4),
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  z-index: 10;
+  transition: all 0.1s;
+  animation: shine 4s infinite linear;
+}
+
+@keyframes shine {
+  0% { left: -150%; }
+  30% { left: 150%; } /* Lewat cepat */
+  100% { left: 150%; } /* Nunggu bentar baru mulai lagi */
+}
+
+/* Hilangkan highlight biru di mobile */
+div {
+  -webkit-tap-highlight-color: transparent;
 }
 </style>
