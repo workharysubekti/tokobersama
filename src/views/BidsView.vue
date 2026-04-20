@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onUnmounted, computed } from "vue"; // Ganti onMounted ke watch
+import { ref, watch, onUnmounted, computed } from "vue";
 import { supabase } from "../lib/supabase";
 import AuctionCard from "../components/AuctionCard.vue";
 import { TrophyIcon, ExclamationCircleIcon, ArrowPathIcon } from "@heroicons/vue/24/outline";
@@ -11,21 +11,21 @@ const activeTab = ref("all");
 let realtimeChannel = null;
 
 const fetchMyBids = async () => {
-  // Cegah jalan kalau profile belum ada
   if (!props.userProfile?.id) return;
   
   loading.value = true;
   try {
-    // 1. Ambil semua bid unik milik user
-    const { data: bidsData } = await supabase
+    // 1. Ambil history produk yang pernah Mas bid
+    const { data: userBids } = await supabase
       .from("bids")
       .select(`product_id, products (*)`)
       .eq("user_id", props.userProfile.id)
       .order("created_at", { ascending: false });
 
-    if (bidsData && bidsData.length > 0) {
+    if (userBids && userBids.length > 0) {
+      // Filter biar satu produk cuma muncul satu kali di list
       const productsMap = new Map();
-      bidsData.forEach(item => {
+      userBids.forEach(item => {
         if (item.products && !productsMap.has(item.product_id)) {
           productsMap.set(item.product_id, { ...item.products });
         }
@@ -34,44 +34,45 @@ const fetchMyBids = async () => {
       const uniqueProducts = Array.from(productsMap.values());
       const productIds = uniqueProducts.map(p => p.id);
 
-      // 2. Cek data Live (Siapa pemenang aslinya sekarang)
-      const { data: liveStatus } = await supabase
-        .from("products")
-        .select("id, current_bid, winner_id") // Pastikan kolomnya winner_id
-        .in("id", productIds);
+      // 2. CEK STATUS LIVE: Siapa penawar tertinggi saat ini?
+      // Kita ambil bid terbaru dari tabel 'bids' untuk produk-produk ini
+      const { data: latestBidsData } = await supabase
+        .from("bids")
+        .select("product_id, user_id, amount")
+        .in("product_id", productIds)
+        .order("created_at", { ascending: false });
 
       myBids.value = uniqueProducts.map(p => {
-        const currentLive = liveStatus?.find(l => l.id === p.id);
+        // Cari bid paling atas (terbaru) untuk produk ini
+        const topBidForThisProduct = latestBidsData?.find(b => b.product_id === p.id);
         
-        // LOGIC PENENTU: Bandingkan ID Mas dengan winner_id di tabel products
-        const winning = currentLive?.winner_id === props.userProfile.id;
+        // LOGIKA: Jika user_id di bid terbaru adalah ID Mas, berarti Mas LEADING
+        const isLeading = topBidForThisProduct?.user_id === props.userProfile.id;
 
         return {
           ...p,
-          current_bid: currentLive?.current_bid || p.current_bid,
-          isWinning: winning // Sekarang harusnya bener
+          // Gunakan harga dari bid terbaru jika ada
+          current_bid: topBidForThisProduct?.amount || p.current_bid,
+          isWinning: isLeading 
         };
       });
     } else {
       myBids.value = [];
     }
   } catch (err) {
-    console.error("Error BidsView:", err);
+    console.error("BidsView Error:", err);
   } finally {
     loading.value = false;
   }
 };
 
-// KUNCI: Nunggu userProfile siap baru tarik data
+// Pantau profile & nyalakan Realtime
 watch(() => props.userProfile, (newVal) => {
   if (newVal) {
     fetchMyBids();
-    
-    // Setup Realtime sekali saja saat profile ready
     if (!realtimeChannel) {
-      realtimeChannel = supabase.channel(`bids-realtime-${props.userProfile.id}`)
+      realtimeChannel = supabase.channel(`bids-live-monitor`)
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "bids" }, fetchMyBids)
-        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "products" }, fetchMyBids)
         .subscribe();
     }
   }
@@ -91,35 +92,37 @@ const filteredBids = computed(() => {
 <template>
   <div class="min-h-screen bg-[#050505] pt-28 pb-32 px-5 text-white">
     <div class="max-w-2xl mx-auto">
+      
       <div class="flex flex-col mb-10">
-        <h2 class="text-3xl font-[1000] italic uppercase tracking-tighter mb-6">Activity <span class="text-yellow-500 text-4xl">Vault</span></h2>
+        <h2 class="text-3xl font-[1000] italic uppercase tracking-tighter mb-6">Market <span class="text-yellow-500 text-4xl">Activity</span></h2>
         
         <div class="flex bg-white/[0.03] border border-white/5 p-1 rounded-2xl">
-          <button @click="activeTab = 'all'" :class="activeTab === 'all' ? 'bg-white/10 text-white' : 'text-gray-500'" class="flex-1 py-3 rounded-xl text-[9px] font-black uppercase italic transition-all">All</button>
-          <button @click="activeTab = 'winning'" :class="activeTab === 'winning' ? 'bg-green-500 text-black' : 'text-gray-500'" class="flex-1 py-3 rounded-xl text-[9px] font-black uppercase italic transition-all">Winning</button>
-          <button @click="activeTab = 'outbid'" :class="activeTab === 'outbid' ? 'bg-red-500 text-white' : 'text-gray-500'" class="flex-1 py-3 rounded-xl text-[9px] font-black uppercase italic transition-all">Outbid</button>
+          <button @click="activeTab = 'all'" :class="activeTab === 'all' ? 'bg-white/10 text-white' : 'text-gray-500'" class="flex-1 py-3 rounded-xl text-[9px] font-black uppercase italic transition-all">Semua</button>
+          <button @click="activeTab = 'winning'" :class="activeTab === 'winning' ? 'bg-green-500 text-black' : 'text-gray-500'" class="flex-1 py-3 rounded-xl text-[9px] font-black uppercase italic transition-all">✓ Leading</button>
+          <button @click="activeTab = 'outbid'" :class="activeTab === 'outbid' ? 'bg-red-500 text-white' : 'text-gray-500'" class="flex-1 py-3 rounded-xl text-[9px] font-black uppercase italic transition-all">✗ Outbid</button>
         </div>
       </div>
 
       <div v-if="loading" class="flex justify-center py-20">
-        <ArrowPathIcon class="w-8 h-8 text-yellow-500 animate-spin opacity-30" />
+        <ArrowPathIcon class="w-8 h-8 text-yellow-500 animate-spin opacity-20" />
       </div>
 
       <div v-else-if="filteredBids.length > 0" class="grid grid-cols-2 gap-4">
-        <div v-for="product in filteredBids" :key="product.id" class="relative">
-          <div class="absolute top-3 left-3 z-30 px-3 py-1 rounded-full text-[7px] font-black uppercase italic shadow-xl" 
-               :class="product.isWinning ? 'bg-green-500 text-black shadow-green-500/20' : 'bg-red-500 text-white shadow-red-500/20'">
-            {{ product.isWinning ? 'Leading' : 'Outbid' }}
+        <div v-for="product in filteredBids" :key="product.id" class="relative group">
+          <div class="absolute top-3 left-3 z-30 px-3 py-1 rounded-full text-[7px] font-[1000] uppercase italic shadow-2xl border transition-all duration-500" 
+               :class="product.isWinning ? 'bg-green-500 text-black border-green-400 shadow-green-500/20' : 'bg-red-500 text-white border-red-400 shadow-red-500/20'">
+            {{ product.isWinning ? '✓ Leading' : '✗ Outbid' }}
           </div>
           
           <AuctionCard :product="product" />
         </div>
       </div>
 
-      <div v-else class="py-20 text-center border-2 border-dashed border-white/5 rounded-[40px]">
-        <ExclamationCircleIcon class="w-10 h-10 text-gray-800 mx-auto mb-4" />
-        <p class="text-[9px] font-black uppercase tracking-[0.3em] text-gray-600 italic">No Activity Detected</p>
+      <div v-else class="py-24 text-center border-2 border-dashed border-white/5 rounded-[40px]">
+        <TrophyIcon class="w-12 h-12 text-gray-800 mx-auto mb-4 opacity-20" />
+        <p class="text-[9px] font-black uppercase tracking-[0.4em] text-gray-600 italic">No Active Transmissions</p>
       </div>
+
     </div>
   </div>
 </template>
