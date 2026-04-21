@@ -2,14 +2,6 @@
 import { ref, onMounted, onUnmounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../lib/supabase.js";
-import { notify } from "../utils/notify";
-import {
-  ArrowLeftIcon,
-  PaperAirplaneIcon,
-  UserCircleIcon,
-  ArrowPathIcon,
-  ShieldCheckIcon,
-} from "@heroicons/vue/24/outline";
 
 const route = useRoute();
 const router = useRouter();
@@ -25,9 +17,7 @@ const isTargetOnline = ref(false);
 
 const scrollToBottom = async () => {
   await nextTick();
-  if (chatContainer.value) {
-    chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-  }
+  if (chatContainer.value) chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
 };
 
 const markAsRead = async () => {
@@ -35,154 +25,97 @@ const markAsRead = async () => {
   await supabase.from("messages").update({ is_read: true }).eq("receiver_id", currentUser.value.id).eq("sender_id", targetId).eq("is_read", false);
 };
 
-const goToPublicProfile = () => {
-  if (targetProfile.value?.username) router.push(`/user/${targetProfile.value.username}`);
-};
-
 const fetchChatData = async () => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return router.push("/login");
-    currentUser.value = session.user;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return router.push("/login");
+  currentUser.value = session.user;
 
-    const { data: profile } = await supabase.from("profiles").select("*").eq("id", targetId).maybeSingle();
-    targetProfile.value = profile;
+  // 1. Ambil Profil & History
+  const { data: profile } = await supabase.from("profiles").select("*").eq("id", targetId).maybeSingle();
+  targetProfile.value = profile;
 
-    const { data: msgData, error } = await supabase.from("messages")
-      .select("*")
-      .or(`and(sender_id.eq.${currentUser.value.id},receiver_id.eq.${targetId}),and(sender_id.eq.${targetId},receiver_id.eq.${currentUser.value.id})`)
-      .order("created_at", { ascending: true });
+  const { data: msgData } = await supabase.from("messages")
+    .select("*")
+    .or(`and(sender_id.eq.${currentUser.value.id},receiver_id.eq.${targetId}),and(sender_id.eq.${targetId},receiver_id.eq.${currentUser.value.id})`)
+    .order("created_at", { ascending: true });
 
-    if (error) throw error;
-    messages.value = msgData || [];
-    loading.value = false;
-    scrollToBottom();
-    markAsRead();
+  messages.value = msgData || [];
+  loading.value = false;
+  scrollToBottom();
+  markAsRead();
 
-    // 1. NGINTIP STATUS ONLINE (JANGAN PAKAI .track() LAGI BIAR GAK BENTROK)
-    const presenceChannel = supabase.channel("global-online-users");
-    presenceChannel
-      .on("presence", { event: "sync" }, () => {
-        const state = presenceChannel.presenceState();
-        isTargetOnline.value = !!state[targetId];
-      })
-      .subscribe();
+  // 2. MONITOR ONLINE (HANYA LISTEN, JANGAN TRACK!)
+  const monitorChannel = supabase.channel("online-status-global");
+  monitorChannel
+    .on("presence", { event: "sync" }, () => {
+      const state = monitorChannel.presenceState();
+      isTargetOnline.value = !!state[targetId];
+    })
+    .subscribe();
 
-    // 2. REALTIME PESAN (PASTIKAN NAMA CHANNEL UNIK)
-    const roomID = [currentUser.value.id, targetId].sort().join("_");
-    const msgChannel = supabase.channel(`msg_realtime_${roomID}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-          const newMsg = payload.new;
-          if ((newMsg.sender_id === currentUser.value.id && newMsg.receiver_id === targetId) || 
-              (newMsg.sender_id === targetId && newMsg.receiver_id === currentUser.value.id)) {
-            messages.value.push(newMsg);
-            scrollToBottom();
-            if (newMsg.receiver_id === currentUser.value.id) markAsRead();
-          }
-      })
-      .subscribe();
+  // 3. REALTIME PESAN (LOGIKA LAMA YANG AMAN)
+  const msgChannel = supabase.channel('any') // Gunakan channel default agar tidak ada lock
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+      const n = payload.new;
+      if ((n.sender_id === currentUser.value.id && n.receiver_id === targetId) || 
+          (n.sender_id === targetId && n.receiver_id === currentUser.value.id)) {
+        messages.value.push(n);
+        scrollToBottom();
+        if (n.receiver_id === currentUser.value.id) markAsRead();
+      }
+    })
+    .subscribe();
 
-    return { presenceChannel, msgChannel };
-  } catch (error) {
-    console.error(error);
-  }
-};
-
-const sendMessage = async () => {
-  if (!newMessage.value.trim()) return;
-  const textToSend = newMessage.value;
-  newMessage.value = "";
-  try {
-    const { error } = await supabase.from("messages").insert({
-      sender_id: currentUser.value.id,
-      receiver_id: targetId,
-      text: textToSend,
-      is_read: false
-    });
-    if (error) throw error;
-  } catch (error) {
-    notify.error("Fail", "Transmission error.");
-  }
+  return { monitorChannel, msgChannel };
 };
 
 let subs;
-onMounted(async () => {
-  subs = await fetchChatData();
-});
-
+onMounted(async () => { subs = await fetchChatData(); });
 onUnmounted(() => {
   if (subs) {
-    supabase.removeChannel(subs.presenceChannel);
+    supabase.removeChannel(subs.monitorChannel);
     supabase.removeChannel(subs.msgChannel);
   }
 });
+
+const sendMessage = async () => {
+  if (!newMessage.value.trim()) return;
+  const text = newMessage.value;
+  newMessage.value = "";
+  await supabase.from("messages").insert({ sender_id: currentUser.value.id, receiver_id: targetId, text: text });
+};
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[9999] h-screen w-full bg-[#050505] flex justify-center overflow-hidden overscroll-none">
-    <div class="relative w-full max-w-2xl bg-[#0a0a0a] flex flex-col h-full md:border-x border-white/5 shadow-2xl">
-      <header class="h-16 shrink-0 z-30 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <button @click="router.back()" class="p-2 bg-white/5 rounded-lg border border-white/10 text-gray-400 active:scale-90">
-            <ArrowLeftIcon class="w-5 h-5" />
-          </button>
-          <div v-if="targetProfile" @click="goToPublicProfile" class="flex items-center gap-3 cursor-pointer group active:opacity-70">
-            <div class="w-10 h-10 rounded-full overflow-hidden border bg-black shadow-lg transition-all duration-500"
-                 :class="isTargetOnline ? 'border-green-500 shadow-green-500/20' : 'border-white/10'">
-              <img v-if="targetProfile.avatar_url" :src="targetProfile.avatar_url" class="w-full h-full object-cover" />
-              <UserCircleIcon v-else class="w-full h-full text-gray-800 p-1" />
-            </div>
-            <div>
-              <h2 class="text-[11px] font-[1000] text-white uppercase italic leading-none mb-1 group-hover:text-yellow-500 transition-colors">
-                {{ targetProfile.full_name || targetProfile.username }}
-              </h2>
-              <div class="flex items-center gap-1.5">
-                <div class="w-1.5 h-1.5 rounded-full shadow-[0_0_8px_currentColor]" :class="isTargetOnline ? 'bg-green-500 text-green-500 animate-pulse' : 'bg-gray-700 text-gray-700'"></div>
-                <p class="text-[7px] font-black uppercase tracking-widest transition-colors duration-500" :class="isTargetOnline ? 'text-green-500' : 'text-gray-600'">
-                  {{ isTargetOnline ? "Online" : "Offline" }}
-                </p>
-              </div>
-            </div>
-          </div>
+  <div class="fixed inset-0 z-[9999] h-screen w-full bg-[#050505] flex flex-col overflow-hidden">
+    <header class="h-16 shrink-0 bg-[#0a0a0a] border-b border-white/5 px-4 flex items-center gap-3">
+      <button @click="router.back()" class="p-2 text-gray-400"><ArrowLeftIcon class="w-6 h-6" /></button>
+      <div v-if="targetProfile" class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full border" :class="isTargetOnline ? 'border-green-500' : 'border-white/10'">
+          <img :src="targetProfile.avatar_url" class="w-full h-full rounded-full object-cover" />
         </div>
-        <ShieldCheckIcon class="w-5 h-5 opacity-20 text-yellow-500" />
-      </header>
-
-      <main ref="chatContainer" class="flex-1 overflow-y-auto p-5 space-y-6 no-scrollbar bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-yellow-500/[0.02] to-transparent overscroll-contain">
-        <div v-if="loading" class="flex justify-center py-20"><ArrowPathIcon class="w-8 h-8 animate-spin text-yellow-500/30" /></div>
-        <template v-else>
-          <div v-for="msg in messages" :key="msg.id" :class="msg.sender_id === currentUser.id ? 'flex-row-reverse' : ''" class="flex items-end gap-2">
-            <div :class="msg.sender_id === currentUser.id ? 'bg-yellow-500 text-black rounded-tr-none' : 'bg-white/[0.03] text-white border border-white/5 rounded-tl-none'" class="max-w-[85%] px-4 py-3 rounded-[22px] shadow-lg relative">
-              <p class="text-[11px] font-bold italic leading-relaxed">{{ msg.text }}</p>
-              <div class="flex items-center justify-end gap-1 mt-1.5">
-                <p class="text-[6px] opacity-40 uppercase font-black tracking-tighter italic">{{ new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }}</p>
-                <div v-if="msg.sender_id === currentUser.id" class="text-[8px] font-black">
-                   <span :class="msg.is_read ? 'text-blue-500' : 'opacity-20'">{{ msg.is_read ? '✓✓' : '✓' }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-        <div class="h-4 w-full shrink-0"></div>
-      </main>
-
-      <footer class="shrink-0 p-4 bg-[#0a0a0a] border-t border-white/5 pb-safe">
-        <div class="relative flex items-center max-w-3xl mx-auto w-full">
-          <input v-model="newMessage" @keyup.enter="sendMessage" type="text" placeholder="KETIK PESAN..." class="w-full bg-black border border-white/10 rounded-2xl py-4 pl-6 pr-16 text-[10px] outline-none focus:border-yellow-500/40 font-black italic text-white transition-all shadow-inner" />
-          <button @click="sendMessage" :disabled="!newMessage.trim()" class="absolute right-2 bg-yellow-500 text-black p-2.5 rounded-xl active:scale-90 shadow-lg hover:bg-white transition-all">
-            <PaperAirplaneIcon class="w-5 h-5" />
-          </button>
+        <div>
+          <h2 class="text-xs font-black text-white italic">{{ targetProfile.full_name }}</h2>
+          <p class="text-[8px] font-bold" :class="isTargetOnline ? 'text-green-500' : 'text-gray-600'">
+            {{ isTargetOnline ? 'ACTIVE' : 'OFFLINE' }}
+          </p>
         </div>
-      </footer>
-    </div>
+      </div>
+    </header>
+
+    <main ref="chatContainer" class="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+      <div v-for="msg in messages" :key="msg.id" :class="msg.sender_id === currentUser.id ? 'flex-row-reverse' : ''" class="flex items-end gap-2">
+        <div :class="msg.sender_id === currentUser.id ? 'bg-yellow-500 text-black' : 'bg-white/5 text-white border border-white/10'" class="max-w-[80%] px-4 py-2 rounded-2xl text-[11px] font-bold italic">
+          {{ msg.text }}
+        </div>
+      </div>
+    </main>
+
+    <footer class="p-4 bg-[#0a0a0a] border-t border-white/5">
+      <div class="relative flex items-center">
+        <input v-model="newMessage" @keyup.enter="sendMessage" type="text" placeholder="KETIK PESAN..." class="w-full bg-black border border-white/10 rounded-xl py-4 pl-5 pr-14 text-[10px] text-white outline-none" />
+        <button @click="sendMessage" class="absolute right-2 bg-yellow-500 p-2 rounded-lg text-black"><PaperAirplaneIcon class="w-5 h-5" /></button>
+      </div>
+    </footer>
   </div>
 </template>
-
-<style scoped>
-.fixed { height: 100vh; height: -webkit-fill-available; }
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-.overscroll-none { overscroll-behavior: none; }
-.overscroll-contain { overscroll-behavior-y: contain; }
-.pb-safe { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
-</style>
