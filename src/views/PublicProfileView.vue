@@ -214,96 +214,24 @@ onMounted(fetchData);
       <div
         class="bg-gray-900/20 border border-white/5 rounded-[48px] p-10 mb-10 backdrop-blur-3xl relative"
       >
-        <div class="flex flex-col md:flex-row items-center gap-10">
-          <div class="relative">
-            <div
-              class="w-36 h-36 rounded-full border-4 border-white/5 overflow-hidden shadow-2xl bg-black"
-            >
-              <img
-                :src="profile.avatar_url"
-                class="w-full h-full object-cover"
-              />
-            </div>
-            <div
-              :class="[userRank.bg, userRank.color]"
-              class="absolute -bottom-3 left-1/2 -translate-x-1/2 px-5 py-1.5 rounded-full border border-white/10 text-[9px] flex items-center gap-2 whitespace-nowrap shadow-xl"
-            >
-              <component :is="userRank.icon" class="w-3.5 h-3.5" />
-              {{ userRank.name }}
-            </div>
+        <div class="flex flex-col items-center gap-4">
+          <div
+            class="w-36 h-36 rounded-full border-4 border-white/5 overflow-hidden shadow-2xl bg-black"
+          >
+            <img
+              v-if="profile.avatar_url"
+              :src="profile.avatar_url"
+              class="w-full h-full object-cover"
+            />
+            <UserCircleIcon v-else class="w-full h-full text-gray-900" />
           </div>
 
-          <div class="flex-1 text-center md:text-left">
-            <h1 class="text-4xl tracking-tighter leading-none mb-2">
-              {{ profile.full_name || profile.username }}
-            </h1>
-            <p
-              class="text-xs text-yellow-500/50 tracking-[0.4em] mb-8 uppercase font-black"
-            >
-              @{{ profile.username }}
-            </p>
-
-            <div
-              class="flex flex-wrap justify-center md:justify-start gap-4 mb-8"
-            >
-              <div
-                class="bg-black/40 border border-white/5 px-6 py-4 rounded-[28px] text-center min-w-[100px]"
-              >
-                <span
-                  class="block text-2xl text-yellow-500 leading-none mb-1"
-                  >{{ followersCount }}</span
-                >
-                <span
-                  class="text-[8px] text-gray-600 tracking-widest font-black uppercase"
-                  >Followers</span
-                >
-              </div>
-              <div
-                class="bg-black/40 border border-white/5 px-6 py-4 rounded-[28px] text-center min-w-[100px]"
-              >
-                <span class="block text-2xl text-white leading-none mb-1">{{
-                  followingCount
-                }}</span>
-                <span
-                  class="text-[8px] text-gray-600 tracking-widest font-black uppercase"
-                  >Following</span
-                >
-              </div>
-              <div
-                class="bg-black/40 border border-white/5 px-6 py-4 rounded-[28px] text-center min-w-[100px]"
-              >
-                <span class="block text-2xl text-blue-500 leading-none mb-1">{{
-                  listings.length
-                }}</span>
-                <span
-                  class="text-[8px] text-gray-600 tracking-widest font-black uppercase"
-                  >Items</span
-                >
-              </div>
-            </div>
-
-            <div
-              v-if="currentUser?.id !== profile.id"
-              class="flex gap-2 justify-center md:justify-start"
-            >
-              <button
-                @click="handleFollow"
-                :class="
-                  isFollowing
-                    ? 'bg-white/5 border border-white/10'
-                    : 'bg-yellow-500 text-black'
-                "
-                class="px-10 py-4 rounded-2xl text-[10px] tracking-widest font-black transition-all active:scale-95 shadow-xl"
-              >
-                {{ isFollowing ? "UNFOLLOW SIGNAL" : "FOLLOW MEMBER" }}
-              </button>
-              <button
-                @click="router.push(`/messages/${profile.id}`)"
-                class="p-4 bg-white/5 border border-white/10 rounded-2xl hover:text-yellow-500 transition-all"
-              >
-                <ChatBubbleLeftEllipsisIcon class="w-6 h-6" />
-              </button>
-            </div>
+          <div
+            :class="[userRank.bg, userRank.color]"
+            class="px-5 py-1.5 rounded-full border border-white/10 text-[9px] flex items-center gap-2 whitespace-nowrap shadow-xl"
+          >
+            <component :is="userRank.icon" class="w-3.5 h-3.5" />
+            {{ userRank.name }}
           </div>
         </div>
       </div>
