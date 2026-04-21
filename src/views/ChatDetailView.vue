@@ -1,5 +1,4 @@
 <script setup>
-/* ... script tetap sama (fetchChatData, markAsRead, dll) ... */
 import { ref, onMounted, onUnmounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../lib/supabase.js";
@@ -53,6 +52,7 @@ const fetchChatData = async () => {
     if (!session) return router.push("/login");
     currentUser.value = session.user;
 
+    // 1. Ambil Profil Target
     const { data: profile } = await supabase
       .from("profiles")
       .select("*")
@@ -60,6 +60,7 @@ const fetchChatData = async () => {
       .maybeSingle();
     targetProfile.value = profile;
 
+    // 2. Ambil History Pesan
     const { data: msgData, error } = await supabase
       .from("messages")
       .select("*")
@@ -72,14 +73,27 @@ const fetchChatData = async () => {
     scrollToBottom();
     markAsRead();
 
-    const channel = supabase.channel(`room_${targetId}`, {
+    // 3. FIX CHANNEL ID: Buat ID Kamar yang sama buat kedua user
+    const roomID = [currentUser.value.id, targetId].sort().join("_");
+    const channel = supabase.channel(`chat_${roomID}`, {
       config: { presence: { key: currentUser.value.id } },
     });
 
     channel
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState();
+        // Cek apakah ID target ada di dalam list online di channel ini
         isTargetOnline.value = !!state[targetId];
+      })
+      .on("presence", { event: "join" }, ({ newPresences }) => {
+        if (newPresences.some(p => p.presence_ref.includes(targetId))) {
+          isTargetOnline.value = true;
+        }
+      })
+      .on("presence", { event: "leave" }, ({ leftPresences }) => {
+        if (leftPresences.some(p => p.presence_ref.includes(targetId))) {
+          isTargetOnline.value = false;
+        }
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
           const newMsg = payload.new;
@@ -92,7 +106,11 @@ const fetchChatData = async () => {
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          await channel.track({ online_at: new Date().toISOString() });
+          // Track status kita agar device sebelah tahu kita online
+          await channel.track({ 
+            user_id: currentUser.value.id, 
+            online_at: new Date().toISOString() 
+          });
         }
       });
     return channel;
@@ -132,15 +150,15 @@ onUnmounted(() => {
     
     <div class="relative w-full max-w-2xl bg-[#0a0a0a] flex flex-col h-full border-x border-white/5 shadow-2xl">
       
-      <header class="h-16 shrink-0 z-30 bg-[#0a0a0a] border-b border-white/5 px-4 flex items-center justify-between">
+      <header class="h-16 shrink-0 z-30 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <button @click="router.back()" class="p-2 bg-white/5 rounded-lg border border-white/10 text-gray-400 active:scale-90 transition-transform">
+          <button @click="router.back()" class="p-2 bg-white/5 rounded-lg border border-white/10 text-gray-400 active:scale-90">
             <ArrowLeftIcon class="w-5 h-5" />
           </button>
 
-          <div v-if="targetProfile" @click="goToPublicProfile" class="flex items-center gap-3 cursor-pointer group active:opacity-70 transition-all">
-            <div class="w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-black shadow-lg"
-                 :class="isTargetOnline ? 'border-green-500/50' : 'border-white/10 group-hover:border-yellow-500/50'">
+          <div v-if="targetProfile" @click="goToPublicProfile" class="flex items-center gap-3 cursor-pointer group">
+            <div class="w-10 h-10 rounded-full overflow-hidden border bg-black shadow-lg"
+                 :class="isTargetOnline ? 'border-green-500' : 'border-white/10'">
               <img v-if="targetProfile.avatar_url" :src="targetProfile.avatar_url" class="w-full h-full object-cover" />
               <UserCircleIcon v-else class="w-full h-full text-gray-800 p-1" />
             </div>
@@ -148,8 +166,8 @@ onUnmounted(() => {
               <h2 class="text-[11px] font-[1000] text-white uppercase italic leading-none mb-1 group-hover:text-yellow-500 transition-colors">
                 {{ targetProfile.full_name || targetProfile.username }}
               </h2>
-              <div class="flex items-center gap-1">
-                <div class="w-1.5 h-1.5 rounded-full" :class="isTargetOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-700'"></div>
+              <div class="flex items-center gap-1.5">
+                <div class="w-1.5 h-1.5 rounded-full" :class="isTargetOnline ? 'bg-green-500 animate-pulse shadow-[0_0_8px_#22c55e]' : 'bg-gray-700'"></div>
                 <p class="text-[7px] font-black uppercase tracking-widest" :class="isTargetOnline ? 'text-green-500' : 'text-gray-600'">
                   {{ isTargetOnline ? "Online" : "Offline" }}
                 </p>
@@ -162,7 +180,7 @@ onUnmounted(() => {
 
       <main 
         ref="chatContainer" 
-        class="flex-1 overflow-y-auto p-5 space-y-6 scroll-smooth overscroll-contain no-scrollbar bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-white/[0.02] to-transparent"
+        class="flex-1 overflow-y-auto p-5 space-y-6 no-scrollbar overscroll-contain bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-white/[0.02] to-transparent"
       >
         <div v-if="loading" class="flex justify-center py-20">
           <ArrowPathIcon class="w-8 h-8 animate-spin text-yellow-500/50" />
@@ -174,9 +192,9 @@ onUnmounted(() => {
             class="flex items-end gap-2"
           >
             <div :class="msg.sender_id === currentUser.id 
-                 ? 'bg-yellow-500 text-black rounded-tr-none' 
+                 ? 'bg-yellow-500 text-black rounded-tr-none shadow-[0_4px_15px_rgba(234,179,8,0.15)]' 
                  : 'bg-white/[0.03] text-white border border-white/5 rounded-tl-none'"
-                 class="max-w-[85%] px-4 py-3 rounded-[22px] shadow-lg relative">
+                 class="max-w-[85%] px-4 py-3 rounded-[22px] relative">
               <p class="text-[11px] font-bold italic leading-relaxed">{{ msg.text }}</p>
               <div class="flex items-center justify-end gap-1 mt-1.5">
                 <p class="text-[6px] opacity-40 uppercase font-black tracking-tighter">
@@ -199,10 +217,10 @@ onUnmounted(() => {
             @keyup.enter="sendMessage"
             type="text"
             placeholder="KETIK PESAN..."
-            class="w-full bg-black border border-white/10 rounded-2xl py-4 pl-6 pr-16 text-[10px] outline-none focus:border-yellow-500/50 font-black italic text-white transition-all shadow-inner"
+            class="w-full bg-black border border-white/10 rounded-2xl py-4 pl-6 pr-16 text-[10px] outline-none focus:border-yellow-500/50 font-black italic text-white"
           />
           <button @click="sendMessage" :disabled="!newMessage.trim()" 
-            class="absolute right-2 bg-yellow-500 text-black p-2.5 rounded-xl active:scale-90 transition-all hover:bg-white">
+            class="absolute right-2 bg-yellow-500 text-black p-2.5 rounded-xl active:scale-90 shadow-lg">
             <PaperAirplaneIcon class="w-5 h-5" />
           </button>
         </div>
@@ -213,9 +231,9 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* 3. FIX VIEWPORT: Biar beneran pas di HP tanpa kepotong address bar */
+/* Fix Viewport HP */
 .fixed {
-  height: 100vh; /* Fallback */
+  height: 100vh;
   height: -webkit-fill-available;
 }
 
@@ -225,7 +243,7 @@ onUnmounted(() => {
 .overscroll-none { overscroll-behavior: none; }
 .overscroll-contain { overscroll-behavior-y: contain; }
 
-/* Menangani safe area di HP modern (iPhone notch/Home bar) */
+/* Home bar iPhone/Android Safe Area */
 .pb-safe {
   padding-bottom: calc(1rem + env(safe-area-inset-bottom));
 }
