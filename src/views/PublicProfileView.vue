@@ -38,6 +38,17 @@ const followingCount = ref(0);
 
 // --- LOGIKA RANK BADGE SEIMBANG (NEWBIE - LEGEND) ---
 const userRank = computed(() => {
+  const ADMIN_ID = "68f80a52-d38c-4ac4-b483-8386026f436c"; // Masukkan ID Owner
+
+  if (profile.value?.id === ADMIN_ID) {
+    return {
+      name: "OWNER",
+      color: "text-red-500",
+      bg: "bg-red-600/10",
+      icon: ShieldCheckIcon,
+    };
+  }
+
   const count = followersCount.value;
   if (count >= 100)
     return {
@@ -152,12 +163,10 @@ const handleFollow = async () => {
       isFollowing.value = false;
       followersCount.value = Math.max(0, followersCount.value - 1);
     } else {
-      await supabase
-        .from("follows")
-        .insert({
-          follower_id: currentUser.value.id,
-          following_id: profile.value.id,
-        });
+      await supabase.from("follows").insert({
+        follower_id: currentUser.value.id,
+        following_id: profile.value.id,
+      });
       isFollowing.value = true;
       followersCount.value++;
     }
