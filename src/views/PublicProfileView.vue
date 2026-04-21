@@ -197,7 +197,7 @@ const formatPrice = (p) =>
 // Navigator buat klik reviewer
 const goToProfile = (uname) => {
   if (uname === username) return;
-  router.push(`/profile/${uname}`);
+  router.push(`/user/${uname}`);
 };
 
 onMounted(fetchData);
