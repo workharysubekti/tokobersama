@@ -12,7 +12,9 @@ import {
   BoltIcon,
   FireIcon,
   TrophyIcon,
+  StarIcon,
 } from "@heroicons/vue/24/outline";
+import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 
 const props = defineProps({ userProfile: Object });
 const router = useRouter();
@@ -24,11 +26,12 @@ const OWNER_ID = "68f80a52-d38c-4ac4-b483-8386026f436c";
 const totalTx = ref(0);
 const followersCount = ref(0);
 const followingCount = ref(0);
+const averageRating = ref(0);
 
 const fetchUserStats = async () => {
   if (!props.userProfile?.id) return;
 
-  const [txRes, follRes, followingRes] = await Promise.all([
+  const [txRes, follRes, followingRes, revRes] = await Promise.all([
     supabase
       .from("products")
       .select("id")
@@ -44,14 +47,22 @@ const fetchUserStats = async () => {
       .from("follows")
       .select("id", { count: "exact", head: true })
       .eq("follower_id", props.userProfile.id),
+    supabase
+      .from("reviews")
+      .select("rating")
+      .eq("target_user_id", props.userProfile.id),
   ]);
 
   if (!txRes.error) totalTx.value = txRes.data?.length || 0;
   followersCount.value = follRes.count || 0;
   followingCount.value = followingRes.count || 0;
+
+  if (!revRes.error && revRes.data.length > 0) {
+    const sum = revRes.data.reduce((acc, curr) => acc + curr.rating, 0);
+    averageRating.value = (sum / revRes.data.length).toFixed(1);
+  }
 };
 
-// --- LOGIKA RANK BERWARNA (KODE SUCI) ---
 const userRank = computed(() => {
   if (props.userProfile?.id === OWNER_ID) {
     return {
@@ -61,7 +72,6 @@ const userRank = computed(() => {
       icon: ShieldCheckIcon,
     };
   }
-
   const count = followersCount.value;
   if (count >= 100)
     return {
@@ -84,7 +94,6 @@ const userRank = computed(() => {
       bg: "bg-purple-500/10",
       icon: BoltIcon,
     };
-
   return {
     name: "NEWBIE",
     color: "text-blue-500",
@@ -189,14 +198,14 @@ onUnmounted(() => {
         </p>
 
         <div
-          class="flex items-center gap-3 mb-6 text-[10px] tracking-widest text-gray-500 font-black uppercase"
+          class="flex items-center gap-3 mb-4 text-[10px] tracking-widest text-gray-500 font-black uppercase"
         >
           <button
             @click="router.push(`/user/${userProfile.username}/followers`)"
             class="flex items-center gap-1.5 hover:text-yellow-500 transition-colors"
           >
             <span class="text-white">{{ followersCount }}</span>
-            <span>Followers</span>
+            <span>Follower</span>
           </button>
           <span class="text-white/10 text-xs font-light">|</span>
           <button
@@ -208,49 +217,58 @@ onUnmounted(() => {
           </button>
         </div>
 
+        <div class="mb-6 max-w-md text-center">
+          <p
+            class="text-[11px] leading-relaxed text-gray-400 normal-case italic font-bold"
+          >
+            {{ userProfile.bio || "MEMBER HAS NOT TRANSMITTED A BIO DATA." }}
+          </p>
+        </div>
+
         <div
           :class="[userRank.bg, userRank.color]"
-          class="px-5 py-1.5 rounded-full border border-white/10 text-[9px] flex items-center gap-2 shadow-xl"
+          class="px-5 py-1.5 rounded-full border border-white/10 text-[9px] flex items-center gap-2 shadow-xl mb-3"
         >
           <component :is="userRank.icon" class="w-3.5 h-3.5" />
           <span class="leading-none">{{ userRank.name }}</span>
         </div>
+
+        <div class="flex items-center gap-1.5 text-yellow-500/80">
+          <StarIconSolid class="w-3.5 h-3.5" />
+          <span class="text-[11px] font-black tracking-widest italic"
+            >{{ averageRating }}/5.0</span
+          >
+        </div>
       </div>
 
       <div
-        class="bg-white/[0.02] border border-white/5 rounded-[40px] p-8 mb-8 backdrop-blur-3xl"
+        class="bg-white/[0.02] border border-white/5 rounded-[40px] p-8 mb-8 backdrop-blur-3xl shadow-2xl"
       >
         <div class="flex justify-between items-center mb-8 px-2">
-          <h2 class="text-xs tracking-[0.3em] text-gray-500">PROFIL</h2>
+          <h2 class="text-xs tracking-[0.3em] text-gray-500 italic font-black">
+            PROFIL
+          </h2>
           <button
             @click="isEditing = !isEditing"
-            class="text-yellow-500 text-[10px] tracking-widest"
+            class="text-yellow-500 text-[10px] tracking-widest font-black italic"
           >
             {{ isEditing ? "BATAL" : "EDIT PROFIL" }}
           </button>
         </div>
 
         <div v-if="!isEditing" class="space-y-6 px-2">
-          <div class="flex gap-10">
-            <div>
-              <label class="text-[8px] text-gray-700 block mb-1 tracking-widest"
-                >TRANSAKSI</label
-              >
-              <p class="text-xl text-white">
+          <div>
+            <label
+              class="text-[8px] text-gray-700 block mb-1 tracking-widest font-black uppercase"
+              >Transaksi</label
+            >
+            <div class="flex items-center gap-2">
+              <CheckBadgeIcon class="w-5 h-5 text-yellow-500" />
+              <p class="text-xl text-white font-[1000]">
                 {{ totalTx }}
-                <span class="text-[10px] text-gray-600">DEALS</span>
+                <span class="text-[10px] text-gray-600 ml-1">DEALS</span>
               </p>
             </div>
-          </div>
-          <div>
-            <label class="text-[8px] text-gray-700 block mb-1 tracking-widest"
-              >BIO</label
-            >
-            <p
-              class="text-[11px] text-gray-400 normal-case leading-relaxed italic font-bold"
-            >
-              {{ userProfile.bio || "MEMBER BELUM MENGIRIM DATA BIO." }}
-            </p>
           </div>
         </div>
 
@@ -258,20 +276,20 @@ onUnmounted(() => {
           <input
             v-model="editData.full_name"
             type="text"
-            class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-xs text-white"
             placeholder="Nama Lengkap"
+            class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-xs text-white focus:border-yellow-500 outline-none"
           />
           <textarea
             v-model="editData.bio"
             rows="3"
-            class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-xs text-white normal-case font-bold italic"
             placeholder="Bio..."
+            class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-xs text-white normal-case font-bold italic resize-none"
           ></textarea>
           <button
             @click="handleUpdate"
-            class="w-full bg-yellow-500 text-black py-5 rounded-2xl font-black text-[10px]"
+            class="w-full bg-yellow-500 text-black py-4 rounded-2xl font-black text-[10px] uppercase italic active:scale-95 transition-all shadow-xl shadow-yellow-500/10"
           >
-            SIMPAN PERUBAHAN
+            Simpan Perubahan
           </button>
         </div>
       </div>
@@ -284,21 +302,16 @@ onUnmounted(() => {
             { name: 'Pesan', path: '/messages', count: unreadCount },
             { name: 'Inventory', path: '/vault', count: 0 },
             { name: 'Wishlist', path: '/my-bids', count: 0 },
-            {
-              name: 'Reputasi',
-              path: `/user/${userProfile.username}`,
-              count: 0,
-            },
             { name: 'Pengaturan Akun', path: '/settings', count: 0 },
           ]"
           :key="item.path"
           :to="item.path"
           class="flex items-center justify-between p-7 hover:bg-white/[0.04] transition-all border-white/5"
-          :class="{ 'border-b': index !== 4 }"
+          :class="{ 'border-b': index !== 3 }"
         >
           <div class="flex items-center gap-4">
             <span
-              class="text-[10px] font-black uppercase italic tracking-[0.2em] text-gray-200"
+              class="text-xs font-[1000] uppercase italic tracking-widest text-gray-200"
               >{{ item.name }}</span
             >
             <div
