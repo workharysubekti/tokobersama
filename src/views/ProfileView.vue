@@ -12,7 +12,6 @@ import {
   BoltIcon,
   FireIcon,
   TrophyIcon,
-  StarIcon,
 } from "@heroicons/vue/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 
@@ -26,7 +25,7 @@ const OWNER_ID = "68f80a52-d38c-4ac4-b483-8386026f436c";
 const totalTx = ref(0);
 const followersCount = ref(0);
 const followingCount = ref(0);
-const averageRating = ref(0);
+const averageRating = ref(5.0); // Default 5.0 untuk akun baru
 
 const fetchUserStats = async () => {
   if (!props.userProfile?.id) return;
@@ -57,9 +56,12 @@ const fetchUserStats = async () => {
   followersCount.value = follRes.count || 0;
   followingCount.value = followingRes.count || 0;
 
+  // Logika Reputasi Real-Time (Akun baru = 5.0)
   if (!revRes.error && revRes.data.length > 0) {
     const sum = revRes.data.reduce((acc, curr) => acc + curr.rating, 0);
     averageRating.value = (sum / revRes.data.length).toFixed(1);
+  } else {
+    averageRating.value = "5.0";
   }
 };
 
@@ -263,10 +265,9 @@ onUnmounted(() => {
               >Transaksi</label
             >
             <div class="flex items-center gap-2">
-              <CheckBadgeIcon class="w-5 h-5 text-yellow-500" />
               <p class="text-xl text-white font-[1000]">
                 {{ totalTx }}
-                <span class="text-[10px] text-gray-600 ml-1">DEALS</span>
+                <span class="text-[10px] text-gray-600 ml-1 italic">DEALS</span>
               </p>
             </div>
           </div>
@@ -287,7 +288,7 @@ onUnmounted(() => {
           ></textarea>
           <button
             @click="handleUpdate"
-            class="w-full bg-yellow-500 text-black py-4 rounded-2xl font-black text-[10px] uppercase italic active:scale-95 transition-all shadow-xl shadow-yellow-500/10"
+            class="w-full bg-yellow-500 text-black py-4 rounded-2xl font-black text-[10px] uppercase italic active:scale-95 transition-all"
           >
             Simpan Perubahan
           </button>
