@@ -21,7 +21,6 @@ const isEditing = ref(false);
 
 const OWNER_ID = "68f80a52-d38c-4ac4-b483-8386026f436c";
 
-// --- LOGIC STATS & FOLLOWS ---
 const totalTx = ref(0);
 const followersCount = ref(0);
 const followingCount = ref(0);
@@ -52,7 +51,7 @@ const fetchUserStats = async () => {
   followingCount.value = followingRes.count || 0;
 };
 
-// --- LOGIC RANK BERWARNA (KODE SUCI) ---
+// --- LOGIKA RANK BERWARNA (KODE SUCI) ---
 const userRank = computed(() => {
   if (props.userProfile?.id === OWNER_ID) {
     return {
@@ -185,7 +184,7 @@ onUnmounted(() => {
         <h1 class="text-3xl tracking-tighter mb-1">
           {{ userProfile.full_name || "MEMBER" }}
         </h1>
-        <p class="text-[10px] text-yellow-500/50 tracking-[0.4em] mb-3">
+        <p class="text-[10px] text-yellow-500/50 tracking-[0.4em] mb-4">
           @{{ userProfile.username }}
         </p>
 
@@ -211,7 +210,7 @@ onUnmounted(() => {
 
         <div
           :class="[userRank.bg, userRank.color]"
-          class="px-5 py-1.5 rounded-full border border-white/10 text-[9px] flex items-center gap-2 whitespace-nowrap shadow-xl"
+          class="px-5 py-1.5 rounded-full border border-white/10 text-[9px] flex items-center gap-2 shadow-xl"
         >
           <component :is="userRank.icon" class="w-3.5 h-3.5" />
           <span class="leading-none">{{ userRank.name }}</span>
@@ -219,36 +218,38 @@ onUnmounted(() => {
       </div>
 
       <div
-        class="bg-white/[0.02] border border-white/5 rounded-[40px] p-8 mb-8 backdrop-blur-3xl shadow-2xl"
+        class="bg-white/[0.02] border border-white/5 rounded-[40px] p-8 mb-8 backdrop-blur-3xl"
       >
         <div class="flex justify-between items-center mb-8 px-2">
-          <h2 class="text-xs tracking-[0.3em] text-gray-500">USER DATA</h2>
+          <h2 class="text-xs tracking-[0.3em] text-gray-500">PROFIL</h2>
           <button
             @click="isEditing = !isEditing"
-            class="text-yellow-500 text-[10px] tracking-widest hover:underline"
+            class="text-yellow-500 text-[10px] tracking-widest"
           >
-            {{ isEditing ? "CANCEL" : "EDIT PROFILE" }}
+            {{ isEditing ? "BATAL" : "EDIT PROFIL" }}
           </button>
         </div>
 
         <div v-if="!isEditing" class="space-y-6 px-2">
-          <div>
-            <label class="text-[8px] text-gray-700 block mb-1 tracking-widest"
-              >TRANSACTION_HISTORY</label
-            >
-            <p class="text-xl text-white">
-              {{ totalTx }}
-              <span class="text-[10px] text-gray-600 ml-2">CLOSED_DEALS</span>
-            </p>
+          <div class="flex gap-10">
+            <div>
+              <label class="text-[8px] text-gray-700 block mb-1 tracking-widest"
+                >TRANSAKSI</label
+              >
+              <p class="text-xl text-white">
+                {{ totalTx }}
+                <span class="text-[10px] text-gray-600">DEALS</span>
+              </p>
+            </div>
           </div>
           <div>
             <label class="text-[8px] text-gray-700 block mb-1 tracking-widest"
-              >BIO_DATA</label
+              >BIO</label
             >
             <p
               class="text-[11px] text-gray-400 normal-case leading-relaxed italic font-bold"
             >
-              {{ userProfile.bio || "NO_TRANSMISSION_DATA" }}
+              {{ userProfile.bio || "MEMBER BELUM MENGIRIM DATA BIO." }}
             </p>
           </div>
         </div>
@@ -257,21 +258,20 @@ onUnmounted(() => {
           <input
             v-model="editData.full_name"
             type="text"
-            placeholder="Full Name"
-            class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-xs focus:border-yellow-500 outline-none transition-all text-white shadow-inner"
+            class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-xs text-white"
+            placeholder="Nama Lengkap"
           />
           <textarea
             v-model="editData.bio"
             rows="3"
-            placeholder="Bio Data..."
-            class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-xs focus:border-yellow-500 outline-none transition-all text-white shadow-inner resize-none normal-case font-bold italic"
+            class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-xs text-white normal-case font-bold italic"
+            placeholder="Bio..."
           ></textarea>
           <button
             @click="handleUpdate"
-            :disabled="loading"
-            class="w-full bg-yellow-500 text-black py-5 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase italic active:scale-95 transition-all shadow-xl shadow-yellow-500/10"
+            class="w-full bg-yellow-500 text-black py-5 rounded-2xl font-black text-[10px]"
           >
-            {{ loading ? "TRANSMITTING..." : "COMMIT_CHANGES" }}
+            SIMPAN PERUBAHAN
           </button>
         </div>
       </div>
@@ -281,19 +281,20 @@ onUnmounted(() => {
       >
         <router-link
           v-for="(item, index) in [
+            { name: 'Pesan', path: '/messages', count: unreadCount },
+            { name: 'Inventory', path: '/vault', count: 0 },
+            { name: 'Wishlist', path: '/my-bids', count: 0 },
             {
-              name: 'Incoming_Messages',
-              path: '/messages',
-              count: unreadCount,
+              name: 'Reputasi',
+              path: `/user/${userProfile.username}`,
+              count: 0,
             },
-            { name: 'Secured_Vault', path: '/vault', count: 0 },
-            { name: 'Active_Bids', path: '/my-bids', count: 0 },
-            { name: 'System_Settings', path: '/settings', count: 0 },
+            { name: 'Pengaturan Akun', path: '/settings', count: 0 },
           ]"
           :key="item.path"
           :to="item.path"
           class="flex items-center justify-between p-7 hover:bg-white/[0.04] transition-all border-white/5"
-          :class="{ 'border-b': index !== 3 }"
+          :class="{ 'border-b': index !== 4 }"
         >
           <div class="flex items-center gap-4">
             <span
