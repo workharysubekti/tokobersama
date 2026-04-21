@@ -96,6 +96,14 @@ const goToSeller = () => {
 
 const placeBid = async () => {
   if (!props.userProfile) return alert("Login dulu bosku!");
+
+  // Cek Waktu Sebelum Bid
+  const now = new Date().getTime();
+  const end = new Date(product.value.end_time).getTime();
+  if (now >= end || timeLeft.value === "ENDED") {
+    return alert("Lelang sudah berakhir! Transmisi ditutup.");
+  }
+
   if (isSubmitting.value) return;
 
   const latestTopPrice =
@@ -130,6 +138,16 @@ const placeBid = async () => {
     isSubmitting.value = false;
   }
 };
+
+// Logika Status Akhir
+const auctionStatus = computed(() => {
+  if (timeLeft.value === "ENDED") {
+    return recentBids.value.length > 0
+      ? `WINNER: @${recentBids.value[0].profiles.username}`
+      : "BID ENDED (NO OFFERS)";
+  }
+  return timeLeft.value;
+});
 
 onMounted(() => {
   fetchProductDetail();

@@ -134,12 +134,21 @@ onUnmounted(() => {
   if (bannerInterval) clearInterval(bannerInterval);
 });
 
-const priorityProducts = computed(() =>
-  products.value.filter((p) => p.is_priority).slice(0, MAX_PREMIUM_SLOTS),
-);
-const regularProducts = computed(() =>
-  products.value.filter((p) => !p.is_priority),
-);
+//Logika Filter Waktu
+const priorityProducts = computed(() => {
+  const now = new Date().getTime();
+  return products.value
+    .filter((p) => p.is_priority && new Date(p.end_time).getTime() > now)
+    .slice(0, MAX_PREMIUM_SLOTS);
+});
+
+const regularProducts = computed(() => {
+  const now = new Date().getTime();
+  return products.value.filter(
+    (p) => !p.is_priority && new Date(p.end_time).getTime() > now,
+  );
+});
+
 const isSlotAvailable = computed(
   () => priorityProducts.value.length < MAX_PREMIUM_SLOTS,
 );
