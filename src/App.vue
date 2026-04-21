@@ -13,10 +13,29 @@ const authReady = ref(false);
 const globalNotification = ref(null);
 
 let globalChannel = null;
+let presenceChannel = null;
 
 const triggerGlobalNotif = (message) => {
   globalNotification.value = { message };
   setTimeout(() => { globalNotification.value = null; }, 6000);
+};
+
+// FITUR BARU: Lapor Online secara Global tanpa ganggu Notif
+const setupGlobalPresence = (userId) => {
+  if (!userId || presenceChannel) return;
+
+  presenceChannel = supabase.channel("global-presence", {
+    config: { presence: { key: userId } }
+  });
+
+  presenceChannel.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      await presenceChannel.track({
+        user_id: userId,
+        online_at: new Date().toISOString()
+      });
+    }
+  });
 };
 
 const setupGlobalRealtime = (userId) => {
@@ -26,7 +45,6 @@ const setupGlobalRealtime = (userId) => {
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "bids" }, 
       async (payload) => {
         if (payload.new.user_id !== userId) {
-          // Hanya cek jika user ini pernah bid di produk yang sama
           const { data: history } = await supabase
             .from("bids")
             .select("id")
@@ -55,6 +73,7 @@ const syncSession = async () => {
       if (data) {
         userProfile.value = data;
         setupGlobalRealtime(session.user.id);
+        setupGlobalPresence(session.user.id); // Jalankan laporan online global
       }
     } else {
       userProfile.value = null;
@@ -66,7 +85,6 @@ const syncSession = async () => {
 };
 
 onMounted(async () => {
-  // SEKRING: Loading wajib mati dalam 3 detik!
   const safetyTimeout = setTimeout(() => {
     isInitialLoading.value = false;
     authReady.value = true;
@@ -79,11 +97,12 @@ onMounted(async () => {
     if (event === 'SIGNED_OUT') {
       userProfile.value = null;
       if (globalChannel) supabase.removeChannel(globalChannel);
+      if (presenceChannel) supabase.removeChannel(presenceChannel); // Bersihkan presence
       globalChannel = null;
+      presenceChannel = null;
     }
   });
 
-  // Saat Mas balik dari WA, cukup cek session tanpa muter loading
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") syncSession();
   });
