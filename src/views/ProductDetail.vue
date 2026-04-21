@@ -89,15 +89,18 @@ const placeBid = async () => {
   if (!props.userProfile) return alert("Login dulu bosku!");
   if (isSubmitting.value || !product.value) return;
 
-  // Gunakan data lokal yang sudah tersinkronisasi via realtime
+  // KEMBALI KE KODE ASLI MAS: Jadikan tabel 'bids' sebagai kebenaran mutlak, bukan 'products'
   const latestTopPrice =
-    product.value.current_bid || product.value.starting_bid;
+    recentBids.value.length > 0
+      ? recentBids.value[0].amount
+      : product.value.current_bid || product.value.starting_bid || 0;
 
   if (bidAmount.value <= latestTopPrice) {
     alert(
       `Waduh! Harga sudah naik ke ${formatPrice(latestTopPrice)}. Harap bid lebih tinggi.`,
     );
     bidAmount.value = latestTopPrice + 10000;
+    product.value.current_bid = latestTopPrice; // Paksa UI sync
     return;
   }
 
@@ -112,13 +115,12 @@ const placeBid = async () => {
     });
     if (bidErr) throw bidErr;
 
-    // 2. Update tabel products (SINKRONISASI KE DATABASE)
+    // 2. Update tabel products (Biarpun di HP gagal, validasi di atas sudah mengamankan double bid)
     await supabase
       .from("products")
       .update({ current_bid: bidAmount.value, winner_id: props.userProfile.id })
       .eq("id", product.value.id);
 
-    // 3. OPTIMISTIC UPDATE (Langsung rubah UI lokal agar instan)
     product.value.current_bid = bidAmount.value;
     bidAmount.value = bidAmount.value + 10000;
   } catch (err) {
