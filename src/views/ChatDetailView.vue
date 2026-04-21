@@ -30,12 +30,34 @@ const scrollToBottom = async () => {
   }
 };
 
+// --- FUNGSI UNTUK MEMBERSIHKAN NOTIFIKASI (is_read = true) ---
+const markAsRead = async () => {
+  if (!currentUser.value || !targetId) return;
+
+  const { error } = await supabase
+    .from("messages")
+    .update({ is_read: true })
+    .eq("receiver_id", currentUser.value.id)
+    .eq("sender_id", targetId)
+    .eq("is_read", false);
+
+  if (error) console.error("Gagal update status baca:", error.message);
+};
+
+// --- FUNGSI REDIRECT KE PROFIL PUBLIK ---
+const goToPublicProfile = () => {
+  if (targetProfile.value?.username) {
+    router.push(`/user/${targetProfile.value.username}`);
+  }
+};
+
 const fetchChatData = async () => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return router.push("/login");
     currentUser.value = session.user;
 
+    // Ambil Profil Target
     const { data: profile } = await supabase
       .from("profiles")
       .select("*")
@@ -43,6 +65,7 @@ const fetchChatData = async () => {
       .maybeSingle();
     targetProfile.value = profile;
 
+    // Ambil Pesan
     const { data: msgData, error } = await supabase
       .from("messages")
       .select("*")
@@ -53,6 +76,9 @@ const fetchChatData = async () => {
     messages.value = msgData || [];
     loading.value = false;
     scrollToBottom();
+
+    // Jalankan markAsRead setelah pesan di-load
+    markAsRead();
 
     const channel = supabase.channel(`room_${targetId}`, {
       config: { presence: { key: currentUser.value.id } },
@@ -69,6 +95,11 @@ const fetchChatData = async () => {
               (newMsg.sender_id === targetId && newMsg.receiver_id === currentUser.value.id)) {
             messages.value.push(newMsg);
             scrollToBottom();
+            
+            // Jika ada pesan masuk saat kita di dalam room, tandai sudah baca
+            if (newMsg.receiver_id === currentUser.value.id) {
+              markAsRead();
+            }
           }
       })
       .subscribe(async (status) => {
@@ -93,6 +124,7 @@ const sendMessage = async () => {
       sender_id: currentUser.value.id,
       receiver_id: targetId,
       text: textToSend,
+      is_read: false // Default false saat dikirim
     });
     if (error) throw error;
   } catch (error) {
@@ -112,29 +144,28 @@ onUnmounted(() => {
 
 <template>
   <div class="fixed inset-0 bg-[#050505] flex justify-center overflow-hidden touch-none pt-16 md:pt-20">
-    
     <div class="relative w-full max-w-2xl bg-[#0a0a0a] md:border-x border-white/5 flex flex-col h-full shadow-2xl">
       
       <header class="shrink-0 z-30 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-white/5 px-4 py-3 md:px-6 md:py-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <button @click="router.back()" class="p-2 bg-white/5 rounded-lg border border-white/10 text-gray-500 active:scale-90 transition-transform">
+          <button @click="router.back()" class="p-2 bg-white/5 rounded-lg border border-white/10 text-gray-500 active:scale-90">
             <ArrowLeftIcon class="w-4 h-4 md:w-5 md:h-5" />
           </button>
 
-          <div v-if="targetProfile" class="flex items-center gap-3">
-            <div class="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden border bg-black shadow-lg"
-                 :class="isTargetOnline ? 'border-green-500/50' : 'border-white/10'">
+          <div v-if="targetProfile" @click="goToPublicProfile" class="flex items-center gap-3 cursor-pointer group active:opacity-70 transition-all">
+            <div class="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden border bg-black shadow-lg transition-colors"
+                 :class="isTargetOnline ? 'border-green-500/50' : 'border-white/10 group-hover:border-yellow-500/50'">
               <img v-if="targetProfile.avatar_url" :src="targetProfile.avatar_url" class="w-full h-full object-cover" />
               <UserCircleIcon v-else class="w-full h-full text-gray-800 p-1" />
             </div>
             <div>
-              <h2 class="text-[10px] md:text-xs font-[1000] text-white uppercase italic leading-none mb-1">
+              <h2 class="text-[10px] md:text-xs font-[1000] text-white uppercase italic leading-none mb-1 group-hover:text-yellow-500 transition-colors">
                 {{ targetProfile.full_name || targetProfile.username }}
               </h2>
               <div class="flex items-center gap-1">
-                <div class="w-1 h-1 rounded-full" :class="isTargetOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-700'"></div>
+                <div class="w-1.5 h-1.5 rounded-full" :class="isTargetOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-700'"></div>
                 <p class="text-[6px] font-black uppercase tracking-widest" :class="isTargetOnline ? 'text-green-500' : 'text-gray-600'">
-                  {{ isTargetOnline ? "Active" : "Offline" }}
+                  {{ isTargetOnline ? "Online" : "Offline" }}
                 </p>
               </div>
             </div>
@@ -173,21 +204,15 @@ onUnmounted(() => {
             v-model="newMessage"
             @keyup.enter="sendMessage"
             type="text"
-            placeholder="TYPE MESSAGE..."
-            class="w-full bg-black border border-white/10 rounded-xl py-4 pl-5 pr-14 text-[10px] outline-none focus:border-yellow-500/40 font-black italic text-white shadow-inner"
+            placeholder="KETIK PESAN..."
+            class="w-full bg-black border border-white/10 rounded-xl py-4 pl-5 pr-14 text-[10px] outline-none focus:border-yellow-500/40 font-black italic text-white"
           />
           <button @click="sendMessage" :disabled="!newMessage.trim()" 
-            class="absolute right-1.5 bg-yellow-500 text-black p-2.5 rounded-lg active:scale-90 transition-all">
+            class="absolute right-1.5 bg-yellow-500 text-black p-2.5 rounded-lg active:scale-90">
             <PaperAirplaneIcon class="w-4 h-4" />
           </button>
         </div>
       </footer>
-
     </div>
   </div>
 </template>
-
-<style scoped>
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-</style>
