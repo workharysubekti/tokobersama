@@ -2,7 +2,6 @@
 import { ref, onMounted, computed, onUnmounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../lib/supabase.js";
-import { notify } from "../utils/notify";
 import {
   ClockIcon,
   ArrowLeftIcon,
@@ -36,7 +35,17 @@ const formatPrice = (price) => {
   }).format(price || 0);
 };
 
-// --- SYSTEM SINKRONISASI REAL-TIME (PERBAIKAN UTAMA) ---
+const fetchBids = async () => {
+  const { data } = await supabase
+    .from("bids")
+    .select("*, profiles(username, reputation_score)")
+    .eq("product_id", route.params.id)
+    .order("amount", { ascending: false })
+    .limit(10);
+  recentBids.value = data || [];
+};
+
+// --- PERBAIKAN SINKRONISASI REAL TIME ---
 const setupRealtime = () => {
   bidSubscription = supabase
     .channel(`public:bids:product_id=eq.${route.params.id}`)
@@ -49,35 +58,25 @@ const setupRealtime = () => {
         filter: `product_id=eq.${route.params.id}`,
       },
       async (payload) => {
-        // Ambil data profil bidder baru
+        // Ambil data bidder baru untuk list bawah
         const { data: newBidWithProfile } = await supabase
-          .from("bids")
-          .select("*, profiles(username, reputation_score)")
-          .eq("id", payload.new.id)
+          .from("profiles")
+          .select("username, reputation_score")
+          .eq("id", payload.new.bidder_id)
           .single();
 
-        if (newBidWithProfile) {
-          // Update list Live Bids
-          recentBids.value = [newBidWithProfile, ...recentBids.value];
+        const fullBid = { ...payload.new, profiles: newBidWithProfile };
 
-          // SYNC: Paksa angka current_bid di UI berubah secara instant jika ada bid masuk
-          if (product.value && payload.new.amount > product.value.current_bid) {
-            product.value.current_bid = payload.new.amount;
-          }
+        // 1. Update List Bids di bawah secara reaktif
+        recentBids.value = [fullBid, ...recentBids.value.slice(0, 9)];
+
+        // 2. SINKRONISASI CURRENT BID UTAMA (PENTING UNTUK HP)
+        if (product.value && payload.new.amount > product.value.current_bid) {
+          product.value.current_bid = payload.new.amount;
         }
       },
     )
     .subscribe();
-};
-
-const fetchBids = async () => {
-  const { data } = await supabase
-    .from("bids")
-    .select("*, profiles(username, reputation_score)")
-    .eq("product_id", route.params.id)
-    .order("amount", { ascending: false })
-    .limit(10);
-  recentBids.value = data || [];
 };
 
 const fetchData = async () => {
@@ -91,53 +90,48 @@ const fetchData = async () => {
 
     if (error) throw error;
     product.value = data;
+
     await fetchBids();
     setupRealtime();
     startTimer();
   } catch (error) {
-    console.error(error);
-    router.push("/");
+    console.error("Error fetching data:", error);
   } finally {
     loading.value = false;
   }
 };
 
 const handleBid = async () => {
-  if (!props.userProfile)
-    return notify.error("Akses Ditolak", "Login dulu Mas.");
+  if (!props.userProfile) return alert("Login dulu Mas.");
 
-  const currentPrice = product.value.current_bid;
-  if (bidAmount.value <= currentPrice) {
-    return notify.error(
-      "Bid Rendah",
-      "Minimal bid harus di atas harga saat ini.",
-    );
+  if (bidAmount.value <= product.value.current_bid) {
+    return alert("Bid harus lebih tinggi dari harga saat ini!");
   }
 
   isSubmitting.value = true;
   try {
-    // 1. Insert ke tabel Bids
+    // 1. Catat Bid ke history
     const { error: bidError } = await supabase.from("bids").insert({
       product_id: product.value.id,
       bidder_id: props.userProfile.id,
       amount: bidAmount.value,
     });
+
     if (bidError) throw bidError;
 
-    // 2. UPDATE LANGSUNG KE TABEL PRODUCTS (SINKRONISASI DATABASE)
+    // 2. UPDATE TABEL PRODUCTS AGAR SYNC KE HOME/CARD
     const { error: productError } = await supabase
       .from("products")
       .update({ current_bid: bidAmount.value })
       .eq("id", product.value.id);
+
     if (productError) throw productError;
 
-    // 3. OPTIMISTIC UPDATE (UI langsung berubah tanpa nunggu refresh/realtime)
+    // 3. OPTIMISTIC UPDATE (Langsung rubah angka di layar tanpa tunggu refresh)
     product.value.current_bid = bidAmount.value;
-
-    notify.success("Success", "Bid berhasil ditempatkan.");
     bidAmount.value = 0;
   } catch (error) {
-    notify.error("Error", error.message);
+    alert(error.message);
   } finally {
     isSubmitting.value = false;
   }
@@ -159,7 +153,7 @@ const startTimer = () => {
     const h = Math.floor(diff / (1000 * 60 * 60));
     const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     const s = Math.floor((diff % (1000 * 60)) / 1000);
-    timeLeft.value = `${h}H ${m}M ${s}S`;
+    timeLeft.value = `${h}:${m}:${s}`;
   }, 1000);
 };
 
@@ -194,7 +188,7 @@ onUnmounted(() => {
         <ArrowLeftIcon
           class="w-5 h-5 group-hover:-translate-x-1 transition-transform"
         />
-        <span class="text-[10px] tracking-widest font-black"
+        <span class="text-[10px] tracking-widest font-black uppercase italic"
           >Back to Chamber</span
         >
       </button>
@@ -215,9 +209,10 @@ onUnmounted(() => {
                 <div
                   class="w-2 h-2 rounded-full bg-red-600 animate-pulse"
                 ></div>
-                <span class="text-[10px] tracking-widest text-white">{{
-                  timeLeft
-                }}</span>
+                <span
+                  class="text-[10px] tracking-widest text-white uppercase italic"
+                  >{{ timeLeft }}</span
+                >
               </div>
             </div>
           </div>
@@ -225,25 +220,29 @@ onUnmounted(() => {
 
         <div class="flex flex-col">
           <div class="mb-10">
-            <h1 class="text-5xl tracking-tighter leading-none mb-4">
+            <h1
+              class="text-5xl tracking-tighter leading-none mb-4 uppercase italic"
+            >
               {{ product.name }}
             </h1>
-            <div class="flex items-center gap-4 text-yellow-500">
-              <TagIcon class="w-4 h-4" />
-              <span class="text-xs tracking-[0.3em] font-black">{{
-                product.category
-              }}</span>
+            <div class="flex items-center gap-3 text-yellow-500">
+              <span
+                class="text-[10px] tracking-[0.4em] font-black uppercase italic"
+                >{{ product.category }}</span
+              >
             </div>
           </div>
 
           <div
             class="bg-white/[0.02] border border-white/5 rounded-[40px] p-10 mb-8 backdrop-blur-3xl shadow-inner"
           >
-            <p class="text-[10px] text-gray-500 tracking-[0.4em] mb-4">
+            <p
+              class="text-[10px] text-gray-500 tracking-[0.4em] mb-4 uppercase italic font-black"
+            >
               Current Signal Value
             </p>
             <div class="flex items-baseline gap-4">
-              <h2 class="text-6xl tracking-tighter text-white">
+              <h2 class="text-6xl tracking-tighter text-white uppercase italic">
                 {{ formatPrice(product.current_bid) }}
               </h2>
             </div>
@@ -254,14 +253,14 @@ onUnmounted(() => {
               <input
                 v-model.number="bidAmount"
                 type="number"
-                placeholder="Enter bid amount..."
-                class="w-full bg-white/[0.03] border border-white/10 rounded-3xl py-6 px-8 text-white outline-none focus:border-yellow-500/50 transition-all font-black italic text-lg"
+                placeholder="ENTER BID AMOUNT..."
+                class="w-full bg-white/[0.03] border border-white/10 rounded-3xl py-6 px-8 text-white outline-none focus:border-yellow-500/50 transition-all font-[1000] italic text-lg uppercase"
               />
             </div>
             <button
               @click="handleBid"
               :disabled="isSubmitting"
-              class="px-12 bg-yellow-500 hover:bg-yellow-400 text-black rounded-3xl font-[1000] text-[11px] tracking-widest transition-all active:scale-95 disabled:opacity-50 flex items-center gap-3"
+              class="px-12 bg-yellow-500 hover:bg-yellow-400 text-black rounded-3xl font-[1000] text-[11px] tracking-widest transition-all active:scale-95 disabled:opacity-50 flex items-center gap-3 uppercase italic"
             >
               <ArrowPathIcon v-if="isSubmitting" class="w-4 h-4 animate-spin" />
               <span>PLACE BID</span>
@@ -273,27 +272,29 @@ onUnmounted(() => {
               <div
                 class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"
               ></div>
-              <h3 class="text-[10px] text-gray-500 tracking-[0.2em]">
-                Transmission Logs
+              <h3
+                class="text-[10px] text-gray-500 tracking-[0.2em] uppercase italic font-black"
+              >
+                Live Bids
               </h3>
             </div>
             <div class="space-y-3">
               <div
                 v-for="bid in recentBids"
                 :key="bid.id"
-                class="flex items-center justify-between p-5 rounded-3xl border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] transition-colors"
+                class="flex items-center justify-between p-4 rounded-2xl border border-white/5 bg-white/[0.01]"
               >
-                <div class="flex items-center gap-4">
+                <div class="flex items-center gap-3">
                   <div
-                    class="w-10 h-10 rounded-xl bg-gray-900 border border-white/10 flex items-center justify-center font-black text-xs text-yellow-500"
+                    class="w-8 h-8 rounded-lg bg-gray-900 border border-white/10 flex items-center justify-center font-black text-[10px] text-yellow-500 italic"
                   >
                     {{ bid.profiles?.username?.[0].toUpperCase() }}
                   </div>
-                  <p class="text-xs font-black">
-                    @{{ bid.profiles?.username }}
+                  <p class="text-xs font-black italic uppercase">
+                    {{ bid.profiles?.username }}
                   </p>
                 </div>
-                <p class="text-sm font-black text-yellow-500">
+                <p class="text-sm font-black italic text-yellow-500 uppercase">
                   {{ formatPrice(bid.amount) }}
                 </p>
               </div>
