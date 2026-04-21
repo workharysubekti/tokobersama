@@ -2,12 +2,16 @@
 import { ref, watch, computed, onMounted, onUnmounted } from "vue";
 import { supabase } from "../lib/supabase.js";
 import { useRouter } from "vue-router";
-import { 
-  PencilSquareIcon, 
+import {
+  PencilSquareIcon,
   CameraIcon,
   ArrowRightOnRectangleIcon,
   ChevronRightIcon,
-  CheckBadgeIcon
+  CheckBadgeIcon,
+  ShieldCheckIcon,
+  BoltIcon,
+  FireIcon,
+  TrophyIcon,
 } from "@heroicons/vue/24/outline";
 
 const props = defineProps({ userProfile: Object });
@@ -15,48 +19,120 @@ const router = useRouter();
 const loading = ref(false);
 const isEditing = ref(false);
 
-const OWNER_ID = "68f80a52-d38c-4ac4-b483-8386026f436c"; // Masukkan ID Owner
+const OWNER_ID = "68f80a52-d38c-4ac4-b483-8386026f436c";
 
-// --- LOGIC TRANSACTION COUNT ---
+// --- LOGIC STATS & FOLLOWS ---
 const totalTx = ref(0);
+const followersCount = ref(0);
+const followingCount = ref(0);
+
 const fetchUserStats = async () => {
   if (!props.userProfile?.id) return;
-  
-  // Hitung gabungan: Jual (Owner) + Beli (Winner) yang sudah CLOSED
-  const { data: products, error } = await supabase
-    .from("products")
-    .select("id")
-    .or(`owner_id.eq.${props.userProfile.id},winner_id.eq.${props.userProfile.id}`)
-    .eq("status", "closed");
 
-  if (!error) totalTx.value = products?.length || 0;
+  const [txRes, follRes, followingRes] = await Promise.all([
+    supabase
+      .from("products")
+      .select("id")
+      .or(
+        `owner_id.eq.${props.userProfile.id},winner_id.eq.${props.userProfile.id}`,
+      )
+      .eq("status", "closed"),
+    supabase
+      .from("follows")
+      .select("id", { count: "exact", head: true })
+      .eq("following_id", props.userProfile.id),
+    supabase
+      .from("follows")
+      .select("id", { count: "exact", head: true })
+      .eq("follower_id", props.userProfile.id),
+  ]);
+
+  if (!txRes.error) totalTx.value = txRes.data?.length || 0;
+  followersCount.value = follRes.count || 0;
+  followingCount.value = followingRes.count || 0;
 };
 
-// --- LOGIC RANK & WARNA ---
+// --- LOGIC RANK BERWARNA (KODE SUCI) ---
 const userRank = computed(() => {
   if (props.userProfile?.id === OWNER_ID) {
-    return { name: "OWNER", color: "text-red-500", border: "border-red-500/30", bg: "bg-red-500/5" };
+    return {
+      name: "OWNER",
+      color: "text-red-600",
+      bg: "bg-red-600/10",
+      icon: ShieldCheckIcon,
+    };
   }
-  
-  const score = props.userProfile?.reputation_score || 0;
-  const tx = totalTx.value;
 
-  if (tx >= 50 && score >= 4.8) {
-    return { name: "LEGENDARY", color: "text-yellow-500", border: "border-yellow-500/30", bg: "bg-yellow-500/5" };
-  } else if (tx >= 25 && score >= 4.5) {
-    return { name: "MASTER", color: "text-purple-500", border: "border-purple-500/30", bg: "bg-purple-500/5" };
-  } else if (tx >= 10 && score >= 4.0) {
-    return { name: "INTERMEDIATE", color: "text-blue-500", border: "border-blue-500/30", bg: "bg-blue-500/5" };
-  } else {
-    return { name: "NEWBIE", color: "text-gray-500", border: "border-white/10", bg: "bg-white/5" };
-  }
+  const count = followersCount.value;
+  if (count >= 100)
+    return {
+      name: "LEGEND",
+      color: "text-yellow-500",
+      bg: "bg-yellow-500/10",
+      icon: TrophyIcon,
+    };
+  if (count >= 30)
+    return {
+      name: "EXPERT",
+      color: "text-red-500",
+      bg: "bg-red-500/10",
+      icon: FireIcon,
+    };
+  if (count >= 10)
+    return {
+      name: "INTERMEDIATE",
+      color: "text-purple-500",
+      bg: "bg-purple-500/10",
+      icon: BoltIcon,
+    };
+
+  return {
+    name: "NEWBIE",
+    color: "text-blue-500",
+    bg: "bg-blue-500/10",
+    icon: ShieldCheckIcon,
+  };
 });
 
-// --- LOGIC UNREAD MESSAGES (Real-time) ---
+const editData = ref({
+  full_name: props.userProfile?.full_name || "",
+  bio: props.userProfile?.bio || "",
+});
+
+watch(
+  () => props.userProfile,
+  (newVal) => {
+    if (newVal) {
+      editData.value.full_name = newVal.full_name || "";
+      editData.value.bio = newVal.bio || "";
+      fetchUserStats();
+    }
+  },
+  { immediate: true },
+);
+
+const handleUpdate = async () => {
+  loading.value = true;
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      full_name: editData.value.full_name,
+      bio: editData.value.bio,
+      updated_at: new Date(),
+    })
+    .eq("id", props.userProfile.id);
+
+  if (!error) {
+    isEditing.value = false;
+    window.location.reload();
+  }
+  loading.value = false;
+};
+
 const unreadCount = ref(0);
 let messageSubscription = null;
 
-const fetchUnreadMessages = async () => {
+const fetchUnreadCount = async () => {
   if (!props.userProfile?.id) return;
   const { count } = await supabase
     .from("messages")
@@ -67,111 +143,173 @@ const fetchUnreadMessages = async () => {
 };
 
 onMounted(() => {
-  fetchUnreadMessages();
   fetchUserStats();
-  
-  messageSubscription = supabase.channel('profile-notifs')
-    .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `receiver_id=eq.${props.userProfile?.id}` }, fetchUnreadMessages)
+  fetchUnreadCount();
+  messageSubscription = supabase
+    .channel("public:messages")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "messages" },
+      fetchUnreadCount,
+    )
     .subscribe();
 });
 
 onUnmounted(() => {
   if (messageSubscription) supabase.removeChannel(messageSubscription);
 });
-
-watch(() => props.userProfile, (val) => {
-  if (val) {
-    fetchUnreadMessages();
-    fetchUserStats();
-  }
-});
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#050505] text-white pt-20 pb-32 px-5">
-    <div v-if="userProfile" class="max-w-md mx-auto">
-      
-      <div class="flex justify-between items-center mb-10 px-2">
-        <div class="flex items-center gap-2 bg-blue-500/10 px-3 py-1.5 rounded-full border border-blue-500/20">
-          <CheckBadgeIcon class="w-4 h-4 text-blue-500" />
-          <span class="text-[9px] font-black uppercase tracking-widest text-blue-400 italic">Verified</span>
-        </div>
-        <button @click="handleLogout" class="p-2.5 bg-white/5 rounded-xl border border-white/5 active:scale-90 transition-all">
-          <ArrowRightOnRectangleIcon class="w-5 h-5 text-gray-500 hover:text-red-500" />
-        </button>
-      </div>
-
-      <div class="flex flex-col items-center mb-10">
-        <div class="relative mb-6">
-          <div class="w-28 h-28 rounded-full border-2 border-white/10 p-1 bg-gradient-to-tr from-white/10 to-transparent shadow-2xl">
-            <div class="w-full h-full rounded-full overflow-hidden bg-gray-900 border border-white/10">
-              <img v-if="userProfile.avatar_url" :src="userProfile.avatar_url" class="w-full h-full object-cover" />
-              <div v-else class="w-full h-full flex items-center justify-center text-gray-800 font-black text-3xl italic">TB</div>
-            </div>
+  <div
+    class="min-h-screen bg-[#050505] pt-28 pb-32 px-6 text-white font-sans uppercase italic font-[1000]"
+  >
+    <div v-if="userProfile" class="max-w-2xl mx-auto">
+      <div class="flex flex-col items-center mb-12">
+        <div class="relative group mb-6">
+          <div
+            class="w-32 h-32 md:w-36 md:h-36 rounded-full border-4 border-white/5 overflow-hidden shadow-2xl bg-black"
+          >
+            <img
+              :src="userProfile.avatar_url || 'https://via.placeholder.com/150'"
+              class="w-full h-full object-cover"
+            />
           </div>
-          <label class="absolute bottom-1 right-1 bg-yellow-500 p-2.5 rounded-full border-4 border-black cursor-pointer active:scale-90 transition-all shadow-lg">
-            <CameraIcon class="w-4 h-4 text-black stroke-[3px]" />
-            <input type="file" class="hidden" accept="image/*" />
-          </label>
-        </div>
-
-        <div class="text-center">
-          <h2 class="text-2xl font-[1000] italic uppercase tracking-tighter leading-none">{{ userProfile.full_name || 'Tanpa Nama' }}</h2>
-          <p class="text-xs font-medium text-gray-500 italic mt-1">@{{ userProfile.username }}</p>
-          
-          <div class="mt-6 flex flex-col items-center gap-3">
-            <div :class="[userRank.bg, userRank.border, userRank.color]" class="px-5 py-1.5 rounded-full border text-[9px] font-[1000] uppercase tracking-[0.3em] italic shadow-sm transition-all duration-500">
-               Rank: {{ userRank.name }}
-            </div>
-
-            <div class="flex items-center gap-2">
-              <router-link to="/reputation" class="text-[9px] font-black bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 uppercase italic text-yellow-500">
-                Rep: {{ userProfile.reputation_score || '5.0' }}
-              </router-link>
-              <div class="text-[9px] font-black bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 uppercase italic text-white/40">
-                Tx: {{ totalTx }}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white/[0.02] border border-white/5 rounded-[40px] p-8 mb-10">
-        <div class="flex justify-between items-center mb-5 pb-4 border-b border-white/5">
-          <span class="text-[9px] font-black uppercase text-gray-600 tracking-widest italic">Deskripsi Diri</span>
-          <button @click="isEditing = !isEditing" class="text-[9px] font-black text-yellow-500 uppercase px-5 py-2 rounded-full bg-yellow-500/10 border border-yellow-500/20 active:scale-95 transition-all">
-            {{ isEditing ? 'Batal' : 'Edit' }}
+          <button
+            class="absolute bottom-1 right-1 bg-yellow-500 p-2.5 rounded-full text-black shadow-xl hover:scale-110 transition-all"
+          >
+            <CameraIcon class="w-5 h-5" />
           </button>
         </div>
-        <p v-if="!isEditing" class="text-sm font-medium italic text-gray-400 leading-relaxed px-1">
-          "{{ userProfile.bio || 'Belum ada deskripsi profil.' }}"
+
+        <h1 class="text-3xl tracking-tighter mb-1">
+          {{ userProfile.full_name || "MEMBER" }}
+        </h1>
+        <p class="text-[10px] text-yellow-500/50 tracking-[0.4em] mb-3">
+          @{{ userProfile.username }}
         </p>
-        <div v-else class="space-y-4">
-          <textarea v-model="editForm.bio" rows="3" class="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-xs font-medium text-gray-300 outline-none focus:border-yellow-500 resize-none"></textarea>
-          <button @click="handleUpdate" class="w-full bg-yellow-500 text-black py-4 rounded-2xl font-black text-[10px] uppercase italic active:scale-95 transition-all">Simpan Perubahan</button>
+
+        <div
+          class="flex items-center gap-3 mb-6 text-[10px] tracking-widest text-gray-500 font-black uppercase"
+        >
+          <button
+            @click="router.push(`/user/${userProfile.username}/followers`)"
+            class="flex items-center gap-1.5 hover:text-yellow-500 transition-colors"
+          >
+            <span class="text-white">{{ followersCount }}</span>
+            <span>Followers</span>
+          </button>
+          <span class="text-white/10 text-xs font-light">|</span>
+          <button
+            @click="router.push(`/user/${userProfile.username}/following`)"
+            class="flex items-center gap-1.5 hover:text-yellow-500 transition-colors"
+          >
+            <span class="text-white">{{ followingCount }}</span>
+            <span>Following</span>
+          </button>
+        </div>
+
+        <div
+          :class="[userRank.bg, userRank.color]"
+          class="px-5 py-1.5 rounded-full border border-white/10 text-[9px] flex items-center gap-2 whitespace-nowrap shadow-xl"
+        >
+          <component :is="userRank.icon" class="w-3.5 h-3.5" />
+          <span class="leading-none">{{ userRank.name }}</span>
         </div>
       </div>
 
-      <div class="bg-white/[0.02] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl">
-        <router-link v-for="(item, index) in [
-          { name: 'Pesan', path: '/messages', count: unreadCount },
-          { name: 'Inventory', path: '/vault', count: 0 },
-          { name: 'Wishlist', path: '/my-bids', count: 0 },
-          { name: 'Pengaturan Akun', path: '/settings', count: 0 }
-        ]" :key="item.path" :to="item.path"
-          class="flex items-center justify-between p-6 hover:bg-white/[0.04] transition-all border-white/5"
-          :class="{ 'border-b': index !== 3 }">
-          
+      <div
+        class="bg-white/[0.02] border border-white/5 rounded-[40px] p-8 mb-8 backdrop-blur-3xl shadow-2xl"
+      >
+        <div class="flex justify-between items-center mb-8 px-2">
+          <h2 class="text-xs tracking-[0.3em] text-gray-500">USER DATA</h2>
+          <button
+            @click="isEditing = !isEditing"
+            class="text-yellow-500 text-[10px] tracking-widest hover:underline"
+          >
+            {{ isEditing ? "CANCEL" : "EDIT PROFILE" }}
+          </button>
+        </div>
+
+        <div v-if="!isEditing" class="space-y-6 px-2">
+          <div>
+            <label class="text-[8px] text-gray-700 block mb-1 tracking-widest"
+              >TRANSACTION_HISTORY</label
+            >
+            <p class="text-xl text-white">
+              {{ totalTx }}
+              <span class="text-[10px] text-gray-600 ml-2">CLOSED_DEALS</span>
+            </p>
+          </div>
+          <div>
+            <label class="text-[8px] text-gray-700 block mb-1 tracking-widest"
+              >BIO_DATA</label
+            >
+            <p
+              class="text-[11px] text-gray-400 normal-case leading-relaxed italic font-bold"
+            >
+              {{ userProfile.bio || "NO_TRANSMISSION_DATA" }}
+            </p>
+          </div>
+        </div>
+
+        <div v-else class="space-y-5">
+          <input
+            v-model="editData.full_name"
+            type="text"
+            placeholder="Full Name"
+            class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-xs focus:border-yellow-500 outline-none transition-all text-white shadow-inner"
+          />
+          <textarea
+            v-model="editData.bio"
+            rows="3"
+            placeholder="Bio Data..."
+            class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-xs focus:border-yellow-500 outline-none transition-all text-white shadow-inner resize-none normal-case font-bold italic"
+          ></textarea>
+          <button
+            @click="handleUpdate"
+            :disabled="loading"
+            class="w-full bg-yellow-500 text-black py-5 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase italic active:scale-95 transition-all shadow-xl shadow-yellow-500/10"
+          >
+            {{ loading ? "TRANSMITTING..." : "COMMIT_CHANGES" }}
+          </button>
+        </div>
+      </div>
+
+      <div
+        class="bg-white/[0.02] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl"
+      >
+        <router-link
+          v-for="(item, index) in [
+            {
+              name: 'Incoming_Messages',
+              path: '/messages',
+              count: unreadCount,
+            },
+            { name: 'Secured_Vault', path: '/vault', count: 0 },
+            { name: 'Active_Bids', path: '/my-bids', count: 0 },
+            { name: 'System_Settings', path: '/settings', count: 0 },
+          ]"
+          :key="item.path"
+          :to="item.path"
+          class="flex items-center justify-between p-7 hover:bg-white/[0.04] transition-all border-white/5"
+          :class="{ 'border-b': index !== 3 }"
+        >
           <div class="flex items-center gap-4">
-            <span class="text-xs font-[1000] uppercase italic tracking-widest text-gray-200">{{ item.name }}</span>
-            <div v-if="item.count > 0" class="bg-red-600 text-white text-[9px] font-black h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full shadow-[0_0_15px_rgba(220,38,38,0.4)]">
-              {{ item.count > 99 ? '99+' : item.count }}
+            <span
+              class="text-[10px] font-black uppercase italic tracking-[0.2em] text-gray-200"
+              >{{ item.name }}</span
+            >
+            <div
+              v-if="item.count > 0"
+              class="bg-red-600 text-white text-[9px] px-2 py-0.5 rounded-full font-black animate-pulse"
+            >
+              {{ item.count }}
             </div>
           </div>
           <ChevronRightIcon class="w-4 h-4 text-gray-800" />
         </router-link>
       </div>
-
     </div>
   </div>
 </template>
