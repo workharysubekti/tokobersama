@@ -1,5 +1,5 @@
 <script setup>
-/* ... script tetap sama seperti sebelumnya (markAsRead, fetchChatData, dll) ... */
+/* ... script tetap sama (fetchChatData, markAsRead, dll) ... */
 import { ref, onMounted, onUnmounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../lib/supabase.js";
@@ -128,18 +128,18 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 h-screen w-full bg-[#050505] flex justify-center overflow-hidden overscroll-none">
+  <div class="fixed inset-0 z-[999] bg-[#050505] flex justify-center overflow-hidden overscroll-none">
     
     <div class="relative w-full max-w-2xl bg-[#0a0a0a] flex flex-col h-full border-x border-white/5 shadow-2xl">
       
-      <header class="h-[70px] shrink-0 z-30 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between">
+      <header class="h-16 shrink-0 z-30 bg-[#0a0a0a] border-b border-white/5 px-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <button @click="router.back()" class="p-2 bg-white/5 rounded-lg border border-white/10 text-gray-400 active:scale-90 transition-transform">
             <ArrowLeftIcon class="w-5 h-5" />
           </button>
 
           <div v-if="targetProfile" @click="goToPublicProfile" class="flex items-center gap-3 cursor-pointer group active:opacity-70 transition-all">
-            <div class="w-10 h-10 rounded-full overflow-hidden border bg-black shadow-lg transition-colors"
+            <div class="w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-black shadow-lg"
                  :class="isTargetOnline ? 'border-green-500/50' : 'border-white/10 group-hover:border-yellow-500/50'">
               <img v-if="targetProfile.avatar_url" :src="targetProfile.avatar_url" class="w-full h-full object-cover" />
               <UserCircleIcon v-else class="w-full h-full text-gray-800 p-1" />
@@ -162,7 +162,7 @@ onUnmounted(() => {
 
       <main 
         ref="chatContainer" 
-        class="flex-1 overflow-y-auto p-5 space-y-6 scroll-smooth overscroll-contain no-scrollbar bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-yellow-500/5 via-transparent to-transparent"
+        class="flex-1 overflow-y-auto p-5 space-y-6 scroll-smooth overscroll-contain no-scrollbar bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-white/[0.02] to-transparent"
       >
         <div v-if="loading" class="flex justify-center py-20">
           <ArrowPathIcon class="w-8 h-8 animate-spin text-yellow-500/50" />
@@ -189,20 +189,20 @@ onUnmounted(() => {
             </div>
           </div>
         </template>
-        <div class="h-4 w-full"></div>
+        <div class="h-2 w-full shrink-0"></div>
       </main>
 
-      <footer class="shrink-0 p-4 bg-[#0a0a0a] border-t border-white/5 pb-8 md:pb-6">
+      <footer class="shrink-0 p-4 bg-[#0a0a0a] border-t border-white/5 pb-safe">
         <div class="relative flex items-center max-w-3xl mx-auto w-full">
           <input
             v-model="newMessage"
             @keyup.enter="sendMessage"
             type="text"
             placeholder="KETIK PESAN..."
-            class="w-full bg-black/60 border border-white/10 rounded-2xl py-4 pl-6 pr-16 text-[10px] outline-none focus:border-yellow-500/50 font-black italic text-white transition-all shadow-inner"
+            class="w-full bg-black border border-white/10 rounded-2xl py-4 pl-6 pr-16 text-[10px] outline-none focus:border-yellow-500/50 font-black italic text-white transition-all shadow-inner"
           />
           <button @click="sendMessage" :disabled="!newMessage.trim()" 
-            class="absolute right-2 bg-yellow-500 text-black p-2.5 rounded-xl active:scale-90 transition-all hover:bg-white disabled:opacity-30">
+            class="absolute right-2 bg-yellow-500 text-black p-2.5 rounded-xl active:scale-90 transition-all hover:bg-white">
             <PaperAirplaneIcon class="w-5 h-5" />
           </button>
         </div>
@@ -213,11 +213,20 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* Hilangkan scrollbar tapi tetap bisa scroll */
+/* 3. FIX VIEWPORT: Biar beneran pas di HP tanpa kepotong address bar */
+.fixed {
+  height: 100vh; /* Fallback */
+  height: -webkit-fill-available;
+}
+
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Mencegah tarikan 'bounce' di Safari iOS */
 .overscroll-none { overscroll-behavior: none; }
 .overscroll-contain { overscroll-behavior-y: contain; }
+
+/* Menangani safe area di HP modern (iPhone notch/Home bar) */
+.pb-safe {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
 </style>
