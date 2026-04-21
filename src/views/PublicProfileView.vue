@@ -14,11 +14,13 @@ import {
   ClockIcon,
   ChevronRightIcon,
   StarIcon as StarIconOutline,
-  ShieldCheckIcon, // Newbie
-  BoltIcon, // Intermediate
-  FireIcon, // Expert
-  TrophyIcon, // Legend
+  ShieldCheckIcon,
+  BoltIcon,
+  FireIcon,
+  TrophyIcon,
+  XMarkIcon,
 } from "@heroicons/vue/24/outline";
+import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 
 const route = useRoute();
 const router = useRouter();
@@ -32,18 +34,22 @@ const isFollowing = ref(false);
 const currentUser = ref(null);
 const activeTab = ref("transmissions");
 
-// Stats Real-time (Paten: Diambil dari tabel follows)
 const followersCount = ref(0);
 const followingCount = ref(0);
 
-// --- LOGIKA RANK BADGE SEIMBANG (NEWBIE - LEGEND) ---
+// Modal Review State
+const showReviewModal = ref(false);
+const submittingReview = ref(false);
+const newReview = ref({ rating: 5, comment: "" });
+
+// --- LOGIKA RANK BADGE + OWNER (KODE SUCI) ---
 const userRank = computed(() => {
-  const ADMIN_ID = "68f80a52-d38c-4ac4-b483-8386026f436c"; // Masukkan ID Owner
+  const ADMIN_ID = "68f80a52-d38c-4ac4-b483-8386026f436c"; // GANTI DENGAN UUID ADMIN MAS
 
   if (profile.value?.id === ADMIN_ID) {
     return {
       name: "OWNER",
-      color: "text-red-500",
+      color: "text-red-600",
       bg: "bg-red-600/10",
       icon: ShieldCheckIcon,
     };
@@ -92,58 +98,47 @@ const fetchData = async () => {
       .select("*")
       .eq("username", username)
       .maybeSingle();
-
-    if (!profileData) {
-      router.push("/");
-      return;
-    }
+    if (!profileData) return router.push("/");
     profile.value = profileData;
 
-    // AMBIL COUNT DARI TABEL FOLLOWS (Solusi Anti-Refresh 0)
-    const [followersRes, followingRes, followCheckRes] = await Promise.all([
-      supabase
-        .from("follows")
-        .select("id", { count: "exact", head: true })
-        .eq("following_id", profileData.id),
-      supabase
-        .from("follows")
-        .select("id", { count: "exact", head: true })
-        .eq("follower_id", profileData.id),
-      currentUser.value
-        ? supabase
-            .from("follows")
-            .select("id")
-            .eq("follower_id", currentUser.value.id)
-            .eq("following_id", profileData.id)
-            .maybeSingle()
-        : { data: null },
-    ]);
+    const [follRes, followingRes, checkRes, prodRes, revRes] =
+      await Promise.all([
+        supabase
+          .from("follows")
+          .select("id", { count: "exact", head: true })
+          .eq("following_id", profileData.id),
+        supabase
+          .from("follows")
+          .select("id", { count: "exact", head: true })
+          .eq("follower_id", profileData.id),
+        currentUser.value
+          ? supabase
+              .from("follows")
+              .select("id")
+              .eq("follower_id", currentUser.value.id)
+              .eq("following_id", profileData.id)
+              .maybeSingle()
+          : { data: null },
+        supabase
+          .from("products")
+          .select("*")
+          .eq("owner_id", profileData.id)
+          .eq("status", "active")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("reviews")
+          .select(
+            `*, reviewer:profiles!reviewer_id (username, avatar_url, full_name)`,
+          )
+          .eq("target_user_id", profileData.id)
+          .order("created_at", { ascending: false }),
+      ]);
 
-    followersCount.value = followersRes.count || 0;
+    followersCount.value = follRes.count || 0;
     followingCount.value = followingRes.count || 0;
-    isFollowing.value = !!followCheckRes.data;
-
-    // Ambil Listings & Reviews
-    const [productsRes, reviewsRes] = await Promise.all([
-      supabase
-        .from("products")
-        .select("*")
-        .eq("owner_id", profileData.id)
-        .eq("status", "active")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("reviews")
-        .select(
-          `*, reviewer:profiles!reviewer_id (username, avatar_url, full_name)`,
-        )
-        .eq("target_user_id", profileData.id)
-        .order("created_at", { ascending: false }),
-    ]);
-
-    listings.value = productsRes.data || [];
-    reviews.value = reviewsRes.data || [];
-  } catch (error) {
-    console.error("Error:", error);
+    isFollowing.value = !!checkRes.data;
+    listings.value = prodRes.data || [];
+    reviews.value = revRes.data || [];
   } finally {
     loading.value = false;
   }
@@ -151,38 +146,53 @@ const fetchData = async () => {
 
 const handleFollow = async () => {
   if (!currentUser.value) return notify.info("Denied", "Login dulu Mas.");
-  if (currentUser.value.id === profile.value.id) return;
-
-  try {
-    if (isFollowing.value) {
-      await supabase
-        .from("follows")
-        .delete()
-        .eq("follower_id", currentUser.value.id)
-        .eq("following_id", profile.value.id);
-      isFollowing.value = false;
-      followersCount.value = Math.max(0, followersCount.value - 1);
-    } else {
-      await supabase.from("follows").insert({
+  if (isFollowing.value) {
+    await supabase
+      .from("follows")
+      .delete()
+      .eq("follower_id", currentUser.value.id)
+      .eq("following_id", profile.value.id);
+    isFollowing.value = false;
+    followersCount.value--;
+  } else {
+    await supabase
+      .from("follows")
+      .insert({
         follower_id: currentUser.value.id,
         following_id: profile.value.id,
       });
-      isFollowing.value = true;
-      followersCount.value++;
-    }
-  } catch (error) {
-    notify.error("Error", "Gagal update follow status.");
+    isFollowing.value = true;
+    followersCount.value++;
   }
 };
 
-const formatPrice = (price) => {
-  return new Intl.NumberFormat("id-ID", {
+const submitReview = async () => {
+  if (!newReview.value.comment)
+    return notify.error("Empty", "Isi pengamatan Mas.");
+  submittingReview.value = true;
+  try {
+    const { error } = await supabase.from("reviews").insert({
+      reviewer_id: currentUser.value.id,
+      target_user_id: profile.value.id,
+      rating: newReview.value.rating,
+      comment: newReview.value.comment,
+    });
+    if (!error) {
+      notify.success("Paten", "Review berhasil dikirim.");
+      showReviewModal.value = false;
+      fetchData(); // Refresh data
+    }
+  } finally {
+    submittingReview.value = false;
+  }
+};
+
+const formatPrice = (p) =>
+  new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     minimumFractionDigits: 0,
-  }).format(price || 0);
-};
-
+  }).format(p || 0);
 onMounted(fetchData);
 </script>
 
@@ -190,90 +200,60 @@ onMounted(fetchData);
   <div
     class="min-h-screen bg-[#050505] pt-24 pb-32 px-6 text-white font-sans uppercase italic font-[1000]"
   >
-    <div v-if="loading" class="flex flex-col items-center justify-center py-48">
+    <div v-if="loading" class="flex justify-center py-48">
       <ArrowPathIcon class="w-12 h-12 text-yellow-500 animate-spin" />
     </div>
-
     <div v-else-if="profile" class="max-w-4xl mx-auto">
-      <button
-        @click="router.back()"
-        class="mb-8 p-3 bg-white/5 border border-white/10 rounded-2xl"
-      >
-        <ArrowLeftIcon class="w-5 h-5 text-gray-400" />
-      </button>
-
       <div
-        class="bg-gray-900/20 border border-white/5 rounded-[48px] p-10 mb-10 backdrop-blur-3xl relative shadow-2xl"
+        class="bg-gray-900/20 border border-white/5 rounded-[48px] p-10 mb-10 backdrop-blur-3xl relative"
       >
         <div class="flex flex-col md:flex-row items-center gap-10">
           <div class="relative">
             <div
-              class="w-36 h-36 rounded-full border-4 border-white/5 overflow-hidden bg-black"
+              class="w-32 h-32 rounded-full border-4 border-white/5 overflow-hidden"
             >
               <img
-                v-if="profile.avatar_url"
                 :src="profile.avatar_url"
                 class="w-full h-full object-cover"
               />
-              <UserCircleIcon v-else class="w-full h-full text-gray-900" />
             </div>
             <div
               :class="[userRank.bg, userRank.color]"
-              class="absolute -bottom-3 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full border border-white/10 backdrop-blur-md flex items-center gap-2 shadow-xl whitespace-nowrap"
+              class="absolute -bottom-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full border border-white/10 text-[9px] flex items-center gap-2 whitespace-nowrap"
             >
-              <component :is="userRank.icon" class="w-3.5 h-3.5" />
-              <span class="text-[9px] tracking-[0.2em] font-black">{{
-                userRank.name
-              }}</span>
+              <component :is="userRank.icon" class="w-3 h-3" />
+              {{ userRank.name }}
             </div>
           </div>
-
           <div class="flex-1 text-center md:text-left">
-            <h1 class="text-4xl tracking-tighter leading-none mb-2">
+            <h1 class="text-4xl tracking-tighter mb-1">
               {{ profile.full_name || profile.username }}
             </h1>
             <p class="text-xs text-yellow-500/50 tracking-[0.3em] mb-6">
               @{{ profile.username }}
             </p>
-
-            <div
-              class="flex flex-wrap justify-center md:justify-start gap-4 mb-8"
-            >
+            <div class="flex justify-center md:justify-start gap-4 mb-8">
               <div
-                class="bg-black/60 border border-white/5 px-6 py-3 rounded-[24px] text-center min-w-[100px]"
+                class="bg-black/40 border border-white/5 px-6 py-3 rounded-2xl text-center min-w-[90px]"
               >
-                <span class="block text-xl text-yellow-500 leading-none mb-1">{{
+                <span class="block text-xl text-yellow-500">{{
                   followersCount
                 }}</span>
-                <span
-                  class="text-[7px] text-gray-500 tracking-widest uppercase font-black"
+                <span class="text-[7px] text-gray-500 tracking-widest"
                   >Followers</span
                 >
               </div>
               <div
-                class="bg-black/60 border border-white/5 px-6 py-3 rounded-[24px] text-center min-w-[100px]"
+                class="bg-black/40 border border-white/5 px-6 py-3 rounded-2xl text-center min-w-[90px]"
               >
-                <span class="block text-xl text-white leading-none mb-1">{{
+                <span class="block text-xl text-white">{{
                   followingCount
                 }}</span>
-                <span
-                  class="text-[7px] text-gray-500 tracking-widest uppercase font-black"
+                <span class="text-[7px] text-gray-500 tracking-widest"
                   >Following</span
                 >
               </div>
-              <div
-                class="bg-black/60 border border-white/5 px-6 py-3 rounded-[24px] text-center min-w-[100px]"
-              >
-                <span class="block text-xl text-blue-500 leading-none mb-1">{{
-                  listings.length
-                }}</span>
-                <span
-                  class="text-[7px] text-gray-500 tracking-widest uppercase font-black"
-                  >Items</span
-                >
-              </div>
             </div>
-
             <div
               v-if="currentUser?.id !== profile.id"
               class="flex gap-2 justify-center md:justify-start"
@@ -282,16 +262,16 @@ onMounted(fetchData);
                 @click="handleFollow"
                 :class="
                   isFollowing
-                    ? 'bg-white/5 border border-white/10 text-white'
+                    ? 'bg-white/5 border border-white/10'
                     : 'bg-yellow-500 text-black'
                 "
-                class="px-8 py-3 rounded-2xl text-[9px] tracking-widest transition-all active:scale-95 font-black uppercase italic"
+                class="px-8 py-3 rounded-2xl text-[9px] transition-all"
               >
-                {{ isFollowing ? "Unfollow Member" : "Follow Member" }}
+                {{ isFollowing ? "Unfollow" : "Follow" }}
               </button>
               <button
                 @click="router.push(`/messages/${profile.id}`)"
-                class="p-3 bg-white/5 border border-white/10 rounded-2xl hover:text-yellow-500 transition-all"
+                class="p-3 bg-white/5 border border-white/10 rounded-2xl"
               >
                 <ChatBubbleLeftEllipsisIcon class="w-6 h-6" />
               </button>
@@ -308,9 +288,9 @@ onMounted(fetchData);
               ? 'text-yellow-500 border-b-2 border-yellow-500'
               : 'text-gray-600'
           "
-          class="pb-5 text-[10px] tracking-[0.3em] font-black uppercase italic"
+          class="pb-5 text-[10px] tracking-widest"
         >
-          Market Items ({{ listings.length }})
+          Items ({{ listings.length }})
         </button>
         <button
           @click="activeTab = 'reviews'"
@@ -319,43 +299,141 @@ onMounted(fetchData);
               ? 'text-yellow-500 border-b-2 border-yellow-500'
               : 'text-gray-600'
           "
-          class="pb-5 text-[10px] tracking-[0.3em] font-black uppercase italic"
+          class="pb-5 text-[10px] tracking-widest"
         >
           Reputation ({{ reviews.length }})
         </button>
       </div>
 
-      <div v-if="activeTab === 'transmissions'" class="grid grid-cols-1 gap-4">
+      <div v-if="activeTab === 'transmissions'" class="grid gap-4">
         <div
-          v-for="product in listings"
-          :key="product.id"
-          @click="router.push(`/product/${product.id}`)"
-          class="group flex items-center bg-white/[0.02] border border-white/5 rounded-3xl p-3 pr-8 hover:border-yellow-500/40 transition-all cursor-pointer"
+          v-for="p in listings"
+          :key="p.id"
+          @click="router.push(`/product/${p.id}`)"
+          class="group flex items-center bg-white/[0.02] border border-white/5 rounded-3xl p-3 cursor-pointer"
         >
-          <div
-            class="w-20 h-20 rounded-2xl overflow-hidden shrink-0 border border-white/5"
+          <div class="w-20 h-20 rounded-2xl overflow-hidden">
+            <img :src="p.image_url" class="w-full h-full object-cover" />
+          </div>
+          <div class="ml-6 flex-1">
+            <h3 class="text-xs group-hover:text-yellow-500">{{ p.name }}</h3>
+          </div>
+          <div class="text-right font-black text-yellow-500">
+            {{ formatPrice(p.current_bid) }}
+          </div>
+        </div>
+      </div>
+
+      <div v-if="activeTab === 'reviews'" class="space-y-6">
+        <div v-if="currentUser && currentUser.id !== profile.id" class="mb-10">
+          <button
+            @click="showReviewModal = true"
+            class="w-full py-5 bg-white/[0.02] border-2 border-dashed border-white/10 rounded-[32px] text-[10px] tracking-[0.4em] hover:border-yellow-500/50 transition-all"
           >
-            <img
-              :src="product.image_url"
-              class="w-full h-full object-cover group-hover:scale-110 duration-700"
-            />
-          </div>
-          <div class="flex-1 ml-6">
-            <h3
-              class="text-xs tracking-tighter mb-2 group-hover:text-yellow-500 transition-colors uppercase italic font-black"
-            >
-              {{ product.name }}
-            </h3>
-            <span
-              class="text-[8px] px-2 py-0.5 bg-white/5 rounded text-gray-500 uppercase"
-              >{{ product.category }}</span
-            >
-          </div>
-          <div class="text-right">
-            <p class="text-sm text-yellow-500 font-black italic">
-              {{ formatPrice(product.price) }}
+            Submit Reputation Report
+          </button>
+        </div>
+
+        <div v-if="reviews.length > 0" class="space-y-4">
+          <div
+            v-for="rev in reviews"
+            :key="rev.id"
+            class="bg-white/[0.02] border border-white/5 rounded-[32px] p-6"
+          >
+            <div class="flex justify-between items-start mb-4">
+              <div class="flex items-center gap-3">
+                <div
+                  class="w-8 h-8 rounded-full overflow-hidden border border-white/10"
+                >
+                  <img
+                    :src="rev.reviewer.avatar_url"
+                    class="w-full h-full object-cover"
+                  />
+                </div>
+                <div>
+                  <p class="text-[9px] text-white">
+                    @{{ rev.reviewer.username }}
+                  </p>
+                  <div class="flex gap-0.5 mt-1">
+                    <StarIconSolid
+                      v-for="i in 5"
+                      :key="i"
+                      class="w-2.5 h-2.5"
+                      :class="
+                        i <= rev.rating ? 'text-yellow-500' : 'text-gray-800'
+                      "
+                    />
+                  </div>
+                </div>
+              </div>
+              <span class="text-[7px] text-gray-700">{{
+                new Date(rev.created_at).toLocaleDateString()
+              }}</span>
+            </div>
+            <p class="text-[11px] text-gray-400 normal-case font-bold italic">
+              "{{ rev.comment }}"
             </p>
           </div>
+        </div>
+      </div>
+
+      <div
+        v-if="showReviewModal"
+        class="fixed inset-0 z-[100] flex items-center justify-center p-6 backdrop-blur-xl bg-black/80"
+      >
+        <div
+          class="bg-[#0a0a0a] border border-white/10 w-full max-w-lg rounded-[48px] p-10 relative shadow-2xl"
+        >
+          <button
+            @click="showReviewModal = false"
+            class="absolute top-8 right-8 text-gray-500 hover:text-white"
+          >
+            <XMarkIcon class="w-6 h-6" />
+          </button>
+          <h2 class="text-2xl mb-10 tracking-tighter uppercase italic">
+            Reputation Report
+          </h2>
+
+          <div class="mb-8">
+            <label class="text-[9px] text-gray-600 block mb-4 tracking-widest"
+              >RATING LEVEL</label
+            >
+            <div class="flex gap-2">
+              <button
+                v-for="i in 5"
+                :key="i"
+                @click="newReview.rating = i"
+                class="transition-all active:scale-90"
+              >
+                <StarIconSolid
+                  class="w-8 h-8"
+                  :class="
+                    i <= newReview.rating ? 'text-yellow-500' : 'text-gray-900'
+                  "
+                />
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-10">
+            <label class="text-[9px] text-gray-600 block mb-4 tracking-widest"
+              >OBSERVATIONS</label
+            >
+            <textarea
+              v-model="newReview.comment"
+              placeholder="Describe member activity..."
+              class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs outline-none focus:border-yellow-500 italic font-bold normal-case text-white"
+              rows="4"
+            ></textarea>
+          </div>
+
+          <button
+            @click="submitReview"
+            :disabled="submittingReview"
+            class="w-full py-5 bg-yellow-500 text-black rounded-3xl text-[10px] tracking-widest font-black uppercase"
+          >
+            {{ submittingReview ? "Syncing..." : "Transmit Report" }}
+          </button>
         </div>
       </div>
     </div>
