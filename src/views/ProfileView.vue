@@ -19,13 +19,57 @@ const props = defineProps({ userProfile: Object });
 const router = useRouter();
 const loading = ref(false);
 const isEditing = ref(false);
+const fileInput = ref(null); // Ref untuk input file
 
 const OWNER_ID = "68f80a52-d38c-4ac4-b483-8386026f436c";
 
 const totalTx = ref(0);
 const followersCount = ref(0);
 const followingCount = ref(0);
-const averageRating = ref(5.0); // Default 5.0 untuk akun baru
+const averageRating = ref("5.0");
+
+// --- FUNGSI UPLOAD AVATAR ---
+const triggerFileInput = () => {
+  fileInput.value.click();
+};
+
+const uploadAvatar = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  loading.value = true;
+  try {
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${props.userProfile.id}-${Math.random()}.${fileExt}`;
+    const filePath = `avatars/${fileName}`;
+
+    // Upload ke Storage
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    // Ambil Public URL
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("avatars").getPublicUrl(filePath);
+
+    // Update Tabel Profiles
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ avatar_url: publicUrl })
+      .eq("id", props.userProfile.id);
+
+    if (updateError) throw updateError;
+
+    window.location.reload();
+  } catch (error) {
+    alert("Gagal upload foto: " + error.message);
+  } finally {
+    loading.value = false;
+  }
+};
 
 const fetchUserStats = async () => {
   if (!props.userProfile?.id) return;
@@ -56,7 +100,6 @@ const fetchUserStats = async () => {
   followersCount.value = follRes.count || 0;
   followingCount.value = followingRes.count || 0;
 
-  // Logika Reputasi Real-Time (Akun baru = 5.0)
   if (!revRes.error && revRes.data.length > 0) {
     const sum = revRes.data.reduce((acc, curr) => acc + curr.rating, 0);
     averageRating.value = (sum / revRes.data.length).toFixed(1);
@@ -185,10 +228,22 @@ onUnmounted(() => {
               class="w-full h-full object-cover"
             />
           </div>
+
+          <input
+            type="file"
+            ref="fileInput"
+            class="hidden"
+            accept="image/*"
+            @change="uploadAvatar"
+          />
+
           <button
-            class="absolute bottom-1 right-1 bg-yellow-500 p-2.5 rounded-full text-black shadow-xl hover:scale-110 transition-all"
+            @click="triggerFileInput"
+            :disabled="loading"
+            class="absolute bottom-1 right-1 bg-yellow-500 p-2.5 rounded-full text-black shadow-xl hover:scale-110 transition-all disabled:opacity-50"
           >
-            <CameraIcon class="w-5 h-5" />
+            <CameraIcon v-if="!loading" class="w-5 h-5" />
+            <ArrowPathIcon v-else class="w-5 h-5 animate-spin" />
           </button>
         </div>
 
@@ -264,12 +319,10 @@ onUnmounted(() => {
               class="text-[8px] text-gray-700 block mb-1 tracking-widest font-black uppercase"
               >Transaksi</label
             >
-            <div class="flex items-center gap-2">
-              <p class="text-xl text-white font-[1000]">
-                {{ totalTx }}
-                <span class="text-[10px] text-gray-600 ml-1 italic">DEALS</span>
-              </p>
-            </div>
+            <p class="text-xl text-white font-[1000]">
+              {{ totalTx }}
+              <span class="text-[10px] text-gray-600 ml-1 italic">DEALS</span>
+            </p>
           </div>
         </div>
 
