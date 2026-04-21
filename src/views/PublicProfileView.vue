@@ -226,7 +226,7 @@ onMounted(fetchData);
             </div>
             <div
               :class="[userRank.bg, userRank.color]"
-              class="px-5 py-1.5 rounded-full border border-white/10 text-[9px] flex items-center gap-2 whitespace-nowrap shadow-xl"
+              class="mt-4 px-4 py-1.5 rounded-full border border-white/10 text-[9px] flex items-center justify-center gap-2 whitespace-nowrap shadow-xl w-fit min-w-[80px]"
             >
               <component :is="userRank.icon" class="w-3.5 h-3.5" />
               {{ userRank.name }}
