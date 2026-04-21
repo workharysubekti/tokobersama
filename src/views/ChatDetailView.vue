@@ -32,18 +32,11 @@ const scrollToBottom = async () => {
 
 const markAsRead = async () => {
   if (!currentUser.value || !targetId) return;
-  await supabase
-    .from("messages")
-    .update({ is_read: true })
-    .eq("receiver_id", currentUser.value.id)
-    .eq("sender_id", targetId)
-    .eq("is_read", false);
+  await supabase.from("messages").update({ is_read: true }).eq("receiver_id", currentUser.value.id).eq("sender_id", targetId).eq("is_read", false);
 };
 
 const goToPublicProfile = () => {
-  if (targetProfile.value?.username) {
-    router.push(`/user/${targetProfile.value.username}`);
-  }
+  if (targetProfile.value?.username) router.push(`/user/${targetProfile.value.username}`);
 };
 
 const fetchChatData = async () => {
@@ -52,11 +45,9 @@ const fetchChatData = async () => {
     if (!session) return router.push("/login");
     currentUser.value = session.user;
 
-    // Fetch Profile Target
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", targetId).maybeSingle();
     targetProfile.value = profile;
 
-    // Fetch Messages
     const { data: msgData, error } = await supabase.from("messages")
       .select("*")
       .or(`and(sender_id.eq.${currentUser.value.id},receiver_id.eq.${targetId}),and(sender_id.eq.${targetId},receiver_id.eq.${currentUser.value.id})`)
@@ -68,18 +59,18 @@ const fetchChatData = async () => {
     scrollToBottom();
     markAsRead();
 
-    // --- LOGIC MONITORING STATUS ONLINE GLOBAL ---
+    // 1. NGINTIP STATUS ONLINE (JANGAN PAKAI .track() LAGI BIAR GAK BENTROK)
     const presenceChannel = supabase.channel("global-online-users");
     presenceChannel
       .on("presence", { event: "sync" }, () => {
         const state = presenceChannel.presenceState();
-        isTargetOnline.value = !!state[targetId]; // Cek keberadaan target di jagat web
+        isTargetOnline.value = !!state[targetId];
       })
       .subscribe();
 
-    // --- LOGIC REALTIME PESAN ---
+    // 2. REALTIME PESAN (PASTIKAN NAMA CHANNEL UNIK)
     const roomID = [currentUser.value.id, targetId].sort().join("_");
-    const msgChannel = supabase.channel(`msg_room_${roomID}`)
+    const msgChannel = supabase.channel(`msg_realtime_${roomID}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
           const newMsg = payload.new;
           if ((newMsg.sender_id === currentUser.value.id && newMsg.receiver_id === targetId) || 
@@ -93,7 +84,7 @@ const fetchChatData = async () => {
 
     return { presenceChannel, msgChannel };
   } catch (error) {
-    console.error("Chat Error:", error);
+    console.error(error);
   }
 };
 
@@ -102,12 +93,13 @@ const sendMessage = async () => {
   const textToSend = newMessage.value;
   newMessage.value = "";
   try {
-    await supabase.from("messages").insert({
+    const { error } = await supabase.from("messages").insert({
       sender_id: currentUser.value.id,
       receiver_id: targetId,
       text: textToSend,
       is_read: false
     });
+    if (error) throw error;
   } catch (error) {
     notify.error("Fail", "Transmission error.");
   }
@@ -128,15 +120,12 @@ onUnmounted(() => {
 
 <template>
   <div class="fixed inset-0 z-[9999] h-screen w-full bg-[#050505] flex justify-center overflow-hidden overscroll-none">
-    
     <div class="relative w-full max-w-2xl bg-[#0a0a0a] flex flex-col h-full md:border-x border-white/5 shadow-2xl">
-      
       <header class="h-16 shrink-0 z-30 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <button @click="router.back()" class="p-2 bg-white/5 rounded-lg border border-white/10 text-gray-500 active:scale-90 transition-transform">
+          <button @click="router.back()" class="p-2 bg-white/5 rounded-lg border border-white/10 text-gray-400 active:scale-90">
             <ArrowLeftIcon class="w-5 h-5" />
           </button>
-
           <div v-if="targetProfile" @click="goToPublicProfile" class="flex items-center gap-3 cursor-pointer group active:opacity-70">
             <div class="w-10 h-10 rounded-full overflow-hidden border bg-black shadow-lg transition-all duration-500"
                  :class="isTargetOnline ? 'border-green-500 shadow-green-500/20' : 'border-white/10'">
@@ -160,24 +149,13 @@ onUnmounted(() => {
       </header>
 
       <main ref="chatContainer" class="flex-1 overflow-y-auto p-5 space-y-6 no-scrollbar bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-yellow-500/[0.02] to-transparent overscroll-contain">
-        <div v-if="loading" class="flex justify-center py-20">
-          <ArrowPathIcon class="w-8 h-8 animate-spin text-yellow-500/30" />
-        </div>
-
+        <div v-if="loading" class="flex justify-center py-20"><ArrowPathIcon class="w-8 h-8 animate-spin text-yellow-500/30" /></div>
         <template v-else>
-          <div v-for="msg in messages" :key="msg.id"
-            :class="msg.sender_id === currentUser.id ? 'flex-row-reverse' : ''"
-            class="flex items-end gap-2"
-          >
-            <div :class="msg.sender_id === currentUser.id 
-                 ? 'bg-yellow-500 text-black rounded-tr-none shadow-[0_5px_15px_rgba(234,179,8,0.1)]' 
-                 : 'bg-white/[0.03] text-white border border-white/5 rounded-tl-none'"
-                 class="max-w-[85%] px-4 py-3 rounded-[22px] shadow-lg">
+          <div v-for="msg in messages" :key="msg.id" :class="msg.sender_id === currentUser.id ? 'flex-row-reverse' : ''" class="flex items-end gap-2">
+            <div :class="msg.sender_id === currentUser.id ? 'bg-yellow-500 text-black rounded-tr-none' : 'bg-white/[0.03] text-white border border-white/5 rounded-tl-none'" class="max-w-[85%] px-4 py-3 rounded-[22px] shadow-lg relative">
               <p class="text-[11px] font-bold italic leading-relaxed">{{ msg.text }}</p>
               <div class="flex items-center justify-end gap-1 mt-1.5">
-                <p class="text-[6px] opacity-40 uppercase font-black tracking-tighter italic">
-                  {{ new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }}
-                </p>
+                <p class="text-[6px] opacity-40 uppercase font-black tracking-tighter italic">{{ new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }}</p>
                 <div v-if="msg.sender_id === currentUser.id" class="text-[8px] font-black">
                    <span :class="msg.is_read ? 'text-blue-500' : 'opacity-20'">{{ msg.is_read ? '✓✓' : '✓' }}</span>
                 </div>
@@ -190,15 +168,8 @@ onUnmounted(() => {
 
       <footer class="shrink-0 p-4 bg-[#0a0a0a] border-t border-white/5 pb-safe">
         <div class="relative flex items-center max-w-3xl mx-auto w-full">
-          <input
-            v-model="newMessage"
-            @keyup.enter="sendMessage"
-            type="text"
-            placeholder="KETIK PESAN..."
-            class="w-full bg-black border border-white/10 rounded-2xl py-4 pl-6 pr-16 text-[10px] outline-none focus:border-yellow-500/40 font-black italic text-white transition-all shadow-inner"
-          />
-          <button @click="sendMessage" :disabled="!newMessage.trim()" 
-            class="absolute right-2 bg-yellow-500 text-black p-2.5 rounded-xl active:scale-90 shadow-lg hover:bg-white transition-all">
+          <input v-model="newMessage" @keyup.enter="sendMessage" type="text" placeholder="KETIK PESAN..." class="w-full bg-black border border-white/10 rounded-2xl py-4 pl-6 pr-16 text-[10px] outline-none focus:border-yellow-500/40 font-black italic text-white transition-all shadow-inner" />
+          <button @click="sendMessage" :disabled="!newMessage.trim()" class="absolute right-2 bg-yellow-500 text-black p-2.5 rounded-xl active:scale-90 shadow-lg hover:bg-white transition-all">
             <PaperAirplaneIcon class="w-5 h-5" />
           </button>
         </div>
