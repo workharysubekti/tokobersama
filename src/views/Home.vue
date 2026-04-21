@@ -74,22 +74,26 @@ const scroll = (containerRef, direction) => {
 onMounted(async () => {
   await fetchProducts();
   startBannerAutoplay();
+
   productSubscription = supabase
     .channel("home-live")
+    // Dengerin perubahan tabel products (buat kalau ada produk baru/tutup)
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "products" },
       fetchProducts,
     )
-    // SINKRONISASI BIDS: Dengerin langsung dari sumber aslinya (Tabel Bids)
+    // SINKRONISASI BIDS (RAHASIA DARI MYBIDS): Dengerin langsung tabel bids!
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "bids" },
       (payload) => {
-        // Langsung tembak harga baru ke UI tanpa nunggu fetch ulang
+        // Cari produk yang ditawar di layar Home
         const pIndex = products.value.findIndex(
           (p) => p.id === payload.new.product_id,
         );
+
+        // Langsung timpa harga di UI Home dengan harga dari tabel Bids!
         if (
           pIndex !== -1 &&
           payload.new.amount > (products.value[pIndex].current_bid || 0)

@@ -57,9 +57,17 @@ const fetchProductDetail = async () => {
 
   if (data) {
     product.value = data;
-    const currentPrice = data.current_bid || data.starting_bid || 0;
-    bidAmount.value = currentPrice + 10000;
+    // 1. Fetch history bids (Tabel Bids)
     await fetchBids();
+
+    // 2. KUNCI RAHASIA DARI MYBIDS: Timpa harga product dengan harga tertinggi dari tabel Bids!
+    const trueHighestBid =
+      recentBids.value.length > 0
+        ? recentBids.value[0].amount
+        : data.current_bid || data.starting_bid || 0;
+
+    product.value.current_bid = trueHighestBid; // Paksa update UI ke harga asli
+    bidAmount.value = trueHighestBid + 10000; // Set input bid
   }
   loading.value = false;
 };
@@ -145,29 +153,16 @@ onMounted(() => {
         table: "bids",
         filter: `product_id=eq.${route.params.id}`,
       },
-      (payload) => {
-        fetchBids();
+      async (payload) => {
+        // Ada bid baru masuk! Tarik ulang list bids.
+        await fetchBids();
+
         if (product.value) {
-          // Sync angka utama secara reaktif
+          // Timpa harga utama dengan harga asli dari bid yang baru masuk
           product.value.current_bid = payload.new.amount;
-          // Update otomatis input bid agar tidak double bid di harga lama
           if (bidAmount.value <= payload.new.amount) {
             bidAmount.value = payload.new.amount + 10000;
           }
-        }
-      },
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "products",
-        filter: `id=eq.${route.params.id}`,
-      },
-      (payload) => {
-        if (product.value) {
-          product.value.current_bid = payload.new.current_bid;
         }
       },
     )
