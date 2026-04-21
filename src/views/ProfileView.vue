@@ -16,7 +16,7 @@ const loading = ref(false);
 const isEditing = ref(false);
 
 // ID Owner Mas (Ganti dengan ID asli Mas)
-const OWNER_ID = "ID_SUPABASE_MAS_DI_SINI"; 
+const OWNER_ID = "68f80a52-d38c-4ac4-b483-8386026f436c"; 
 
 const editForm = ref({
   full_name: "",
