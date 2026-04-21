@@ -36,9 +36,10 @@ const startBannerAutoplay = () => {
   }, 5000);
 };
 
+// --- PERBAIKAN: MENGGUNAKAN LOGIKA "MYBIDS" ---
 const fetchProducts = async () => {
   try {
-    const { data } = await supabase
+    const { data: prodData } = await supabase
       .from("products")
       .select(
         `
@@ -54,7 +55,30 @@ const fetchProducts = async () => {
       .eq("status", "active")
       .order("created_at", { ascending: false });
 
-    if (data) products.value = data;
+    if (prodData && prodData.length > 0) {
+      // 1. Ambil semua ID produk yang sedang aktif di Home
+      const productIds = prodData.map((p) => p.id);
+
+      // 2. Tarik data Bids tertinggi dari tabel 'bids' (Sama persis seperti di MyBids)
+      const { data: latestBidsData } = await supabase
+        .from("bids")
+        .select("product_id, amount")
+        .in("product_id", productIds)
+        .order("amount", { ascending: false });
+
+      // 3. Timpa harga current_bid yang mungkin telat di database dengan harga mutlak dari tabel bids
+      products.value = prodData.map((p) => {
+        const topBid = latestBidsData?.find((b) => b.product_id === p.id);
+        return {
+          ...p,
+          current_bid: topBid
+            ? topBid.amount
+            : p.current_bid || p.starting_bid || 0,
+        };
+      });
+    } else {
+      products.value = [];
+    }
   } finally {
     loading.value = false;
   }
@@ -81,9 +105,9 @@ onMounted(async () => {
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "products" },
-      fetchProducts,
+      () => fetchProducts(), // Pastikan ini dipanggil ulang
     )
-    // SINKRONISASI BIDS (RAHASIA DARI MYBIDS): Dengerin langsung tabel bids!
+    // SINKRONISASI BIDS: Dengerin langsung tabel bids!
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "bids" },
