@@ -11,6 +11,7 @@ import {
   BanknotesIcon,
   ArrowPathIcon,
   UserCircleIcon,
+  TagIcon, // Tambahan icon untuk kategori
 } from "@heroicons/vue/24/outline";
 
 const props = defineProps({ userProfile: Object });
@@ -36,9 +37,11 @@ const formatPrice = (price) => {
 };
 
 const fetchBids = async () => {
+  if (!route.params.id) return;
   const { data } = await supabase
     .from("bids")
-    .select("*, profiles(username, reputation_score)")
+    // Tambahkan full_name agar bisa muncul di section Winner
+    .select("*, profiles(username, full_name, reputation_score)")
     .eq("product_id", route.params.id)
     .order("amount", { ascending: false })
     .limit(8);
@@ -46,31 +49,38 @@ const fetchBids = async () => {
 };
 
 const fetchProductDetail = async () => {
+  if (!route.params.id) return;
   loading.value = true;
-  const { data } = await supabase
-    .from("products")
-    .select(
-      "*, profiles!owner_id(username, full_name, avatar_url, reputation_score)",
-    )
-    .eq("id", route.params.id)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("products")
+      .select(
+        "*, profiles!owner_id(username, full_name, avatar_url, reputation_score)",
+      )
+      .eq("id", route.params.id)
+      .maybeSingle();
 
-  if (data) {
+    if (error || !data) {
+      console.error("Asset not found");
+      return router.push("/");
+    }
+
     product.value = data;
     const currentPrice = data.current_bid || data.starting_bid || 0;
     bidAmount.value = currentPrice + 10000;
     await fetchBids();
+  } catch (err) {
+    console.error("Fetch Error:", err);
+  } finally {
+    loading.value = false;
   }
-  loading.value = false;
 };
 
-// --- UPDATE LOGIKA TIMER (TAMBAH HARI) ---
 const updateTimer = () => {
   if (!product.value?.end_time) return;
   const end = new Date(product.value.end_time).getTime();
   const now = new Date().getTime();
   const diff = end - now;
-
   if (diff <= 0) {
     timeLeft.value = "ENDED";
     return;
@@ -96,31 +106,46 @@ const goToSeller = () => {
 
 const placeBid = async () => {
   if (!props.userProfile) return alert("Login dulu bosku!");
+  if (isSubmitting.value || !product.value) return;
 
-  // Cek Waktu Sebelum Bid
   const now = new Date().getTime();
   const end = new Date(product.value.end_time).getTime();
   if (now >= end || timeLeft.value === "ENDED") {
     return alert("Lelang sudah berakhir! Transmisi ditutup.");
   }
 
-  if (isSubmitting.value) return;
+  const currentPrice =
+    product.value.current_bid || product.value.starting_bid || 0;
 
-  const latestTopPrice =
-    recentBids.value.length > 0
-      ? recentBids.value[0].amount
-      : product.value.current_bid || product.value.starting_bid;
-
-  if (bidAmount.value <= latestTopPrice) {
+  if (bidAmount.value <= currentPrice) {
     alert(
-      `Waduh! Harga sudah naik ke ${formatPrice(latestTopPrice)}. Harap bid lebih tinggi.`,
+      `Waduh! Harga sudah naik ke ${formatPrice(currentPrice)}. Harap bid lebih tinggi.`,
     );
-    bidAmount.value = latestTopPrice + 10000;
+    bidAmount.value = currentPrice + 10000;
     return;
   }
 
   try {
     isSubmitting.value = true;
+
+    const { data: checkData } = await supabase
+      .from("products")
+      .select("current_bid, starting_bid")
+      .eq("id", product.value.id)
+      .single();
+
+    if (checkData) {
+      const dbPrice = checkData.current_bid || checkData.starting_bid || 0;
+      if (bidAmount.value <= dbPrice) {
+        alert(
+          "Seseorang sudah melakukan bid lebih tinggi. Mengupdate harga...",
+        );
+        product.value.current_bid = dbPrice;
+        bidAmount.value = dbPrice + 10000;
+        return;
+      }
+    }
+
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
       user_id: props.userProfile.id,
@@ -132,6 +157,9 @@ const placeBid = async () => {
       .from("products")
       .update({ current_bid: bidAmount.value, winner_id: props.userProfile.id })
       .eq("id", product.value.id);
+
+    product.value.current_bid = bidAmount.value;
+    bidAmount.value = bidAmount.value + 10000;
   } catch (err) {
     alert(err.message);
   } finally {
@@ -139,53 +167,47 @@ const placeBid = async () => {
   }
 };
 
-// Logika Status Akhir
-const auctionStatus = computed(() => {
-  if (timeLeft.value === "ENDED") {
-    return recentBids.value.length > 0
-      ? `WINNER: @${recentBids.value[0].profiles.username}`
-      : "BID ENDED (NO OFFERS)";
-  }
-  return timeLeft.value;
-});
-
 onMounted(() => {
   fetchProductDetail();
   timerInterval = setInterval(updateTimer, 1000);
 
-  bidSubscription = supabase
-    .channel(`live-auction-${route.params.id}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "bids",
-        filter: `product_id=eq.${route.params.id}`,
-      },
-      (payload) => {
-        fetchBids();
-        if (product.value) {
-          product.value.current_bid = payload.new.amount;
-          if (bidAmount.value <= payload.new.amount) {
-            bidAmount.value = payload.new.amount + 10000;
+  if (route.params.id) {
+    bidSubscription = supabase
+      .channel(`live-auction-${route.params.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "bids",
+          filter: `product_id=eq.${route.params.id}`,
+        },
+        (payload) => {
+          fetchBids();
+          if (product.value) {
+            product.value.current_bid = payload.new.amount;
+            if (bidAmount.value <= payload.new.amount) {
+              bidAmount.value = payload.new.amount + 10000;
+            }
           }
-        }
-      },
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "products",
-        filter: `id=eq.${route.params.id}`,
-      },
-      (payload) => {
-        if (product.value) product.value.current_bid = payload.new.current_bid;
-      },
-    )
-    .subscribe();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "products",
+          filter: `id=eq.${route.params.id}`,
+        },
+        (payload) => {
+          if (product.value) {
+            product.value.current_bid = payload.new.current_bid;
+          }
+        },
+      )
+      .subscribe();
+  }
 });
 
 onUnmounted(() => {
@@ -265,8 +287,8 @@ onUnmounted(() => {
                     {{ bid.profiles?.username?.[0].toUpperCase() }}
                   </div>
                   <div>
-                    <p class="text-xs font-black italic">
-                      {{ bid.profiles?.username }}
+                    <p class="text-xs font-black italic uppercase">
+                      @{{ bid.profiles?.username }}
                     </p>
                     <p
                       class="text-[8px] text-gray-600 font-bold uppercase tracking-widest"
@@ -295,12 +317,23 @@ onUnmounted(() => {
 
         <div class="lg:col-span-5 space-y-8">
           <div class="space-y-6">
-            <div class="flex items-center gap-2">
-              <ShieldCheckIcon class="w-4 h-4 text-blue-500" />
-              <span
-                class="text-[9px] font-black text-gray-500 uppercase tracking-[0.3em] italic"
-                >Authentic Asset</span
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <ShieldCheckIcon class="w-4 h-4 text-blue-500" />
+                <span
+                  class="text-[9px] font-black text-gray-500 uppercase tracking-[0.3em] italic"
+                  >Authentic Asset</span
+                >
+              </div>
+              <div
+                class="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/5"
               >
+                <TagIcon class="w-3 h-3 text-yellow-500" />
+                <span
+                  class="text-[8px] font-black text-gray-400 uppercase tracking-widest italic"
+                  >{{ product.category }}</span
+                >
+              </div>
             </div>
 
             <h2
@@ -363,13 +396,13 @@ onUnmounted(() => {
                 <input
                   v-model.number="bidAmount"
                   type="number"
-                  class="w-full bg-black border border-white/10 rounded-2xl py-6 pl-16 pr-6 text-2xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none appearance-none"
+                  class="w-full bg-black border border-white/10 rounded-2xl py-6 pl-16 pr-6 text-2xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none appearance-none uppercase"
                 />
               </div>
 
               <button
                 @click="placeBid"
-                :disabled="isSubmitting"
+                :disabled="isSubmitting || timeLeft === 'ENDED'"
                 class="w-full bg-yellow-500 text-black py-6 rounded-2xl font-[1000] italic uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
               >
                 <ArrowPathIcon
@@ -378,7 +411,11 @@ onUnmounted(() => {
                 />
                 <BanknotesIcon v-else class="w-6 h-6 stroke-[2.5px]" />
                 <span>{{
-                  isSubmitting ? "Transmitting..." : "Place Your Bid"
+                  timeLeft === "ENDED"
+                    ? "AUCTION ENDED"
+                    : isSubmitting
+                      ? "Transmitting..."
+                      : "Place Your Bid"
                 }}</span>
               </button>
             </div>
@@ -390,12 +427,12 @@ onUnmounted(() => {
             >
               Asset Dossier
             </p>
-            <p class="text-gray-400 text-sm italic leading-relaxed">
+            <p class="text-gray-400 text-sm italic leading-relaxed normal-case">
               {{ product.description }}
             </p>
           </div>
 
-          <div class="lg:hidden space-y-4 pt-6 pb-10">
+          <div class="lg:hidden space-y-4 pt-6">
             <div class="flex items-center gap-2 mb-4">
               <FireIcon class="w-4 h-4 text-orange-500" />
               <h3
@@ -420,8 +457,69 @@ onUnmounted(() => {
                     @{{ bid.profiles?.username }}
                   </p>
                 </div>
-                <p class="text-sm font-black italic text-yellow-500">
+                <p class="text-sm font-black italic text-yellow-500 uppercase">
                   {{ formatPrice(bid.amount) }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="timeLeft === 'ENDED' && recentBids.length > 0"
+            class="pt-10 border-t border-white/5"
+          >
+            <div
+              class="bg-green-500/10 border border-green-500/30 rounded-[40px] p-8 shadow-[0_0_40px_rgba(34,197,94,0.05)] relative overflow-hidden"
+            >
+              <div
+                class="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"
+              ></div>
+
+              <div class="flex items-center gap-4 mb-6">
+                <TrophyIcon class="w-6 h-6 text-green-500 animate-bounce" />
+                <h3
+                  class="text-xs font-[1000] italic uppercase tracking-[0.4em] text-green-500"
+                >
+                  Contract Finalized: Winner
+                </h3>
+              </div>
+
+              <div class="flex items-center gap-6">
+                <div
+                  class="w-16 h-16 rounded-3xl bg-green-500/20 border border-green-500/40 flex items-center justify-center"
+                >
+                  <UserCircleIcon class="w-10 h-10 text-green-500" />
+                </div>
+                <div>
+                  <h4
+                    class="text-xl font-[1000] italic uppercase tracking-tighter text-white mb-1"
+                  >
+                    {{ recentBids[0].profiles?.full_name }}
+                  </h4>
+                  <p
+                    class="text-[9px] font-black text-green-500 uppercase tracking-widest italic mb-2"
+                  >
+                    @{{ recentBids[0].profiles?.username }}
+                  </p>
+                  <div class="flex items-center gap-2">
+                    <div
+                      class="px-2 py-0.5 bg-green-500 text-black text-[7px] font-[1000] rounded uppercase italic"
+                    >
+                      Rep:
+                      {{ recentBids[0].profiles?.reputation_score || 0 }} PTS
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-8 pt-6 border-t border-green-500/20">
+                <p
+                  class="text-[10px] text-gray-500 font-black italic uppercase tracking-widest mb-1"
+                >
+                  Final Transaction Value
+                </p>
+                <p class="text-2xl font-[1000] italic text-white uppercase">
+                  {{ formatPrice(recentBids[0].amount) }}
                 </p>
               </div>
             </div>
@@ -447,6 +545,12 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
   -webkit-appearance: none;
