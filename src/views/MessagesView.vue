@@ -2,7 +2,7 @@
 import { ref, watch, onMounted, onUnmounted } from "vue";
 import { supabase } from "../lib/supabase.js";
 import { useRouter } from "vue-router";
-import { usePresenceStore } from "../store/presence.js"; // Import Store Online
+import { usePresenceStore } from "../store/presence.js";
 import {
   ChatBubbleLeftRightIcon,
   ArrowPathIcon,
@@ -11,36 +11,42 @@ import {
 
 const props = defineProps({ userProfile: Object });
 const router = useRouter();
-const presenceStore = usePresenceStore(); // Pakai Pinia
+const presenceStore = usePresenceStore();
 const loading = ref(true);
 const chatList = ref([]);
 
-// Fungsi Ambil Data Chat
-const fetchChatList = async () => {
+// KUNCI PERBAIKAN: Tambahkan (isSilent = false) di sini
+const fetchChatList = async (isSilent = false) => {
   if (!props.userProfile?.id) return;
+
+  // Sekarang isSilent sudah dikenal, tidak akan error lagi
   if (!isSilent) loading.value = true;
 
-  const { data } = await supabase
-    .from("messages")
-    .select(
-      `
-      *,
-      sender:profiles!sender_id(id, username, full_name, avatar_url),
-      receiver:profiles!receiver_id(id, username, full_name, avatar_url)
-    `,
-    )
-    .or(
-      `sender_id.eq.${props.userProfile.id},receiver_id.eq.${props.userProfile.id}`,
-    )
-    .order("created_at", { ascending: false });
+  try {
+    const { data } = await supabase
+      .from("messages")
+      .select(
+        `
+        *,
+        sender:profiles!sender_id(id, username, full_name, avatar_url),
+        receiver:profiles!receiver_id(id, username, full_name, avatar_url)
+      `,
+      )
+      .or(
+        `sender_id.eq.${props.userProfile.id},receiver_id.eq.${props.userProfile.id}`,
+      )
+      .order("created_at", { ascending: false });
 
-  if (data) {
-    processChatList(data);
+    if (data) {
+      processChatList(data);
+    }
+  } catch (error) {
+    console.error("Fetch error:", error);
+  } finally {
+    loading.value = false; // Pastikan loading mati apa pun yang terjadi
   }
-  loading.value = false;
 };
 
-// Logika Mapping agar Chat tetap Unique dan urut Terbaru
 const processChatList = (data) => {
   const uniqueChatsMap = new Map();
   data.forEach((msg) => {
@@ -52,7 +58,6 @@ const processChatList = (data) => {
         user: otherUser,
         lastMessage: msg.text,
         time: msg.created_at,
-        // LOGIC NOTIF: Jika kita penerima dan belum dibaca
         isUnread: !msg.is_read && msg.receiver_id === props.userProfile.id,
         senderId: msg.sender_id,
       });
@@ -61,7 +66,6 @@ const processChatList = (data) => {
   chatList.value = Array.from(uniqueChatsMap.values());
 };
 
-// --- LOGIC REAL-TIME INBOX ---
 let inboxChannel = null;
 const setupInboxRealtime = () => {
   if (!props.userProfile?.id) return;
@@ -76,12 +80,11 @@ const setupInboxRealtime = () => {
         table: "messages",
       },
       (payload) => {
-        // Jika pesan melibatkan kita, refresh list
         if (
           payload.new.sender_id === props.userProfile.id ||
           payload.new.receiver_id === props.userProfile.id
         ) {
-          fetchChatList(true); // Tarik ulang agar urutan & teks terakhir update otomatis
+          fetchChatList(true); // Memanggil fetchChatList dengan mode silent
         }
       },
     )
@@ -207,9 +210,3 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-</style>
