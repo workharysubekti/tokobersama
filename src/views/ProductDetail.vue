@@ -47,6 +47,7 @@ const fetchBids = async () => {
 };
 
 const fetchProductDetail = async () => {
+  if (!route.params.id) return;
   loading.value = true;
   try {
     const { data, error } = await supabase
@@ -57,14 +58,17 @@ const fetchProductDetail = async () => {
       .eq("id", route.params.id)
       .maybeSingle();
 
-    if (error || !data) throw new Error("Data tidak ditemukan");
+    if (error || !data) {
+      console.error("Asset not found");
+      return router.push("/");
+    }
 
     product.value = data;
     const currentPrice = data.current_bid || data.starting_bid || 0;
     bidAmount.value = currentPrice + 10000;
     await fetchBids();
   } catch (err) {
-    console.error("Fetch Error:", err.message);
+    console.error("Fetch Error:", err);
   } finally {
     loading.value = false;
   }
@@ -95,23 +99,37 @@ const placeBid = async () => {
   if (!props.userProfile) return alert("Login dulu bosku!");
   if (isSubmitting.value || !product.value) return;
 
+  const currentPrice =
+    product.value.current_bid || product.value.starting_bid || 0;
+
+  if (bidAmount.value <= currentPrice) {
+    alert(
+      `Waduh! Harga sudah naik ke ${formatPrice(currentPrice)}. Harap bid lebih tinggi.`,
+    );
+    bidAmount.value = currentPrice + 10000;
+    return;
+  }
+
   try {
     isSubmitting.value = true;
 
-    // VALIDASI DATABASE TERBARU (SINKRONISASI REAL-TIME)
-    const { data: latest } = await supabase
+    // --- SYNC DATABASE TERBARU ---
+    const { data: checkData } = await supabase
       .from("products")
       .select("current_bid, starting_bid")
       .eq("id", product.value.id)
       .single();
 
-    const topPrice = latest.current_bid || latest.starting_bid;
-
-    if (bidAmount.value <= topPrice) {
-      alert(`Harga sudah naik ke ${formatPrice(topPrice)}!`);
-      product.value.current_bid = topPrice;
-      bidAmount.value = topPrice + 10000;
-      return;
+    if (checkData) {
+      const dbPrice = checkData.current_bid || checkData.starting_bid || 0;
+      if (bidAmount.value <= dbPrice) {
+        alert(
+          "Seseorang sudah melakukan bid lebih tinggi. Mengupdate harga...",
+        );
+        product.value.current_bid = dbPrice;
+        bidAmount.value = dbPrice + 10000;
+        return;
+      }
     }
 
     const { error: bidErr } = await supabase.from("bids").insert({
@@ -126,6 +144,7 @@ const placeBid = async () => {
       .update({ current_bid: bidAmount.value, winner_id: props.userProfile.id })
       .eq("id", product.value.id);
 
+    // Optimistic Update UI
     product.value.current_bid = bidAmount.value;
     bidAmount.value = bidAmount.value + 10000;
   } catch (err) {
@@ -139,40 +158,46 @@ onMounted(() => {
   fetchProductDetail();
   timerInterval = setInterval(updateTimer, 1000);
 
-  // FIX REALTIME CONNECTION
-  bidSubscription = supabase
-    .channel(`auction-${route.params.id}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "bids",
-        filter: `product_id=eq.${route.params.id}`,
-      },
-      (payload) => {
-        fetchBids();
-        if (product.value && payload.new.amount > product.value.current_bid) {
-          product.value.current_bid = payload.new.amount;
-          if (bidAmount.value <= payload.new.amount) {
-            bidAmount.value = payload.new.amount + 10000;
+  // REALTIME FIX: HANYA JALAN JIKA ID VALID
+  if (route.params.id) {
+    bidSubscription = supabase
+      .channel(`live-auction-${route.params.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "bids",
+          filter: `product_id=eq.${route.params.id}`,
+        },
+        (payload) => {
+          fetchBids();
+          // PENGAMAN NULL: Cek apakah product.value ada sebelum dibaca
+          if (product.value) {
+            product.value.current_bid = payload.new.amount;
+            if (bidAmount.value <= payload.new.amount) {
+              bidAmount.value = payload.new.amount + 10000;
+            }
           }
-        }
-      },
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "products",
-        filter: `id=eq.${route.params.id}`,
-      },
-      (payload) => {
-        if (product.value) product.value.current_bid = payload.new.current_bid;
-      },
-    )
-    .subscribe();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "products",
+          filter: `id=eq.${route.params.id}`,
+        },
+        (payload) => {
+          // PENGAMAN NULL: Cek apakah product.value ada sebelum dibaca
+          if (product.value) {
+            product.value.current_bid = payload.new.current_bid;
+          }
+        },
+      )
+      .subscribe();
+  }
 });
 
 onUnmounted(() => {
@@ -418,7 +443,7 @@ onUnmounted(() => {
     </div>
 
     <div
-      v-else
+      v-else-if="loading"
       class="fixed inset-0 bg-black flex flex-col items-center justify-center"
     >
       <div
