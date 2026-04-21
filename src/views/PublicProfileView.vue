@@ -194,7 +194,6 @@ const formatPrice = (p) =>
     minimumFractionDigits: 0,
   }).format(p || 0);
 
-// Navigator buat klik reviewer
 const goToProfile = (uname) => {
   if (uname === username) return;
   router.push(`/user/${uname}`);
@@ -210,26 +209,32 @@ onMounted(fetchData);
     <div v-if="loading" class="flex justify-center py-48">
       <ArrowPathIcon class="w-12 h-12 text-yellow-500 animate-spin" />
     </div>
+
     <div v-else-if="profile" class="max-w-4xl mx-auto">
       <div
-        class="bg-gray-900/20 border border-white/5 rounded-[48px] p-10 mb-10 backdrop-blur-3xl relative"
+        class="bg-gray-900/20 border border-white/5 rounded-[48px] p-10 mb-10 backdrop-blur-3xl"
       >
         <div class="flex flex-col md:flex-row items-center gap-10">
-          <div class="relative">
+          <div class="flex flex-col items-center shrink-0 w-full md:w-auto">
             <div
-              class="w-36 h-36 rounded-full border-4 border-white/5 overflow-hidden shadow-2xl bg-black"
+              class="w-32 h-32 md:w-36 md:h-36 rounded-full border-4 border-white/5 overflow-hidden shadow-2xl bg-black"
             >
               <img
                 :src="profile.avatar_url"
                 class="w-full h-full object-cover"
               />
             </div>
+
             <div
               :class="[userRank.bg, userRank.color]"
-              class="mt-4 px-4 py-1.5 rounded-full border border-white/10 text-[9px] flex items-center justify-center gap-2 whitespace-nowrap shadow-xl w-fit min-w-[80px]"
+              class="mt-4 px-4 py-1.5 rounded-full border border-white/10 text-[9px] flex items-center justify-center gap-2 whitespace-nowrap shadow-xl w-fit min-w-[100px]"
             >
               <component :is="userRank.icon" class="w-3.5 h-3.5" />
-              {{ userRank.name }}
+              <span
+                class="text-center font-[1000] tracking-widest uppercase italic leading-none"
+              >
+                {{ userRank.name }}
+              </span>
             </div>
           </div>
 
@@ -438,7 +443,7 @@ onMounted(fetchData);
         >
           <button
             @click="showReviewModal = false"
-            class="absolute top-10 right-10 text-gray-700 hover:text-white"
+            class="absolute top-10 right-10 text-gray-500 hover:text-white"
           >
             <XMarkIcon class="w-8 h-8" />
           </button>
