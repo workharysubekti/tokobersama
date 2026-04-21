@@ -58,9 +58,7 @@ const fetchProductDetail = async () => {
   if (data) {
     product.value = data;
     const currentPrice = data.current_bid || data.starting_bid || 0;
-    if (bidAmount.value <= currentPrice) {
-      bidAmount.value = currentPrice + 10000;
-    }
+    bidAmount.value = currentPrice + 10000;
     await fetchBids();
   }
   loading.value = false;
@@ -91,10 +89,24 @@ const placeBid = async () => {
   if (!props.userProfile) return alert("Login dulu bosku!");
   if (isSubmitting.value) return;
 
+  // CEK APAKAH PRODUCT ADA SEBELUM AKSES CURRENT_BID
+  if (!product.value) return;
+
+  const latestTopPrice =
+    product.value.current_bid || product.value.starting_bid;
+
+  if (bidAmount.value <= latestTopPrice) {
+    alert(
+      `Waduh! Harga sudah naik ke ${formatPrice(latestTopPrice)}. Harap bid lebih tinggi.`,
+    );
+    bidAmount.value = latestTopPrice + 10000;
+    return;
+  }
+
   try {
     isSubmitting.value = true;
 
-    // --- PAGAR GAIB: CEK HARGA TERBARU DARI DATABASE (ANTI DOUBLE BID) ---
+    // VALIDASI DATABASE SEBELUM INSERT (ANTI DOUBLE BID)
     const { data: latestProduct } = await supabase
       .from("products")
       .select("current_bid, starting_bid")
@@ -102,18 +114,15 @@ const placeBid = async () => {
       .single();
 
     const dbPrice = latestProduct.current_bid || latestProduct.starting_bid;
-
     if (bidAmount.value <= dbPrice) {
       alert(
-        `Waduh! Seseorang baru saja bid di harga ${formatPrice(dbPrice)}. Naikkan bid Anda!`,
+        `Seseorang baru saja bid di harga ${formatPrice(dbPrice)}. Naikkan bid Anda!`,
       );
-      product.value.current_bid = dbPrice; // Update UI Lokal
+      product.value.current_bid = dbPrice;
       bidAmount.value = dbPrice + 10000;
       return;
     }
-    // ---------------------------------------------------------------------
 
-    // 1. Insert ke tabel Bids
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
       user_id: props.userProfile.id,
@@ -121,13 +130,11 @@ const placeBid = async () => {
     });
     if (bidErr) throw bidErr;
 
-    // 2. UPDATE tabel products (Sync Global)
     await supabase
       .from("products")
       .update({ current_bid: bidAmount.value, winner_id: props.userProfile.id })
       .eq("id", product.value.id);
 
-    // 3. OPTIMISTIC UPDATE
     product.value.current_bid = bidAmount.value;
     bidAmount.value = bidAmount.value + 10000;
   } catch (err) {
@@ -151,9 +158,10 @@ onMounted(() => {
         table: "bids",
         filter: `product_id=eq.${route.params.id}`,
       },
-      async (payload) => {
-        await fetchBids();
-        if (product.value && payload.new.amount > product.value.current_bid) {
+      (payload) => {
+        fetchBids();
+        // CEK PRODUCT.VALUE SEBELUM UPDATE
+        if (product.value) {
           product.value.current_bid = payload.new.amount;
           if (bidAmount.value <= payload.new.amount) {
             bidAmount.value = payload.new.amount + 10000;
@@ -170,7 +178,10 @@ onMounted(() => {
         filter: `id=eq.${route.params.id}`,
       },
       (payload) => {
-        if (product.value) product.value.current_bid = payload.new.current_bid;
+        // CEK PRODUCT.VALUE SEBELUM UPDATE
+        if (product.value) {
+          product.value.current_bid = payload.new.current_bid;
+        }
       },
     )
     .subscribe();
@@ -183,9 +194,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    class="bg-black min-h-screen text-white pb-32 uppercase italic font-[1000]"
-  >
+  <div class="bg-black min-h-screen text-white pb-32">
     <div
       class="fixed top-0 inset-x-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between"
     >
@@ -255,7 +264,7 @@ onUnmounted(() => {
                     {{ bid.profiles?.username?.[0].toUpperCase() }}
                   </div>
                   <div>
-                    <p class="text-xs font-black italic uppercase">
+                    <p class="text-xs font-black italic">
                       @{{ bid.profiles?.username }}
                     </p>
                     <p
@@ -353,7 +362,7 @@ onUnmounted(() => {
                 <input
                   v-model.number="bidAmount"
                   type="number"
-                  class="w-full bg-black border border-white/10 rounded-2xl py-6 pl-16 pr-6 text-2xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none appearance-none uppercase"
+                  class="w-full bg-black border border-white/10 rounded-2xl py-6 pl-16 pr-6 text-2xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none appearance-none"
                 />
               </div>
 
@@ -380,7 +389,7 @@ onUnmounted(() => {
             >
               Asset Dossier
             </p>
-            <p class="text-gray-400 text-sm italic leading-relaxed normal-case">
+            <p class="text-gray-400 text-sm italic leading-relaxed">
               {{ product.description }}
             </p>
           </div>
@@ -410,7 +419,7 @@ onUnmounted(() => {
                     @{{ bid.profiles?.username }}
                   </p>
                 </div>
-                <p class="text-sm font-black italic text-yellow-500 uppercase">
+                <p class="text-sm font-black italic text-yellow-500">
                   {{ formatPrice(bid.amount) }}
                 </p>
               </div>
@@ -419,5 +428,30 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <div
+      v-else
+      class="fixed inset-0 bg-black flex flex-col items-center justify-center"
+    >
+      <div
+        class="w-12 h-12 border-2 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin"
+      ></div>
+      <p
+        class="text-[8px] font-black uppercase text-yellow-500 mt-6 tracking-[0.5em] animate-pulse italic"
+      >
+        Scanning Frequency...
+      </p>
+    </div>
   </div>
 </template>
+
+<style scoped>
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+</style>
