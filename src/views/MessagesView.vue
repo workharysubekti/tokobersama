@@ -18,7 +18,7 @@ const chatList = ref([]);
 // Fungsi Ambil Data Chat
 const fetchChatList = async () => {
   if (!props.userProfile?.id) return;
-  loading.value = true;
+  if (!isSilent) loading.value = true;
 
   const { data } = await supabase
     .from("messages")
@@ -81,7 +81,7 @@ const setupInboxRealtime = () => {
           payload.new.sender_id === props.userProfile.id ||
           payload.new.receiver_id === props.userProfile.id
         ) {
-          fetchChatList(); // Tarik ulang agar urutan & teks terakhir update otomatis
+          fetchChatList(true); // Tarik ulang agar urutan & teks terakhir update otomatis
         }
       },
     )
