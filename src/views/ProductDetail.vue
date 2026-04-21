@@ -11,7 +11,7 @@ import {
   BanknotesIcon,
   ArrowPathIcon,
   UserCircleIcon,
-  TagIcon, // Tambahan icon untuk kategori
+  TagIcon,
 } from "@heroicons/vue/24/outline";
 
 const props = defineProps({ userProfile: Object });
@@ -40,7 +40,6 @@ const fetchBids = async () => {
   if (!route.params.id) return;
   const { data } = await supabase
     .from("bids")
-    // Tambahkan full_name agar bisa muncul di section Winner
     .select("*, profiles(username, full_name, reputation_score)")
     .eq("product_id", route.params.id)
     .order("amount", { ascending: false })
@@ -114,38 +113,21 @@ const placeBid = async () => {
     return alert("Lelang sudah berakhir! Transmisi ditutup.");
   }
 
-  const currentPrice =
-    product.value.current_bid || product.value.starting_bid || 0;
+  const latestTopPrice =
+    recentBids.value.length > 0
+      ? recentBids.value[0].amount
+      : product.value.current_bid || product.value.starting_bid;
 
-  if (bidAmount.value <= currentPrice) {
+  if (bidAmount.value <= latestTopPrice) {
     alert(
-      `Waduh! Harga sudah naik ke ${formatPrice(currentPrice)}. Harap bid lebih tinggi.`,
+      `Waduh! Harga sudah naik ke ${formatPrice(latestTopPrice)}. Harap bid lebih tinggi.`,
     );
-    bidAmount.value = currentPrice + 10000;
+    bidAmount.value = latestTopPrice + 10000;
     return;
   }
 
   try {
     isSubmitting.value = true;
-
-    const { data: checkData } = await supabase
-      .from("products")
-      .select("current_bid, starting_bid")
-      .eq("id", product.value.id)
-      .single();
-
-    if (checkData) {
-      const dbPrice = checkData.current_bid || checkData.starting_bid || 0;
-      if (bidAmount.value <= dbPrice) {
-        alert(
-          "Seseorang sudah melakukan bid lebih tinggi. Mengupdate harga...",
-        );
-        product.value.current_bid = dbPrice;
-        bidAmount.value = dbPrice + 10000;
-        return;
-      }
-    }
-
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
       user_id: props.userProfile.id,
@@ -382,7 +364,7 @@ onUnmounted(() => {
               Top Current Bid
             </p>
             <h3
-              class="text-5xl lg:text-6xl font-[1000] italic text-yellow-500 tracking-tighter mb-10 drop-shadow-[0_0_20px_rgba(234,179,8,0.2)]"
+              class="text-3xl sm:text-4xl lg:text-6xl font-[1000] italic text-yellow-500 tracking-tighter mb-10 drop-shadow-[0_0_20px_rgba(234,179,8,0.2)] break-all leading-tight"
             >
               {{ formatPrice(product.current_bid || product.starting_bid) }}
             </h3>
@@ -390,13 +372,13 @@ onUnmounted(() => {
             <div class="space-y-4">
               <div class="relative group">
                 <span
-                  class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-xs italic tracking-tighter"
+                  class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-[10px] md:text-xs italic tracking-tighter"
                   >IDR</span
                 >
                 <input
                   v-model.number="bidAmount"
                   type="number"
-                  class="w-full bg-black border border-white/10 rounded-2xl py-6 pl-16 pr-6 text-2xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none appearance-none uppercase"
+                  class="w-full bg-black border border-white/10 rounded-2xl py-6 pl-14 md:pl-16 pr-6 text-xl md:text-2xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none appearance-none uppercase"
                 />
               </div>
 
