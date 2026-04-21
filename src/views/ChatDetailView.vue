@@ -120,20 +120,34 @@ onMounted(async () => {
 
 const sendMessage = async () => {
   if (!newMessage.value.trim()) return;
-  const textToSend = newMessage.value;
-  newMessage.value = "";
-  try {
-    await supabase.from("messages").insert({
-      sender_id: currentUser.value.id,
-      receiver_id: targetId,
-      text: textToSend,
-      is_read: false,
-    });
 
-    if (error) throw error;
-  } catch (error) {
-    notify.error("Fail", "Transmission error.");
+  const textToSend = newMessage.value;
+  newMessage.value = ""; // Langsung kosongkan input biar user merasa kencang
+
+  try {
+    // Kita tambahkan { count: 'minimal' } atau biarkan kosong
+    // tapi kita spesifik cek error-nya saja
+    const { error } = await supabase.from("messages").insert([
+      {
+        sender_id: currentUser.value.id,
+        receiver_id: targetId,
+        text: textToSend,
+        is_read: false,
+      },
+    ]);
+
+    if (error) {
+      // Jika benar-benar error dari database
+      console.error("Database Error:", error);
+      newMessage.value = textToSend; // Kembalikan teksnya
+      notify.error("Fail", "Gagal mengirim pesan.");
+    }
+    // Jika tidak ada error, fungsi selesai dengan tenang (Pesan tetap muncul via Realtime)
+  } catch (err) {
+    // Ini kalau internet benar-benar mati total
+    console.error("Connection Error:", err);
     newMessage.value = textToSend;
+    notify.error("Fail", "Koneksi terputus.");
   }
 };
 
