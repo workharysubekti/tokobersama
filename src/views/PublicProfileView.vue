@@ -253,7 +253,7 @@ onMounted(fetchData);
             {{ isFollowing ? "UNFOLLOW" : "FOLLOW" }}
           </button>
           <button
-            @click="router.push(`/chat/${profile.id}`)"
+            @click="router.push(`/messages/${profile.id}`)"
             class="p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all"
           >
             <ChatBubbleLeftEllipsisIcon class="w-5 h-5 text-yellow-500" />
