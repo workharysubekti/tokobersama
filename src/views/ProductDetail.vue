@@ -36,7 +36,6 @@ const formatPrice = (price) => {
 };
 
 const fetchBids = async () => {
-  if (!route.params.id) return;
   const { data } = await supabase
     .from("bids")
     .select("*, profiles(username, reputation_score)")
@@ -47,31 +46,22 @@ const fetchBids = async () => {
 };
 
 const fetchProductDetail = async () => {
-  if (!route.params.id) return;
   loading.value = true;
-  try {
-    const { data, error } = await supabase
-      .from("products")
-      .select(
-        "*, profiles!owner_id(username, full_name, avatar_url, reputation_score)",
-      )
-      .eq("id", route.params.id)
-      .maybeSingle();
+  const { data } = await supabase
+    .from("products")
+    .select(
+      "*, profiles!owner_id(username, full_name, avatar_url, reputation_score)",
+    )
+    .eq("id", route.params.id)
+    .single();
 
-    if (error || !data) {
-      console.error("Asset not found");
-      return router.push("/");
-    }
-
+  if (data) {
     product.value = data;
     const currentPrice = data.current_bid || data.starting_bid || 0;
     bidAmount.value = currentPrice + 10000;
     await fetchBids();
-  } catch (err) {
-    console.error("Fetch Error:", err);
-  } finally {
-    loading.value = false;
   }
+  loading.value = false;
 };
 
 const updateTimer = () => {
@@ -99,39 +89,22 @@ const placeBid = async () => {
   if (!props.userProfile) return alert("Login dulu bosku!");
   if (isSubmitting.value || !product.value) return;
 
-  const currentPrice =
-    product.value.current_bid || product.value.starting_bid || 0;
+  // Gunakan data lokal yang sudah tersinkronisasi via realtime
+  const latestTopPrice =
+    product.value.current_bid || product.value.starting_bid;
 
-  if (bidAmount.value <= currentPrice) {
+  if (bidAmount.value <= latestTopPrice) {
     alert(
-      `Waduh! Harga sudah naik ke ${formatPrice(currentPrice)}. Harap bid lebih tinggi.`,
+      `Waduh! Harga sudah naik ke ${formatPrice(latestTopPrice)}. Harap bid lebih tinggi.`,
     );
-    bidAmount.value = currentPrice + 10000;
+    bidAmount.value = latestTopPrice + 10000;
     return;
   }
 
   try {
     isSubmitting.value = true;
 
-    // --- SYNC DATABASE TERBARU ---
-    const { data: checkData } = await supabase
-      .from("products")
-      .select("current_bid, starting_bid")
-      .eq("id", product.value.id)
-      .single();
-
-    if (checkData) {
-      const dbPrice = checkData.current_bid || checkData.starting_bid || 0;
-      if (bidAmount.value <= dbPrice) {
-        alert(
-          "Seseorang sudah melakukan bid lebih tinggi. Mengupdate harga...",
-        );
-        product.value.current_bid = dbPrice;
-        bidAmount.value = dbPrice + 10000;
-        return;
-      }
-    }
-
+    // 1. Insert ke tabel Bids
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
       user_id: props.userProfile.id,
@@ -139,12 +112,13 @@ const placeBid = async () => {
     });
     if (bidErr) throw bidErr;
 
+    // 2. Update tabel products (SINKRONISASI KE DATABASE)
     await supabase
       .from("products")
       .update({ current_bid: bidAmount.value, winner_id: props.userProfile.id })
       .eq("id", product.value.id);
 
-    // Optimistic Update UI
+    // 3. OPTIMISTIC UPDATE (Langsung rubah UI lokal agar instan)
     product.value.current_bid = bidAmount.value;
     bidAmount.value = bidAmount.value + 10000;
   } catch (err) {
@@ -158,46 +132,44 @@ onMounted(() => {
   fetchProductDetail();
   timerInterval = setInterval(updateTimer, 1000);
 
-  // REALTIME FIX: HANYA JALAN JIKA ID VALID
-  if (route.params.id) {
-    bidSubscription = supabase
-      .channel(`live-auction-${route.params.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "bids",
-          filter: `product_id=eq.${route.params.id}`,
-        },
-        (payload) => {
-          fetchBids();
-          // PENGAMAN NULL: Cek apakah product.value ada sebelum dibaca
-          if (product.value) {
-            product.value.current_bid = payload.new.amount;
-            if (bidAmount.value <= payload.new.amount) {
-              bidAmount.value = payload.new.amount + 10000;
-            }
+  // SISTEM SINKRONISASI REAL-TIME (DIPERKETAT)
+  bidSubscription = supabase
+    .channel(`live-auction-${route.params.id}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "bids",
+        filter: `product_id=eq.${route.params.id}`,
+      },
+      (payload) => {
+        fetchBids();
+        if (product.value) {
+          // Sync angka utama secara reaktif
+          product.value.current_bid = payload.new.amount;
+          // Update otomatis input bid agar tidak double bid di harga lama
+          if (bidAmount.value <= payload.new.amount) {
+            bidAmount.value = payload.new.amount + 10000;
           }
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "products",
-          filter: `id=eq.${route.params.id}`,
-        },
-        (payload) => {
-          // PENGAMAN NULL: Cek apakah product.value ada sebelum dibaca
-          if (product.value) {
-            product.value.current_bid = payload.new.current_bid;
-          }
-        },
-      )
-      .subscribe();
-  }
+        }
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "products",
+        filter: `id=eq.${route.params.id}`,
+      },
+      (payload) => {
+        if (product.value) {
+          product.value.current_bid = payload.new.current_bid;
+        }
+      },
+    )
+    .subscribe();
 });
 
 onUnmounted(() => {
@@ -432,7 +404,7 @@ onUnmounted(() => {
                     @{{ bid.profiles?.username }}
                   </p>
                 </div>
-                <p class="text-sm font-black italic text-yellow-500">
+                <p class="text-sm font-black italic text-yellow-500 uppercase">
                   {{ formatPrice(bid.amount) }}
                 </p>
               </div>
@@ -443,7 +415,7 @@ onUnmounted(() => {
     </div>
 
     <div
-      v-else-if="loading"
+      v-else
       class="fixed inset-0 bg-black flex flex-col items-center justify-center"
     >
       <div
