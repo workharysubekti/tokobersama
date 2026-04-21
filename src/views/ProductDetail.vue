@@ -57,34 +57,35 @@ const fetchProductDetail = async () => {
 
   if (data) {
     product.value = data;
-    // 1. Fetch history bids (Tabel Bids)
+    const currentPrice = data.current_bid || data.starting_bid || 0;
+    bidAmount.value = currentPrice + 10000;
     await fetchBids();
-
-    // 2. KUNCI RAHASIA DARI MYBIDS: Timpa harga product dengan harga tertinggi dari tabel Bids!
-    const trueHighestBid =
-      recentBids.value.length > 0
-        ? recentBids.value[0].amount
-        : data.current_bid || data.starting_bid || 0;
-
-    product.value.current_bid = trueHighestBid; // Paksa update UI ke harga asli
-    bidAmount.value = trueHighestBid + 10000; // Set input bid
   }
   loading.value = false;
 };
 
+// --- UPDATE LOGIKA TIMER (TAMBAH HARI) ---
 const updateTimer = () => {
   if (!product.value?.end_time) return;
   const end = new Date(product.value.end_time).getTime();
   const now = new Date().getTime();
   const diff = end - now;
+
   if (diff <= 0) {
     timeLeft.value = "ENDED";
     return;
   }
+
+  const d = Math.floor(diff / (1000 * 60 * 60 * 24));
   const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   const s = Math.floor((diff % (1000 * 60)) / 1000);
-  timeLeft.value = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+
+  if (d > 0) {
+    timeLeft.value = `${d}D ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  } else {
+    timeLeft.value = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  }
 };
 
 const goToSeller = () => {
@@ -95,27 +96,23 @@ const goToSeller = () => {
 
 const placeBid = async () => {
   if (!props.userProfile) return alert("Login dulu bosku!");
-  if (isSubmitting.value || !product.value) return;
+  if (isSubmitting.value) return;
 
-  // KEMBALI KE KODE ASLI MAS: Jadikan tabel 'bids' sebagai kebenaran mutlak, bukan 'products'
   const latestTopPrice =
     recentBids.value.length > 0
       ? recentBids.value[0].amount
-      : product.value.current_bid || product.value.starting_bid || 0;
+      : product.value.current_bid || product.value.starting_bid;
 
   if (bidAmount.value <= latestTopPrice) {
     alert(
       `Waduh! Harga sudah naik ke ${formatPrice(latestTopPrice)}. Harap bid lebih tinggi.`,
     );
     bidAmount.value = latestTopPrice + 10000;
-    product.value.current_bid = latestTopPrice; // Paksa UI sync
     return;
   }
 
   try {
     isSubmitting.value = true;
-
-    // 1. Insert ke tabel Bids
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
       user_id: props.userProfile.id,
@@ -123,14 +120,10 @@ const placeBid = async () => {
     });
     if (bidErr) throw bidErr;
 
-    // 2. Update tabel products (Biarpun di HP gagal, validasi di atas sudah mengamankan double bid)
     await supabase
       .from("products")
       .update({ current_bid: bidAmount.value, winner_id: props.userProfile.id })
       .eq("id", product.value.id);
-
-    product.value.current_bid = bidAmount.value;
-    bidAmount.value = bidAmount.value + 10000;
   } catch (err) {
     alert(err.message);
   } finally {
@@ -142,7 +135,6 @@ onMounted(() => {
   fetchProductDetail();
   timerInterval = setInterval(updateTimer, 1000);
 
-  // SISTEM SINKRONISASI REAL-TIME (DIPERKETAT)
   bidSubscription = supabase
     .channel(`live-auction-${route.params.id}`)
     .on(
@@ -153,17 +145,26 @@ onMounted(() => {
         table: "bids",
         filter: `product_id=eq.${route.params.id}`,
       },
-      async (payload) => {
-        // Ada bid baru masuk! Tarik ulang list bids.
-        await fetchBids();
-
+      (payload) => {
+        fetchBids();
         if (product.value) {
-          // Timpa harga utama dengan harga asli dari bid yang baru masuk
           product.value.current_bid = payload.new.amount;
           if (bidAmount.value <= payload.new.amount) {
             bidAmount.value = payload.new.amount + 10000;
           }
         }
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "products",
+        filter: `id=eq.${route.params.id}`,
+      },
+      (payload) => {
+        if (product.value) product.value.current_bid = payload.new.current_bid;
       },
     )
     .subscribe();
@@ -247,7 +248,7 @@ onUnmounted(() => {
                   </div>
                   <div>
                     <p class="text-xs font-black italic">
-                      @{{ bid.profiles?.username }}
+                      {{ bid.profiles?.username }}
                     </p>
                     <p
                       class="text-[8px] text-gray-600 font-bold uppercase tracking-widest"
@@ -401,7 +402,7 @@ onUnmounted(() => {
                     @{{ bid.profiles?.username }}
                   </p>
                 </div>
-                <p class="text-sm font-black italic text-yellow-500 uppercase">
+                <p class="text-sm font-black italic text-yellow-500">
                   {{ formatPrice(bid.amount) }}
                 </p>
               </div>
