@@ -58,7 +58,9 @@ const fetchProductDetail = async () => {
   if (data) {
     product.value = data;
     const currentPrice = data.current_bid || data.starting_bid || 0;
-    bidAmount.value = currentPrice + 10000;
+    if (bidAmount.value <= currentPrice) {
+      bidAmount.value = currentPrice + 10000;
+    }
     await fetchBids();
   }
   loading.value = false;
@@ -89,19 +91,28 @@ const placeBid = async () => {
   if (!props.userProfile) return alert("Login dulu bosku!");
   if (isSubmitting.value) return;
 
-  const latestTopPrice =
-    product.value.current_bid || product.value.starting_bid;
-
-  if (bidAmount.value <= latestTopPrice) {
-    alert(
-      `Waduh! Harga sudah naik ke ${formatPrice(latestTopPrice)}. Harap bid lebih tinggi.`,
-    );
-    bidAmount.value = latestTopPrice + 10000;
-    return;
-  }
-
   try {
     isSubmitting.value = true;
+
+    // --- PAGAR GAIB: CEK HARGA TERBARU DARI DATABASE (ANTI DOUBLE BID) ---
+    const { data: latestProduct } = await supabase
+      .from("products")
+      .select("current_bid, starting_bid")
+      .eq("id", product.value.id)
+      .single();
+
+    const dbPrice = latestProduct.current_bid || latestProduct.starting_bid;
+
+    if (bidAmount.value <= dbPrice) {
+      alert(
+        `Waduh! Seseorang baru saja bid di harga ${formatPrice(dbPrice)}. Naikkan bid Anda!`,
+      );
+      product.value.current_bid = dbPrice; // Update UI Lokal
+      bidAmount.value = dbPrice + 10000;
+      return;
+    }
+    // ---------------------------------------------------------------------
+
     // 1. Insert ke tabel Bids
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
@@ -110,13 +121,13 @@ const placeBid = async () => {
     });
     if (bidErr) throw bidErr;
 
-    // 2. UPDATE tabel products (Sync untuk tampilan Luar/Home/Detail)
+    // 2. UPDATE tabel products (Sync Global)
     await supabase
       .from("products")
       .update({ current_bid: bidAmount.value, winner_id: props.userProfile.id })
       .eq("id", product.value.id);
 
-    // 3. OPTIMISTIC UPDATE (UI langsung berubah instant tanpa tunggu refresh)
+    // 3. OPTIMISTIC UPDATE
     product.value.current_bid = bidAmount.value;
     bidAmount.value = bidAmount.value + 10000;
   } catch (err) {
@@ -130,7 +141,6 @@ onMounted(() => {
   fetchProductDetail();
   timerInterval = setInterval(updateTimer, 1000);
 
-  // SISTEM SINKRONISASI REAL-TIME (PERBAIKAN)
   bidSubscription = supabase
     .channel(`live-auction-${route.params.id}`)
     .on(
@@ -143,7 +153,6 @@ onMounted(() => {
       },
       async (payload) => {
         await fetchBids();
-        // Paksa UI Sync current_bid jika ada bid baru masuk (Real-time di HP)
         if (product.value && payload.new.amount > product.value.current_bid) {
           product.value.current_bid = payload.new.amount;
           if (bidAmount.value <= payload.new.amount) {
@@ -174,7 +183,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="bg-black min-h-screen text-white pb-32">
+  <div
+    class="bg-black min-h-screen text-white pb-32 uppercase italic font-[1000]"
+  >
     <div
       class="fixed top-0 inset-x-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between"
     >
@@ -244,7 +255,7 @@ onUnmounted(() => {
                     {{ bid.profiles?.username?.[0].toUpperCase() }}
                   </div>
                   <div>
-                    <p class="text-xs font-black italic">
+                    <p class="text-xs font-black italic uppercase">
                       @{{ bid.profiles?.username }}
                     </p>
                     <p
@@ -342,7 +353,7 @@ onUnmounted(() => {
                 <input
                   v-model.number="bidAmount"
                   type="number"
-                  class="w-full bg-black border border-white/10 rounded-2xl py-6 pl-16 pr-6 text-2xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none appearance-none"
+                  class="w-full bg-black border border-white/10 rounded-2xl py-6 pl-16 pr-6 text-2xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none appearance-none uppercase"
                 />
               </div>
 
@@ -369,7 +380,7 @@ onUnmounted(() => {
             >
               Asset Dossier
             </p>
-            <p class="text-gray-400 text-sm italic leading-relaxed">
+            <p class="text-gray-400 text-sm italic leading-relaxed normal-case">
               {{ product.description }}
             </p>
           </div>
@@ -399,7 +410,7 @@ onUnmounted(() => {
                     @{{ bid.profiles?.username }}
                   </p>
                 </div>
-                <p class="text-sm font-black italic text-yellow-500">
+                <p class="text-sm font-black italic text-yellow-500 uppercase">
                   {{ formatPrice(bid.amount) }}
                 </p>
               </div>
@@ -408,30 +419,5 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-
-    <div
-      v-else
-      class="fixed inset-0 bg-black flex flex-col items-center justify-center"
-    >
-      <div
-        class="w-12 h-12 border-2 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin"
-      ></div>
-      <p
-        class="text-[8px] font-black uppercase text-yellow-500 mt-6 tracking-[0.5em] animate-pulse italic"
-      >
-        Scanning Frequency...
-      </p>
-    </div>
   </div>
 </template>
-
-<style scoped>
-input::-webkit-outer-spin-button,
-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type="number"] {
-  -moz-appearance: textfield;
-}
-</style>
