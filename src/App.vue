@@ -20,13 +20,12 @@ const triggerGlobalNotif = (message) => {
   setTimeout(() => { globalNotification.value = null; }, 6000);
 };
 
-// --- SINYAL ONLINE GLOBAL ---
+// --- LOGIC ONLINE GLOBAL (TETAP DI SINI) ---
 const setupGlobalPresence = (userId) => {
   if (!userId) return;
-  // Bersihkan channel lama kalau ada
   if (presenceChannel) supabase.removeChannel(presenceChannel);
 
-  // Buat channel global untuk pantau siapa saja yang sedang buka web
+  // Buat channel untuk lapor diri sendiri online
   presenceChannel = supabase.channel("global-online-users", {
     config: { presence: { key: userId } }
   });
@@ -34,7 +33,6 @@ const setupGlobalPresence = (userId) => {
   presenceChannel
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
-        // Daftarkan diri ke jagat raya TokoBersama
         await presenceChannel.track({
           user_id: userId,
           online_at: new Date().toISOString()
@@ -45,21 +43,13 @@ const setupGlobalPresence = (userId) => {
 
 const setupGlobalRealtime = (userId) => {
   if (!userId || globalNotifChannel) return;
-  
   globalNotifChannel = supabase.channel("global-notif")
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "bids" }, 
       async (payload) => {
         if (payload.new.user_id !== userId) {
-          const { data: history } = await supabase
-            .from("bids")
-            .select("id")
-            .eq("product_id", payload.new.product_id)
-            .eq("user_id", userId)
-            .limit(1);
-
+          const { data: history } = await supabase.from("bids").select("id").eq("product_id", payload.new.product_id).eq("user_id", userId).limit(1);
           if (history && history.length > 0) {
-            const { data: prod } = await supabase
-              .from("products").select("name").eq("id", payload.new.product_id).single();
+            const { data: prod } = await supabase.from("products").select("name").eq("id", payload.new.product_id).single();
             if (prod) triggerGlobalNotif(`⚡ OUTBID: Seseorang menyalip bid Mas di "${prod.name}"!`);
           }
         }
@@ -71,12 +61,11 @@ const syncSession = async () => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
-      const { data } = await supabase
-        .from("profiles").select("*").eq("id", session.user.id).single();
+      const { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
       if (data) {
         userProfile.value = data;
         setupGlobalRealtime(session.user.id);
-        setupGlobalPresence(session.user.id); // Nyalakan Sinyal Online
+        setupGlobalPresence(session.user.id);
       }
     } else {
       userProfile.value = null;
@@ -88,13 +77,8 @@ const syncSession = async () => {
 };
 
 onMounted(async () => {
-  const safetyTimeout = setTimeout(() => {
-    isInitialLoading.value = false;
-    authReady.value = true;
-  }, 3000);
-
+  const safetyTimeout = setTimeout(() => { isInitialLoading.value = false; authReady.value = true; }, 3000);
   await syncSession();
-
   supabase.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_IN') syncSession();
     if (event === 'SIGNED_OUT') {
@@ -105,7 +89,6 @@ onMounted(async () => {
       presenceChannel = null;
     }
   });
-
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") syncSession();
   });
@@ -122,11 +105,9 @@ onMounted(async () => {
         </div>
       </div>
     </transition>
-
     <Header :userProfile="userProfile" :authReady="authReady" />
     <router-view v-if="authReady" :userProfile="userProfile" :key="route.fullPath" />
     <BottomNav v-if="route.meta.showBottomNav" :userProfile="userProfile" />
-
     <transition name="notif">
       <div v-if="globalNotification" class="fixed bottom-24 right-4 left-4 sm:left-auto z-[1000] max-w-[400px] bg-[#111]/90 backdrop-blur-xl border border-red-500/50 rounded-2xl p-4 shadow-2xl flex items-center gap-4">
         <div class="flex-1 min-w-0">
