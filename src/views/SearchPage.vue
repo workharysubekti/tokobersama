@@ -2,13 +2,19 @@
 import { ref, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../lib/supabase.js";
-import { useSearchStore } from "../store/search.js"; // Pastikan path ini benar
-import { MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
+import { useSearchStore } from "../store/search.js";
+import {
+  MagnifyingGlassIcon,
+  UserCircleIcon,
+  TagIcon,
+} from "@heroicons/vue/24/outline";
 
 const route = useRoute();
 const router = useRouter();
 const searchStore = useSearchStore();
+
 const products = ref([]);
+const users = ref([]);
 const loading = ref(false);
 
 const formatPrice = (price) => {
@@ -16,7 +22,7 @@ const formatPrice = (price) => {
     style: "currency",
     currency: "IDR",
     minimumFractionDigits: 0,
-  }).format(price);
+  }).format(price || 0);
 };
 
 const fetchSearch = async () => {
@@ -24,23 +30,47 @@ const fetchSearch = async () => {
 
   if (!searchQuery) {
     products.value = [];
+    users.value = [];
     return;
   }
 
   loading.value = true;
-  const { data, error } = await supabase
-    .from("products")
-    .select("*")
-    .ilike("name", `%${searchQuery}%`)
-    .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error("Supabase Error:", error.message);
-    products.value = [];
-  } else {
-    products.value = data;
+  try {
+    // LOGIKA SEARCH @USER
+    if (searchQuery.startsWith("@")) {
+      const cleanUsername = searchQuery.substring(1);
+      const { data: userData } = await supabase
+        .from("profiles")
+        .select("id, username, full_name, avatar_url")
+        .ilike("username", `%${cleanUsername}%`)
+        .limit(10);
+
+      users.value = userData || [];
+      products.value = [];
+    } else {
+      // LOGIKA HYBRID SEARCH (BARANG + NAMA USER)
+      const [prodRes, userRes] = await Promise.all([
+        supabase
+          .from("products")
+          .select("*")
+          .ilike("name", `%${searchQuery}%`)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("profiles")
+          .select("id, username, full_name, avatar_url")
+          .ilike("full_name", `%${searchQuery}%`)
+          .limit(5),
+      ]);
+
+      products.value = prodRes.data || [];
+      users.value = userRes.data || [];
+    }
+  } catch (error) {
+    console.error("Search Intel Error:", error.message);
+  } finally {
+    loading.value = false;
   }
-  loading.value = false;
 };
 
 onMounted(() => {
@@ -56,123 +86,135 @@ watch(
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#0a0a0a] pt-24 pb-32 px-4 sm:px-6">
-    <div class="md:hidden mb-6 sticky top-20 z-[60]">
+  <div
+    class="min-h-screen bg-[#0a0a0a] pt-24 pb-32 px-4 sm:px-6 font-sans uppercase italic font-[1000]"
+  >
+    <div class="md:hidden mb-10 sticky top-20 z-[60]">
       <div class="relative group">
         <div
-          class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"
+          class="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none"
         >
-          <MagnifyingGlassIcon class="h-5 w-5 text-yellow-500/50" />
+          <MagnifyingGlassIcon class="h-5 w-5 text-yellow-500" />
         </div>
-
         <input
           v-model="searchStore.searchQuery"
           @keyup.enter="fetchSearch"
           type="text"
-          placeholder="Cari koleksi..."
-          class="w-full bg-[#16191e] border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-yellow-500/50 font-black italic uppercase text-sm shadow-2xl"
+          placeholder="Cari user @ atau barang..."
+          class="w-full bg-white/[0.03] border border-white/10 rounded-[24px] py-5 pl-14 pr-4 text-white placeholder-gray-700 focus:outline-none focus:border-yellow-500/50 transition-all shadow-2xl"
         />
-
-        <button
-          @click="fetchSearch"
-          class="absolute inset-y-2 right-2 px-4 bg-yellow-500 text-black rounded-xl text-[10px] font-[900] uppercase italic transition-all active:scale-95"
-        >
-          GO!
-        </button>
       </div>
     </div>
 
-    <div class="mb-8 px-2">
-      <h2
-        class="text-2xl font-[900] italic text-white uppercase tracking-tighter"
-      >
-        Search <span class="text-yellow-500 text-sm ml-2">// Results</span>
+    <div class="mb-12">
+      <h2 class="text-4xl tracking-tighter text-white">
+        Search <span class="text-yellow-500">// Results</span>
       </h2>
-      <p
-        class="text-[10px] text-gray-500 mt-1 font-mono uppercase tracking-widest"
-      >
-        Query: "{{ route.query.q || "None" }}"
+      <p class="text-[10px] text-gray-600 mt-2 tracking-[0.4em]">
+        SIGNAL: "{{ route.query.q || "IDLE" }}"
       </p>
     </div>
 
-    <div v-if="loading" class="flex justify-center py-20">
+    <div v-if="loading" class="flex justify-center py-24">
       <div
-        class="animate-spin rounded-full h-8 w-8 border-t-2 border-yellow-500"
+        class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-yellow-500"
       ></div>
     </div>
 
-    <div v-else-if="products.length > 0" class="space-y-4">
-      <div
-        v-for="item in products"
-        :key="item.id"
-        class="group flex items-center bg-[#16191e] border border-white/5 p-4 rounded-[24px] hover:border-yellow-500/40 transition-all duration-300"
-      >
-        <img
-          :src="item.image_url"
-          class="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-2xl border border-white/10"
-        />
-
-        <div class="flex-1 ml-4 sm:ml-6">
-          <h4
-            class="text-white font-black uppercase italic text-xs sm:text-sm tracking-tight group-hover:text-yellow-500 transition-colors"
-          >
-            {{ item.name }}
-          </h4>
-          <p class="text-[9px] text-gray-600 font-mono mt-1 uppercase">
-            Ref: #{{ String(item.id).split("-")[0] }}
-          </p>
-        </div>
-
-        <div class="text-right mr-4 sm:mr-10">
-          <p
-            class="text-[8px] text-gray-600 uppercase font-black tracking-widest mb-0.5"
-          >
-            Bid
-          </p>
-          <p
-            class="text-yellow-500 font-black text-sm sm:text-xl italic leading-none"
-          >
-            {{ formatPrice(item.current_bid) }}
-          </p>
-        </div>
-
-        <button
-          @click="router.push(`/product/${item.id}`)"
-          class="bg-yellow-500 hover:bg-white text-black px-4 py-2 sm:px-6 sm:py-2.5 rounded-xl transition-all active:scale-95 flex items-center space-x-2 shadow-[0_0_15px_rgba(234,179,8,0.2)]"
+    <div v-else class="space-y-12">
+      <div v-if="users.length > 0">
+        <h3
+          class="text-[10px] text-gray-500 tracking-[0.5em] mb-6 px-2 flex items-center gap-2"
         >
-          <span class="text-[10px] font-black uppercase tracking-tighter"
-            >Bid / View</span
+          <UserCircleIcon class="w-4 h-4" /> Users Found
+        </h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div
+            v-for="user in users"
+            :key="user.id"
+            @click="router.push(`/user/${user.username}`)"
+            class="flex items-center gap-4 bg-white/[0.02] border border-white/5 p-4 rounded-[28px] hover:border-blue-500/30 transition-all cursor-pointer group"
           >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-3 w-3 hidden sm:block"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="3"
-              d="M13 7l5 5m0 0l-5 5m5-5H6"
-            />
-          </svg>
-        </button>
+            <div
+              class="w-12 h-12 rounded-full overflow-hidden border border-white/10 shrink-0"
+            >
+              <img
+                v-if="user.avatar_url"
+                :src="user.avatar_url"
+                class="w-full h-full object-cover"
+              />
+              <div
+                v-else
+                class="w-full h-full bg-gray-900 flex items-center justify-center text-xs text-gray-600"
+              >
+                ?
+              </div>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h4
+                class="text-sm text-white group-hover:text-blue-400 transition-colors truncate"
+              >
+                {{ user.full_name || user.username }}
+              </h4>
+              <p class="text-[9px] text-yellow-500/50 tracking-widest mt-0.5">
+                @{{ user.username }}
+              </p>
+            </div>
+            <ChevronRightIcon class="w-4 h-4 text-gray-800" />
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div
-      v-else
-      class="text-center py-20 border border-dashed border-white/5 rounded-[40px]"
-    >
-      <div class="text-gray-700 mb-4 flex justify-center">
-        <MagnifyingGlassIcon class="w-12 h-12 opacity-20" />
+      <div v-if="products.length > 0">
+        <h3
+          class="text-[10px] text-gray-500 tracking-[0.5em] mb-6 px-2 flex items-center gap-2"
+        >
+          <TagIcon class="w-4 h-4" /> Items Found
+        </h3>
+        <div class="space-y-4">
+          <div
+            v-for="item in products"
+            :key="item.id"
+            @click="router.push(`/product/${item.id}`)"
+            class="group flex items-center bg-white/[0.02] border border-white/5 p-4 pr-10 rounded-[32px] hover:border-yellow-500/30 transition-all duration-300 cursor-pointer"
+          >
+            <img
+              :src="item.image_url"
+              class="w-20 h-20 object-cover rounded-[20px] border border-white/5 shadow-inner"
+            />
+            <div class="flex-1 ml-6 min-w-0">
+              <h4
+                class="text-sm text-white group-hover:text-yellow-500 transition-colors truncate tracking-tight"
+              >
+                {{ item.name }}
+              </h4>
+              <p class="text-[9px] text-gray-700 mt-2 tracking-widest">
+                REF: #{{ String(item.id).split("-")[0] }}
+              </p>
+            </div>
+            <div class="text-right">
+              <p class="text-[8px] text-gray-700 tracking-widest mb-1">
+                CURRENT BID
+              </p>
+              <p class="text-xl text-yellow-500 font-black italic leading-none">
+                {{ formatPrice(item.current_bid) }}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
-      <p
-        class="text-gray-600 font-black italic uppercase tracking-widest text-xs"
+
+      <div
+        v-if="users.length === 0 && products.length === 0"
+        class="text-center py-32 border-2 border-dashed border-white/5 rounded-[48px]"
       >
-        Target Tidak Ditemukan
-      </p>
+        <MagnifyingGlassIcon
+          class="w-16 h-16 text-gray-900 mx-auto mb-6 opacity-20"
+        />
+        <p class="text-gray-700 tracking-[0.5em] text-xs">
+          NO SIGNALS DETECTED
+        </p>
+      </div>
     </div>
   </div>
 </template>
