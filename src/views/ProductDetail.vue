@@ -36,6 +36,7 @@ const formatPrice = (price) => {
 };
 
 const fetchBids = async () => {
+  if (!route.params.id) return;
   const { data } = await supabase
     .from("bids")
     .select("*, profiles(username, reputation_score)")
@@ -48,7 +49,7 @@ const fetchBids = async () => {
 const fetchProductDetail = async () => {
   loading.value = true;
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("products")
       .select(
         "*, profiles!owner_id(username, full_name, avatar_url, reputation_score)",
@@ -56,14 +57,14 @@ const fetchProductDetail = async () => {
       .eq("id", route.params.id)
       .maybeSingle();
 
-    if (data) {
-      product.value = data;
-      const currentPrice = data.current_bid || data.starting_bid || 0;
-      bidAmount.value = currentPrice + 10000;
-      await fetchBids();
-    }
+    if (error || !data) throw new Error("Data tidak ditemukan");
+
+    product.value = data;
+    const currentPrice = data.current_bid || data.starting_bid || 0;
+    bidAmount.value = currentPrice + 10000;
+    await fetchBids();
   } catch (err) {
-    console.error(err);
+    console.error("Fetch Error:", err.message);
   } finally {
     loading.value = false;
   }
@@ -94,33 +95,25 @@ const placeBid = async () => {
   if (!props.userProfile) return alert("Login dulu bosku!");
   if (isSubmitting.value || !product.value) return;
 
-  const currentPrice = product.value.current_bid || product.value.starting_bid;
-
-  if (bidAmount.value <= currentPrice) {
-    alert(`Harga sudah naik! Harap bid lebih tinggi.`);
-    bidAmount.value = currentPrice + 10000;
-    return;
-  }
-
   try {
     isSubmitting.value = true;
 
-    // VALIDASI DATABASE (ANTI DOUBLE BID)
-    const { data: dbProd } = await supabase
+    // VALIDASI DATABASE TERBARU (SINKRONISASI REAL-TIME)
+    const { data: latest } = await supabase
       .from("products")
       .select("current_bid, starting_bid")
       .eq("id", product.value.id)
       .single();
 
-    const latestPrice = dbProd.current_bid || dbProd.starting_bid;
-    if (bidAmount.value <= latestPrice) {
-      alert("Seseorang sudah mendahului bid Anda!");
-      product.value.current_bid = latestPrice;
-      bidAmount.value = latestPrice + 10000;
+    const topPrice = latest.current_bid || latest.starting_bid;
+
+    if (bidAmount.value <= topPrice) {
+      alert(`Harga sudah naik ke ${formatPrice(topPrice)}!`);
+      product.value.current_bid = topPrice;
+      bidAmount.value = topPrice + 10000;
       return;
     }
 
-    // 1. INSERT KE BIDS
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
       user_id: props.userProfile.id,
@@ -128,13 +121,11 @@ const placeBid = async () => {
     });
     if (bidErr) throw bidErr;
 
-    // 2. UPDATE KE PRODUCTS (SYNC REAL-TIME)
     await supabase
       .from("products")
       .update({ current_bid: bidAmount.value, winner_id: props.userProfile.id })
       .eq("id", product.value.id);
 
-    // 3. OPTIMISTIC UPDATE UI
     product.value.current_bid = bidAmount.value;
     bidAmount.value = bidAmount.value + 10000;
   } catch (err) {
@@ -148,9 +139,9 @@ onMounted(() => {
   fetchProductDetail();
   timerInterval = setInterval(updateTimer, 1000);
 
-  // SINKRONISASI REAL-TIME
+  // FIX REALTIME CONNECTION
   bidSubscription = supabase
-    .channel(`live-auction-${route.params.id}`)
+    .channel(`auction-${route.params.id}`)
     .on(
       "postgres_changes",
       {
@@ -161,7 +152,7 @@ onMounted(() => {
       },
       (payload) => {
         fetchBids();
-        if (product.value) {
+        if (product.value && payload.new.amount > product.value.current_bid) {
           product.value.current_bid = payload.new.amount;
           if (bidAmount.value <= payload.new.amount) {
             bidAmount.value = payload.new.amount + 10000;
@@ -191,9 +182,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    class="bg-black min-h-screen text-white pb-32 uppercase italic font-[1000]"
-  >
+  <div class="bg-black min-h-screen text-white pb-32">
     <div
       class="fixed top-0 inset-x-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between"
     >
