@@ -52,17 +52,12 @@ const fetchChatData = async () => {
     if (!session) return router.push("/login");
     currentUser.value = session.user;
 
-    // 1. Ambil Profil Target
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", targetId)
-      .maybeSingle();
+    // Fetch Profile Target
+    const { data: profile } = await supabase.from("profiles").select("*").eq("id", targetId).maybeSingle();
     targetProfile.value = profile;
 
-    // 2. Ambil History Pesan
-    const { data: msgData, error } = await supabase
-      .from("messages")
+    // Fetch Messages
+    const { data: msgData, error } = await supabase.from("messages")
       .select("*")
       .or(`and(sender_id.eq.${currentUser.value.id},receiver_id.eq.${targetId}),and(sender_id.eq.${targetId},receiver_id.eq.${currentUser.value.id})`)
       .order("created_at", { ascending: true });
@@ -73,28 +68,18 @@ const fetchChatData = async () => {
     scrollToBottom();
     markAsRead();
 
-    // 3. FIX CHANNEL ID: Buat ID Kamar yang sama buat kedua user
-    const roomID = [currentUser.value.id, targetId].sort().join("_");
-    const channel = supabase.channel(`chat_${roomID}`, {
-      config: { presence: { key: currentUser.value.id } },
-    });
-
-    channel
+    // --- LOGIC MONITORING STATUS ONLINE GLOBAL ---
+    const presenceChannel = supabase.channel("global-online-users");
+    presenceChannel
       .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState();
-        // Cek apakah ID target ada di dalam list online di channel ini
-        isTargetOnline.value = !!state[targetId];
+        const state = presenceChannel.presenceState();
+        isTargetOnline.value = !!state[targetId]; // Cek keberadaan target di jagat web
       })
-      .on("presence", { event: "join" }, ({ newPresences }) => {
-        if (newPresences.some(p => p.presence_ref.includes(targetId))) {
-          isTargetOnline.value = true;
-        }
-      })
-      .on("presence", { event: "leave" }, ({ leftPresences }) => {
-        if (leftPresences.some(p => p.presence_ref.includes(targetId))) {
-          isTargetOnline.value = false;
-        }
-      })
+      .subscribe();
+
+    // --- LOGIC REALTIME PESAN ---
+    const roomID = [currentUser.value.id, targetId].sort().join("_");
+    const msgChannel = supabase.channel(`msg_room_${roomID}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
           const newMsg = payload.new;
           if ((newMsg.sender_id === currentUser.value.id && newMsg.receiver_id === targetId) || 
@@ -104,16 +89,9 @@ const fetchChatData = async () => {
             if (newMsg.receiver_id === currentUser.value.id) markAsRead();
           }
       })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          // Track status kita agar device sebelah tahu kita online
-          await channel.track({ 
-            user_id: currentUser.value.id, 
-            online_at: new Date().toISOString() 
-          });
-        }
-      });
-    return channel;
+      .subscribe();
+
+    return { presenceChannel, msgChannel };
   } catch (error) {
     console.error("Chat Error:", error);
   }
@@ -135,30 +113,33 @@ const sendMessage = async () => {
   }
 };
 
-let messageSub;
+let subs;
 onMounted(async () => {
-  messageSub = await fetchChatData();
+  subs = await fetchChatData();
 });
 
 onUnmounted(() => {
-  if (messageSub) supabase.removeChannel(messageSub);
+  if (subs) {
+    supabase.removeChannel(subs.presenceChannel);
+    supabase.removeChannel(subs.msgChannel);
+  }
 });
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[999] bg-[#050505] flex justify-center overflow-hidden overscroll-none">
+  <div class="fixed inset-0 z-[9999] h-screen w-full bg-[#050505] flex justify-center overflow-hidden overscroll-none">
     
-    <div class="relative w-full max-w-2xl bg-[#0a0a0a] flex flex-col h-full border-x border-white/5 shadow-2xl">
+    <div class="relative w-full max-w-2xl bg-[#0a0a0a] flex flex-col h-full md:border-x border-white/5 shadow-2xl">
       
       <header class="h-16 shrink-0 z-30 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-white/5 px-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <button @click="router.back()" class="p-2 bg-white/5 rounded-lg border border-white/10 text-gray-400 active:scale-90">
+          <button @click="router.back()" class="p-2 bg-white/5 rounded-lg border border-white/10 text-gray-500 active:scale-90 transition-transform">
             <ArrowLeftIcon class="w-5 h-5" />
           </button>
 
-          <div v-if="targetProfile" @click="goToPublicProfile" class="flex items-center gap-3 cursor-pointer group">
-            <div class="w-10 h-10 rounded-full overflow-hidden border bg-black shadow-lg"
-                 :class="isTargetOnline ? 'border-green-500' : 'border-white/10'">
+          <div v-if="targetProfile" @click="goToPublicProfile" class="flex items-center gap-3 cursor-pointer group active:opacity-70">
+            <div class="w-10 h-10 rounded-full overflow-hidden border bg-black shadow-lg transition-all duration-500"
+                 :class="isTargetOnline ? 'border-green-500 shadow-green-500/20' : 'border-white/10'">
               <img v-if="targetProfile.avatar_url" :src="targetProfile.avatar_url" class="w-full h-full object-cover" />
               <UserCircleIcon v-else class="w-full h-full text-gray-800 p-1" />
             </div>
@@ -167,8 +148,8 @@ onUnmounted(() => {
                 {{ targetProfile.full_name || targetProfile.username }}
               </h2>
               <div class="flex items-center gap-1.5">
-                <div class="w-1.5 h-1.5 rounded-full" :class="isTargetOnline ? 'bg-green-500 animate-pulse shadow-[0_0_8px_#22c55e]' : 'bg-gray-700'"></div>
-                <p class="text-[7px] font-black uppercase tracking-widest" :class="isTargetOnline ? 'text-green-500' : 'text-gray-600'">
+                <div class="w-1.5 h-1.5 rounded-full shadow-[0_0_8px_currentColor]" :class="isTargetOnline ? 'bg-green-500 text-green-500 animate-pulse' : 'bg-gray-700 text-gray-700'"></div>
+                <p class="text-[7px] font-black uppercase tracking-widest transition-colors duration-500" :class="isTargetOnline ? 'text-green-500' : 'text-gray-600'">
                   {{ isTargetOnline ? "Online" : "Offline" }}
                 </p>
               </div>
@@ -178,12 +159,9 @@ onUnmounted(() => {
         <ShieldCheckIcon class="w-5 h-5 opacity-20 text-yellow-500" />
       </header>
 
-      <main 
-        ref="chatContainer" 
-        class="flex-1 overflow-y-auto p-5 space-y-6 no-scrollbar overscroll-contain bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-white/[0.02] to-transparent"
-      >
+      <main ref="chatContainer" class="flex-1 overflow-y-auto p-5 space-y-6 no-scrollbar bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-yellow-500/[0.02] to-transparent overscroll-contain">
         <div v-if="loading" class="flex justify-center py-20">
-          <ArrowPathIcon class="w-8 h-8 animate-spin text-yellow-500/50" />
+          <ArrowPathIcon class="w-8 h-8 animate-spin text-yellow-500/30" />
         </div>
 
         <template v-else>
@@ -192,22 +170,22 @@ onUnmounted(() => {
             class="flex items-end gap-2"
           >
             <div :class="msg.sender_id === currentUser.id 
-                 ? 'bg-yellow-500 text-black rounded-tr-none shadow-[0_4px_15px_rgba(234,179,8,0.15)]' 
+                 ? 'bg-yellow-500 text-black rounded-tr-none shadow-[0_5px_15px_rgba(234,179,8,0.1)]' 
                  : 'bg-white/[0.03] text-white border border-white/5 rounded-tl-none'"
-                 class="max-w-[85%] px-4 py-3 rounded-[22px] relative">
+                 class="max-w-[85%] px-4 py-3 rounded-[22px] shadow-lg">
               <p class="text-[11px] font-bold italic leading-relaxed">{{ msg.text }}</p>
               <div class="flex items-center justify-end gap-1 mt-1.5">
-                <p class="text-[6px] opacity-40 uppercase font-black tracking-tighter">
+                <p class="text-[6px] opacity-40 uppercase font-black tracking-tighter italic">
                   {{ new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }}
                 </p>
-                <div v-if="msg.sender_id === currentUser.id" class="text-[8px] opacity-40">
-                   {{ msg.is_read ? '✓✓' : '✓' }}
+                <div v-if="msg.sender_id === currentUser.id" class="text-[8px] font-black">
+                   <span :class="msg.is_read ? 'text-blue-500' : 'opacity-20'">{{ msg.is_read ? '✓✓' : '✓' }}</span>
                 </div>
               </div>
             </div>
           </div>
         </template>
-        <div class="h-2 w-full shrink-0"></div>
+        <div class="h-4 w-full shrink-0"></div>
       </main>
 
       <footer class="shrink-0 p-4 bg-[#0a0a0a] border-t border-white/5 pb-safe">
@@ -217,34 +195,23 @@ onUnmounted(() => {
             @keyup.enter="sendMessage"
             type="text"
             placeholder="KETIK PESAN..."
-            class="w-full bg-black border border-white/10 rounded-2xl py-4 pl-6 pr-16 text-[10px] outline-none focus:border-yellow-500/50 font-black italic text-white"
+            class="w-full bg-black border border-white/10 rounded-2xl py-4 pl-6 pr-16 text-[10px] outline-none focus:border-yellow-500/40 font-black italic text-white transition-all shadow-inner"
           />
           <button @click="sendMessage" :disabled="!newMessage.trim()" 
-            class="absolute right-2 bg-yellow-500 text-black p-2.5 rounded-xl active:scale-90 shadow-lg">
+            class="absolute right-2 bg-yellow-500 text-black p-2.5 rounded-xl active:scale-90 shadow-lg hover:bg-white transition-all">
             <PaperAirplaneIcon class="w-5 h-5" />
           </button>
         </div>
       </footer>
-
     </div>
   </div>
 </template>
 
 <style scoped>
-/* Fix Viewport HP */
-.fixed {
-  height: 100vh;
-  height: -webkit-fill-available;
-}
-
+.fixed { height: 100vh; height: -webkit-fill-available; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
 .overscroll-none { overscroll-behavior: none; }
 .overscroll-contain { overscroll-behavior-y: contain; }
-
-/* Home bar iPhone/Android Safe Area */
-.pb-safe {
-  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
-}
+.pb-safe { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
 </style>
