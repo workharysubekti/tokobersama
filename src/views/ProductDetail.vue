@@ -58,10 +58,7 @@ const fetchProductDetail = async () => {
   if (data) {
     product.value = data;
     const currentPrice = data.current_bid || data.starting_bid || 0;
-    // Set bid minimal
-    if (bidAmount.value <= currentPrice) {
-      bidAmount.value = currentPrice + 10000;
-    }
+    bidAmount.value = currentPrice + 10000;
     await fetchBids();
   }
   loading.value = false;
@@ -105,7 +102,6 @@ const placeBid = async () => {
 
   try {
     isSubmitting.value = true;
-
     // 1. Insert ke tabel Bids
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
@@ -114,13 +110,13 @@ const placeBid = async () => {
     });
     if (bidErr) throw bidErr;
 
-    // 2. UPDATE TABEL PRODUCTS (AGAR SYNC KE HOME/CARD)
+    // 2. UPDATE tabel products (Sync untuk tampilan Luar/Home/Detail)
     await supabase
       .from("products")
       .update({ current_bid: bidAmount.value, winner_id: props.userProfile.id })
       .eq("id", product.value.id);
 
-    // 3. OPTIMISTIC UPDATE (Langsung rubah angka di UI agar HP tidak telat)
+    // 3. OPTIMISTIC UPDATE (UI langsung berubah instant tanpa tunggu refresh)
     product.value.current_bid = bidAmount.value;
     bidAmount.value = bidAmount.value + 10000;
   } catch (err) {
@@ -134,7 +130,7 @@ onMounted(() => {
   fetchProductDetail();
   timerInterval = setInterval(updateTimer, 1000);
 
-  // SINKRONISASI REAL-TIME (DIBETULKAN)
+  // SISTEM SINKRONISASI REAL-TIME (PERBAIKAN)
   bidSubscription = supabase
     .channel(`live-auction-${route.params.id}`)
     .on(
@@ -146,13 +142,10 @@ onMounted(() => {
         filter: `product_id=eq.${route.params.id}`,
       },
       async (payload) => {
-        // Ambil data bid terbaru
         await fetchBids();
-
-        // Sync angka current_bid utama di UI secara Real-time
+        // Paksa UI Sync current_bid jika ada bid baru masuk (Real-time di HP)
         if (product.value && payload.new.amount > product.value.current_bid) {
           product.value.current_bid = payload.new.amount;
-          // Auto-update input bid minimal
           if (bidAmount.value <= payload.new.amount) {
             bidAmount.value = payload.new.amount + 10000;
           }
@@ -168,10 +161,7 @@ onMounted(() => {
         filter: `id=eq.${route.params.id}`,
       },
       (payload) => {
-        // Jika ada perubahan current_bid di tabel product (dari seller/sistem)
-        if (product.value) {
-          product.value.current_bid = payload.new.current_bid;
-        }
+        if (product.value) product.value.current_bid = payload.new.current_bid;
       },
     )
     .subscribe();
@@ -184,9 +174,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div
-    class="bg-black min-h-screen text-white pb-32 uppercase italic font-[1000]"
-  >
+  <div class="bg-black min-h-screen text-white pb-32">
     <div
       class="fixed top-0 inset-x-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between"
     >
@@ -256,7 +244,7 @@ onUnmounted(() => {
                     {{ bid.profiles?.username?.[0].toUpperCase() }}
                   </div>
                   <div>
-                    <p class="text-xs font-black italic uppercase">
+                    <p class="text-xs font-black italic">
                       @{{ bid.profiles?.username }}
                     </p>
                     <p
@@ -354,7 +342,7 @@ onUnmounted(() => {
                 <input
                   v-model.number="bidAmount"
                   type="number"
-                  class="w-full bg-black border border-white/10 rounded-2xl py-6 pl-16 pr-6 text-2xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none appearance-none uppercase"
+                  class="w-full bg-black border border-white/10 rounded-2xl py-6 pl-16 pr-6 text-2xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none appearance-none"
                 />
               </div>
 
@@ -381,7 +369,7 @@ onUnmounted(() => {
             >
               Asset Dossier
             </p>
-            <p class="text-gray-400 text-sm italic leading-relaxed normal-case">
+            <p class="text-gray-400 text-sm italic leading-relaxed">
               {{ product.description }}
             </p>
           </div>
