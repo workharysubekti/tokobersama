@@ -52,7 +52,6 @@ const fetchChatData = async () => {
     if (!session) return router.push("/login");
     currentUser.value = session.user;
 
-    // 1. Ambil Profil Target
     const { data: profile } = await supabase
       .from("profiles")
       .select("*")
@@ -60,7 +59,6 @@ const fetchChatData = async () => {
       .maybeSingle();
     targetProfile.value = profile;
 
-    // 2. Ambil History Pesan
     const { data: msgData, error } = await supabase
       .from("messages")
       .select("*")
@@ -73,16 +71,13 @@ const fetchChatData = async () => {
     scrollToBottom();
     markAsRead();
 
-    // 3. FIX CHANNEL ID: Buat ID Kamar yang sama buat kedua user
-    const roomID = [currentUser.value.id, targetId].sort().join("_");
-    const channel = supabase.channel(`chat_${roomID}`, {
-      config: { presence: { key: currentUser.value.id } },
-    });
+    // --- KUNCI PERBAIKAN: NGINTIP CHANNEL GLOBAL ---
+    // Gunakan channel yang sama dengan App.vue tapi JANGAN pakai track()
+    const presenceChannel = supabase.channel("global-presence");
 
-    channel
+    presenceChannel
       .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState();
-        // Cek apakah ID target ada di dalam list online di channel ini
+        const state = presenceChannel.presenceState();
         isTargetOnline.value = !!state[targetId];
       })
       .on("presence", { event: "join" }, ({ newPresences }) => {
@@ -95,6 +90,11 @@ const fetchChatData = async () => {
           isTargetOnline.value = false;
         }
       })
+      .subscribe();
+
+    // --- REALTIME PESAN (TIDAK BERUBAH) ---
+    const roomID = [currentUser.value.id, targetId].sort().join("_");
+    const msgChannel = supabase.channel(`chat_${roomID}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
           const newMsg = payload.new;
           if ((newMsg.sender_id === currentUser.value.id && newMsg.receiver_id === targetId) || 
@@ -104,16 +104,9 @@ const fetchChatData = async () => {
             if (newMsg.receiver_id === currentUser.value.id) markAsRead();
           }
       })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          // Track status kita agar device sebelah tahu kita online
-          await channel.track({ 
-            user_id: currentUser.value.id, 
-            online_at: new Date().toISOString() 
-          });
-        }
-      });
-    return channel;
+      .subscribe();
+
+    return { presenceChannel, msgChannel };
   } catch (error) {
     console.error("Chat Error:", error);
   }
@@ -135,13 +128,16 @@ const sendMessage = async () => {
   }
 };
 
-let messageSub;
+let subs;
 onMounted(async () => {
-  messageSub = await fetchChatData();
+  subs = await fetchChatData();
 });
 
 onUnmounted(() => {
-  if (messageSub) supabase.removeChannel(messageSub);
+  if (subs) {
+    supabase.removeChannel(subs.presenceChannel);
+    supabase.removeChannel(subs.msgChannel);
+  }
 });
 </script>
 
@@ -231,19 +227,14 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* Fix Viewport HP */
 .fixed {
   height: 100vh;
   height: -webkit-fill-available;
 }
-
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
 .overscroll-none { overscroll-behavior: none; }
 .overscroll-contain { overscroll-behavior-y: contain; }
-
-/* Home bar iPhone/Android Safe Area */
 .pb-safe {
   padding-bottom: calc(1rem + env(safe-area-inset-bottom));
 }
