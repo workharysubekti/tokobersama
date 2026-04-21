@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, watch } from "vue";
 import { useRoute } from "vue-router";
 import { supabase } from "./lib/supabase.js";
 import Header from "./components/Header.vue";
@@ -12,21 +12,44 @@ const route = useRoute();
 const authReady = ref(false);
 const globalNotification = ref(null);
 
-let globalChannel = null;
+let globalNotifChannel = null;
+let presenceChannel = null;
 
 const triggerGlobalNotif = (message) => {
   globalNotification.value = { message };
   setTimeout(() => { globalNotification.value = null; }, 6000);
 };
 
-const setupGlobalRealtime = (userId) => {
-  if (!userId || globalChannel) return;
+// --- SINYAL ONLINE GLOBAL ---
+const setupGlobalPresence = (userId) => {
+  if (!userId) return;
+  // Bersihkan channel lama kalau ada
+  if (presenceChannel) supabase.removeChannel(presenceChannel);
 
-  globalChannel = supabase.channel("global-notif")
+  // Buat channel global untuk pantau siapa saja yang sedang buka web
+  presenceChannel = supabase.channel("global-online-users", {
+    config: { presence: { key: userId } }
+  });
+
+  presenceChannel
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        // Daftarkan diri ke jagat raya TokoBersama
+        await presenceChannel.track({
+          user_id: userId,
+          online_at: new Date().toISOString()
+        });
+      }
+    });
+};
+
+const setupGlobalRealtime = (userId) => {
+  if (!userId || globalNotifChannel) return;
+  
+  globalNotifChannel = supabase.channel("global-notif")
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "bids" }, 
       async (payload) => {
         if (payload.new.user_id !== userId) {
-          // Hanya cek jika user ini pernah bid di produk yang sama
           const { data: history } = await supabase
             .from("bids")
             .select("id")
@@ -41,9 +64,7 @@ const setupGlobalRealtime = (userId) => {
           }
         }
     })
-    .subscribe((status) => {
-      if (status === 'CLOSED') globalChannel = null;
-    });
+    .subscribe();
 };
 
 const syncSession = async () => {
@@ -55,6 +76,7 @@ const syncSession = async () => {
       if (data) {
         userProfile.value = data;
         setupGlobalRealtime(session.user.id);
+        setupGlobalPresence(session.user.id); // Nyalakan Sinyal Online
       }
     } else {
       userProfile.value = null;
@@ -66,7 +88,6 @@ const syncSession = async () => {
 };
 
 onMounted(async () => {
-  // SEKRING: Loading wajib mati dalam 3 detik!
   const safetyTimeout = setTimeout(() => {
     isInitialLoading.value = false;
     authReady.value = true;
@@ -78,12 +99,13 @@ onMounted(async () => {
     if (event === 'SIGNED_IN') syncSession();
     if (event === 'SIGNED_OUT') {
       userProfile.value = null;
-      if (globalChannel) supabase.removeChannel(globalChannel);
-      globalChannel = null;
+      if (globalNotifChannel) supabase.removeChannel(globalNotifChannel);
+      if (presenceChannel) supabase.removeChannel(presenceChannel);
+      globalNotifChannel = null;
+      presenceChannel = null;
     }
   });
 
-  // Saat Mas balik dari WA, cukup cek session tanpa muter loading
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") syncSession();
   });
@@ -91,12 +113,12 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="bg-black min-h-screen text-white">
+  <div class="bg-black min-h-screen text-white selection:bg-yellow-500">
     <transition name="fade">
       <div v-if="isInitialLoading" class="fixed inset-0 bg-black z-[9999] flex items-center justify-center">
         <div class="flex flex-col items-center">
           <div class="w-10 h-10 border-4 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin"></div>
-          <p class="mt-4 text-[8px] font-black text-yellow-500 uppercase tracking-[0.4em] animate-pulse italic">Connecting...</p>
+          <p class="mt-4 text-[8px] font-black text-yellow-500 uppercase tracking-[0.4em] animate-pulse italic">Connecting Transmission...</p>
         </div>
       </div>
     </transition>
@@ -124,5 +146,5 @@ onMounted(async () => {
 .notif-leave-active { transition: all 0.4s ease-in; }
 .notif-enter-from { transform: translateY(100px); opacity: 0; }
 .notif-leave-to { transform: translateX(100%); opacity: 0; }
-body { background-color: black; margin: 0; -webkit-tap-highlight-color: transparent; }
+body { background-color: black; margin: 0; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
 </style>
