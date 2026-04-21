@@ -47,21 +47,32 @@ const fetchBids = async () => {
 
 const fetchProductDetail = async () => {
   loading.value = true;
-  const { data } = await supabase
-    .from("products")
-    .select(
-      "*, profiles!owner_id(username, full_name, avatar_url, reputation_score)",
-    )
-    .eq("id", route.params.id)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("products")
+      .select(
+        "*, profiles!owner_id(username, full_name, avatar_url, reputation_score)",
+      )
+      .eq("id", route.params.id)
+      .maybeSingle();
 
-  if (data) {
+    if (error || !data) throw new Error("Asset not found");
+
     product.value = data;
     const currentPrice = data.current_bid || data.starting_bid || 0;
-    bidAmount.value = currentPrice + 10000;
+
+    // Set bidAmount default jika belum diisi
+    if (bidAmount.value <= currentPrice) {
+      bidAmount.value = currentPrice + 10000;
+    }
+
     await fetchBids();
+  } catch (err) {
+    console.error(err);
+    router.push("/");
+  } finally {
+    loading.value = false;
   }
-  loading.value = false;
 };
 
 const updateTimer = () => {
@@ -87,10 +98,8 @@ const goToSeller = () => {
 
 const placeBid = async () => {
   if (!props.userProfile) return alert("Login dulu bosku!");
-  if (isSubmitting.value) return;
-
-  // CEK APAKAH PRODUCT ADA SEBELUM AKSES CURRENT_BID
-  if (!product.value) return;
+  // Safety check agar tidak crash jika product belum load
+  if (!product.value || isSubmitting.value) return;
 
   const latestTopPrice =
     product.value.current_bid || product.value.starting_bid;
@@ -106,23 +115,22 @@ const placeBid = async () => {
   try {
     isSubmitting.value = true;
 
-    // VALIDASI DATABASE SEBELUM INSERT (ANTI DOUBLE BID)
-    const { data: latestProduct } = await supabase
+    // 1. Tarik data harga terbaru (Pagar Gaib Anti Double Bid)
+    const { data: dbProduct } = await supabase
       .from("products")
       .select("current_bid, starting_bid")
       .eq("id", product.value.id)
       .single();
 
-    const dbPrice = latestProduct.current_bid || latestProduct.starting_bid;
+    const dbPrice = dbProduct.current_bid || dbProduct.starting_bid;
     if (bidAmount.value <= dbPrice) {
-      alert(
-        `Seseorang baru saja bid di harga ${formatPrice(dbPrice)}. Naikkan bid Anda!`,
-      );
+      alert(`Gagal! Seseorang baru saja bid di harga ${formatPrice(dbPrice)}.`);
       product.value.current_bid = dbPrice;
       bidAmount.value = dbPrice + 10000;
       return;
     }
 
+    // 2. Insert ke tabel Bids
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
       user_id: props.userProfile.id,
@@ -130,11 +138,13 @@ const placeBid = async () => {
     });
     if (bidErr) throw bidErr;
 
+    // 3. Update tabel products (Sync Global)
     await supabase
       .from("products")
       .update({ current_bid: bidAmount.value, winner_id: props.userProfile.id })
       .eq("id", product.value.id);
 
+    // Update UI Lokal
     product.value.current_bid = bidAmount.value;
     bidAmount.value = bidAmount.value + 10000;
   } catch (err) {
@@ -148,6 +158,7 @@ onMounted(() => {
   fetchProductDetail();
   timerInterval = setInterval(updateTimer, 1000);
 
+  // REALTIME SINKRONISASI
   bidSubscription = supabase
     .channel(`live-auction-${route.params.id}`)
     .on(
@@ -160,7 +171,7 @@ onMounted(() => {
       },
       (payload) => {
         fetchBids();
-        // CEK PRODUCT.VALUE SEBELUM UPDATE
+        // Cek product.value agar tidak null saat payload masuk
         if (product.value) {
           product.value.current_bid = payload.new.amount;
           if (bidAmount.value <= payload.new.amount) {
@@ -178,7 +189,6 @@ onMounted(() => {
         filter: `id=eq.${route.params.id}`,
       },
       (payload) => {
-        // CEK PRODUCT.VALUE SEBELUM UPDATE
         if (product.value) {
           product.value.current_bid = payload.new.current_bid;
         }
@@ -264,7 +274,7 @@ onUnmounted(() => {
                     {{ bid.profiles?.username?.[0].toUpperCase() }}
                   </div>
                   <div>
-                    <p class="text-xs font-black italic">
+                    <p class="text-xs font-black italic uppercase">
                       @{{ bid.profiles?.username }}
                     </p>
                     <p
@@ -362,7 +372,7 @@ onUnmounted(() => {
                 <input
                   v-model.number="bidAmount"
                   type="number"
-                  class="w-full bg-black border border-white/10 rounded-2xl py-6 pl-16 pr-6 text-2xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none appearance-none"
+                  class="w-full bg-black border border-white/10 rounded-2xl py-6 pl-16 pr-6 text-2xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none appearance-none uppercase"
                 />
               </div>
 
@@ -389,7 +399,7 @@ onUnmounted(() => {
             >
               Asset Dossier
             </p>
-            <p class="text-gray-400 text-sm italic leading-relaxed">
+            <p class="text-gray-400 text-sm italic leading-relaxed normal-case">
               {{ product.description }}
             </p>
           </div>
