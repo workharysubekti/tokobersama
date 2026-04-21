@@ -243,48 +243,42 @@ onMounted(fetchData);
               {{ profile.full_name || profile.username }}
             </h1>
             <p
-              class="text-xs text-yellow-500/50 tracking-[0.4em] mb-8 uppercase font-black"
+              class="text-xs text-yellow-500/50 tracking-[0.4em] mb-6 uppercase font-black"
             >
               @{{ profile.username }}
             </p>
 
             <div
-              class="flex flex-wrap justify-center md:justify-start gap-4 mb-8"
+              class="flex items-center justify-center md:justify-start gap-3 mb-4 text-[10px] tracking-widest text-gray-500 font-black uppercase"
             >
-              <div
-                class="bg-black/40 border border-white/5 px-6 py-4 rounded-[28px] text-center min-w-[100px]"
-              >
-                <span
-                  class="block text-2xl text-yellow-500 leading-none mb-1"
-                  >{{ followersCount }}</span
-                >
-                <span
-                  class="text-[8px] text-gray-600 tracking-widest font-black uppercase"
-                  >Followers</span
-                >
+              <div class="flex items-center gap-1.5 transition-colors">
+                <span class="text-white">{{ listings.length }}</span>
+                <span>Items</span>
               </div>
-              <div
-                class="bg-black/40 border border-white/5 px-6 py-4 rounded-[28px] text-center min-w-[100px]"
+              <span class="text-white/10 text-xs font-light">|</span>
+              <button
+                @click="router.push(`/user/${profile.username}/followers`)"
+                class="flex items-center gap-1.5 hover:text-yellow-500 transition-colors"
               >
-                <span class="block text-2xl text-white leading-none mb-1">{{
-                  followingCount
-                }}</span>
-                <span
-                  class="text-[8px] text-gray-600 tracking-widest font-black uppercase"
-                  >Following</span
-                >
-              </div>
-              <div
-                class="bg-black/40 border border-white/5 px-6 py-4 rounded-[28px] text-center min-w-[100px]"
+                <span class="text-white">{{ followersCount }}</span>
+                <span>Followers</span>
+              </button>
+              <span class="text-white/10 text-xs font-light">|</span>
+              <button
+                @click="router.push(`/user/${profile.username}/following`)"
+                class="flex items-center gap-1.5 hover:text-yellow-500 transition-colors"
               >
-                <span class="block text-2xl text-blue-500 leading-none mb-1">{{
-                  listings.length
-                }}</span>
-                <span
-                  class="text-[8px] text-gray-600 tracking-widest font-black uppercase"
-                  >Items</span
-                >
-              </div>
+                <span class="text-white">{{ followingCount }}</span>
+                <span>Following</span>
+              </button>
+            </div>
+
+            <div class="mb-8 max-w-lg mx-auto md:mx-0">
+              <p
+                class="text-[11px] leading-relaxed text-gray-400 normal-case italic font-bold"
+              >
+                {{ profile.bio || "MEMBER HAS NOT TRANSMITTED A BIO DATA." }}
+              </p>
             </div>
 
             <div
@@ -298,7 +292,7 @@ onMounted(fetchData);
                     ? 'bg-white/5 border border-white/10'
                     : 'bg-yellow-500 text-black'
                 "
-                class="px-10 py-4 rounded-2xl text-[10px] tracking-widest font-black transition-all active:scale-95 shadow-xl"
+                class="px-10 py-4 rounded-2xl text-[10px] tracking-widest font-black transition-all active:scale-95 shadow-xl uppercase"
               >
                 {{ isFollowing ? "UNFOLLOW SIGNAL" : "FOLLOW MEMBER" }}
               </button>
