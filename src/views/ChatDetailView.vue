@@ -151,9 +151,30 @@ const sendMessage = async () => {
   }
 };
 
+  const syncMessages = async () => {
+  // Fungsi buat tarik pesan terbaru biar gak ada yang ketinggalan
+  // Mirip fungsi fetchMessages Mas yang sudah ada
+  await fetchMessages(); 
+  console.log("Koneksi disinkronkan ulang...");
+};
+
 let subs;
 onMounted(async () => {
   subs = await fetchChatData();
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      // 1. Tarik pesan terbaru (biar pesan yang masuk pas dia "tidur" muncul)
+      syncMessages();
+      
+      // 2. Cek apakah channel realtime masih hidup, kalau ragu, subscribe ulang
+      if (chatSubscription) {
+        // Kadang perlu di-refresh koneksinya di sini
+        supabase.removeChannel(chatSubscription);
+        setupRealtime(); // Panggil fungsi setup realtime Mas lagi
+      }
+    }
+  });
 });
 
 onUnmounted(() => {
