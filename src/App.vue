@@ -155,11 +155,14 @@ onMounted(async () => {
     </transition>
 
     <Header :userProfile="userProfile" :authReady="authReady" />
-    <router-view
-      v-if="authReady"
-      :userProfile="userProfile"
-      :key="route.fullPath"
-    />
+    <main class="min-h-screen">
+      <div class="h-20 md:h-24"></div>
+      <router-view
+        v-if="authReady"
+        :userProfile="userProfile"
+        :key="route.fullPath"
+      />
+    </main>
     <BottomNav v-if="route.meta.showBottomNav" :userProfile="userProfile" />
 
     <transition name="notif">
