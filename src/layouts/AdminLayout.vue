@@ -87,15 +87,10 @@ const logout = () => {
         class="sticky top-0 z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 px-8 py-7 flex justify-between items-center w-full"
       >
         <div class="flex flex-col">
-          <p
-            class="text-[8px] font-black uppercase text-yellow-500 tracking-[0.4em] italic mb-1"
-          >
-            Command Center
-          </p>
           <h2
             class="font-[1000] italic text-xl md:text-2xl tracking-tighter uppercase leading-none"
           >
-            ADMIN<span class="text-yellow-500">VAULT</span>
+            COMMAND<span class="text-yellow-500">CENTER</span>
           </h2>
         </div>
 
