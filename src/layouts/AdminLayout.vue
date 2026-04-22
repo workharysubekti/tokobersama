@@ -81,9 +81,9 @@ const logout = () => {
       </div>
     </aside>
 
-    <main class="flex-1 overflow-y-auto no-scrollbar bg-[#050505]">
+    <main class="flex-1 overflow-y-auto no-scrollbar bg-[#050505] relative">
       <header
-        class="sticky top-0 z-40 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 px-8 py-6 flex justify-between items-center w-full"
+        class="fixed top-0 right-0 left-20 md:left-64 z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 px-8 py-6 flex justify-between items-center"
       >
         <h2
           class="font-black italic uppercase tracking-widest text-[11px] text-gray-500"
@@ -101,7 +101,7 @@ const logout = () => {
         </div>
       </header>
 
-      <div class="p-8">
+      <div class="p-8 pt-24 md:pt-28">
         <router-view />
       </div>
     </main>

@@ -154,8 +154,12 @@ onMounted(async () => {
       </div>
     </transition>
 
-    <Header :userProfile="userProfile" :authReady="authReady" />
-    <main class="min-h-screen">
+    <Header
+      v-if="!$route.meta.requiresAdmin"
+      :userProfile="userProfile"
+      :authReady="authReady"
+    />
+    <main class="min-h-screen bg-black">
       <div class="h-20 md:h-24"></div>
       <router-view
         v-if="authReady"
