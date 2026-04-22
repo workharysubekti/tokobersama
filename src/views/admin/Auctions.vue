@@ -1,25 +1,32 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from "vue";
 import { supabase } from "../../lib/supabase";
-import { formatPrice } from "../../utils/format"; // Pastikan utilitas format ini ada
-import { FireIcon, ClockIcon, EyeIcon } from "@heroicons/vue/24/solid";
+import { formatPrice } from "../../utils/format";
+import {
+  FireIcon,
+  EyeIcon,
+  TrashIcon,
+  CheckBadgeIcon,
+  ClockIcon,
+} from "@heroicons/vue/24/solid";
 
 const activeAuctions = ref([]);
 const loading = ref(true);
 let auctionSubscription = null;
 
-const fetchActiveAuctions = async () => {
+const fetchAllAuctions = async () => {
   loading.value = true;
   try {
-    // Tarik produk yang statusnya 'active'
-    const { data: prods, error } = await supabase
+    // Kita tarik semua produk yang sudah di-approve (active & ended)
+    // Biar Mas bisa pantau mana yang masih jalan dan mana yang baru beres
+    const { data, error } = await supabase
       .from("products")
       .select("*, profiles!owner_id(username)")
-      .eq("status", "active")
-      .order("end_time", { ascending: true });
+      .neq("status", "pending") // Kecuali yang masih antre moderasi
+      .order("end_time", { ascending: false });
 
     if (error) throw error;
-    activeAuctions.value = prods || [];
+    activeAuctions.value = data || [];
   } catch (err) {
     console.error("Error monitor:", err.message);
   } finally {
@@ -27,16 +34,40 @@ const fetchActiveAuctions = async () => {
   }
 };
 
-onMounted(() => {
-  fetchActiveAuctions();
+const deleteProduct = async (product) => {
+  const confirmDelete = confirm(
+    `EKSEKUSI MATI: Hapus "${product.name}" secara permanen?`,
+  );
+  if (!confirmDelete) return;
 
-  // REALTIME: Kalau ada bid baru masuk, refresh list biar harga update terus!
+  try {
+    const { error } = await supabase
+      .from("products")
+      .delete()
+      .eq("id", product.id);
+
+    if (error) throw error;
+    alert("Produk berhasil dimusnahkan dari database.");
+    fetchAllAuctions();
+  } catch (err) {
+    alert("Gagal eksekusi: " + err.message);
+  }
+};
+
+// Cek apakah waktu sudah lewat atau belum
+const isEnded = (endTime) => {
+  return new Date(endTime) < new Date();
+};
+
+onMounted(() => {
+  fetchAllAuctions();
+  // Realtime update jika ada bid masuk
   auctionSubscription = supabase
-    .channel("admin-monitor")
+    .channel("admin-monitor-all")
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "bids" },
-      () => fetchActiveAuctions(),
+      () => fetchAllAuctions(),
     )
     .subscribe();
 });
@@ -50,90 +81,113 @@ onUnmounted(() => {
   <div class="space-y-6">
     <div class="flex items-center justify-between">
       <h3 class="text-xl font-[1000] italic uppercase tracking-tighter">
-        Live <span class="text-yellow-500">Monitor</span>
+        Auction <span class="text-yellow-500">Monitor</span>
       </h3>
-      <div
-        class="flex items-center gap-2 bg-yellow-500/10 px-4 py-2 rounded-2xl border border-yellow-500/20"
-      >
-        <FireIcon class="w-4 h-4 text-yellow-500 animate-pulse" />
-        <span
-          class="text-[9px] font-black uppercase text-yellow-500 italic tracking-widest"
-        >
-          {{ activeAuctions.length }} Active Transmissions
-        </span>
-      </div>
     </div>
 
     <div
       class="bg-[#0d0d0d] border border-white/5 rounded-[32px] overflow-hidden"
     >
-      <table class="w-full text-left border-collapse">
+      <table class="w-full text-left">
         <thead
           class="text-[9px] font-black uppercase tracking-widest text-gray-600 border-b border-white/5 bg-white/[0.01]"
         >
           <tr>
-            <th class="px-8 py-4">Asset</th>
-            <th class="px-8 py-4">Contractor</th>
-            <th class="px-8 py-4">Current Bid</th>
-            <th class="px-8 py-4">Time Remaining</th>
-            <th class="px-8 py-4 text-right">Action</th>
+            <th class="px-8 py-4">Asset & Contractor</th>
+            <th class="px-8 py-4">Current Value</th>
+            <th class="px-8 py-4">Status</th>
+            <th class="px-8 py-4 text-right">Operations</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-white/5">
           <tr
-            v-for="auction in activeAuctions"
-            :key="auction.id"
-            class="hover:bg-white/[0.01] transition-all group"
+            v-for="item in activeAuctions"
+            :key="item.id"
+            class="hover:bg-white/[0.01] transition-all"
           >
             <td class="px-8 py-6">
               <div class="flex items-center gap-4">
                 <img
-                  :src="auction.image_url"
-                  class="w-12 h-12 rounded-xl object-cover border border-white/10"
+                  :src="item.image_url"
+                  class="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0"
                 />
-                <p class="text-xs font-black italic uppercase tracking-tighter">
-                  {{ auction.name }}
-                </p>
+                <div>
+                  <p
+                    class="text-xs font-black italic uppercase tracking-tighter"
+                  >
+                    {{ item.name }}
+                  </p>
+                  <p
+                    class="text-[8px] font-bold text-gray-500 uppercase italic"
+                  >
+                    @{{ item.profiles?.username }}
+                  </p>
+                </div>
               </div>
             </td>
-            <td
-              class="px-8 py-6 text-[10px] font-bold text-gray-400 uppercase italic"
-            >
-              @{{ auction.profiles?.username }}
-            </td>
+
             <td class="px-8 py-6">
               <p class="text-sm font-[1000] italic text-yellow-500">
-                {{ formatPrice(auction.current_bid || auction.starting_bid) }}
+                {{ formatPrice(item.current_bid || item.starting_bid) }}
+              </p>
+              <p class="text-[8px] text-gray-600 font-bold uppercase italic">
+                Highest Bid
               </p>
             </td>
+
             <td class="px-8 py-6">
-              <div class="flex items-center gap-2 text-gray-500">
-                <ClockIcon class="w-3 h-3" />
-                <span class="text-[9px] font-black uppercase italic">{{
-                  new Date(auction.end_time).toLocaleString()
-                }}</span>
+              <div
+                v-if="!isEnded(item.end_time)"
+                class="flex items-center gap-2 text-green-500"
+              >
+                <div
+                  class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"
+                ></div>
+                <span
+                  class="text-[9px] font-black uppercase italic tracking-widest"
+                  >Live Bidding</span
+                >
+              </div>
+              <div
+                v-else
+                class="flex items-center gap-2 text-red-500 opacity-60"
+              >
+                <CheckBadgeIcon class="w-3 h-3" />
+                <span
+                  class="text-[9px] font-black uppercase italic tracking-widest"
+                  >Ended</span
+                >
               </div>
             </td>
+
             <td class="px-8 py-6 text-right">
-              <router-link
-                :to="'/product/' + auction.id"
-                class="inline-flex p-2 hover:bg-white/5 rounded-xl transition-all"
-              >
-                <EyeIcon class="w-5 h-5 text-gray-600 group-hover:text-white" />
-              </router-link>
+              <div class="flex justify-end gap-2">
+                <router-link
+                  :to="'/product/' + item.id"
+                  title="View Detail"
+                  class="p-2 bg-white/5 text-gray-400 hover:text-white rounded-xl transition-all"
+                >
+                  <EyeIcon class="w-4 h-4" />
+                </router-link>
+
+                <button
+                  @click="deleteProduct(item)"
+                  title="Delete/Terminated"
+                  class="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all"
+                >
+                  <TrashIcon class="w-4 h-4" />
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
       </table>
 
-      <div
-        v-if="activeAuctions.length === 0 && !loading"
-        class="py-20 text-center"
-      >
+      <div v-if="activeAuctions.length === 0" class="py-20 text-center">
         <p
           class="text-[8px] font-black text-gray-700 uppercase tracking-[0.5em] italic"
         >
-          No Active Auctions in Progress
+          No Auction History Found
         </p>
       </div>
     </div>
