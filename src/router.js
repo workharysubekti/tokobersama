@@ -99,8 +99,8 @@ const routes = [
     component: () => import("../src/views/ChatDetailView.vue"),
   },
   {
-    path: "my-auctions",
-    name: "PublicAuctions",
+    path: "/my-auctions",
+    name: "MyAuctions",
     component: () => import("../src/views/user/MyAuctions.vue"),
     meta: { showBottomNav: true },
   },
