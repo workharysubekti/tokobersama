@@ -104,6 +104,12 @@ const routes = [
     component: () => import("../src/views/user/MyAuctions.vue"),
     meta: { showBottomNav: true },
   },
+  {
+    path: "/notifications",
+    name: "Notifications",
+    component: () => import("../views/user/Notifications.vue"),
+    meta: { showBottomNav: true },
+  },
 ];
 
 const router = createRouter({
