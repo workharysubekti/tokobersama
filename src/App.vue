@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router"; // useRouter ditambahkan
 import { supabase } from "./lib/supabase.js";
 import Header from "./components/Header.vue";
 import BottomNav from "./components/BottomNav.vue";
@@ -12,29 +12,15 @@ const presenceStore = usePresenceStore();
 const userProfile = ref(null);
 const isInitialLoading = ref(true);
 const route = useRoute();
+const router = useRouter(); // Inisialisasi router
 const authReady = ref(false);
 const globalNotification = ref(null);
 
 let globalChannel = null;
 let presenceChannel = null;
+let notificationChannel = null;
 
 const toast = useToast();
-
-// Pantau tabel bids
-supabase
-  .channel("global-notifications")
-  .on(
-    "postgres_changes",
-    { event: "INSERT", schema: "public", table: "bids" },
-    async (payload) => {
-      // Cek apakah produk ini punya saya (owner_id == my_id)
-      // Jika ya, munculkan Toast
-      toast.info("Someone placed a bid on your item! Click to check.", {
-        onClick: () => router.push(`/product/${payload.new.product_id}`),
-      });
-    },
-  )
-  .subscribe();
 
 const triggerGlobalNotif = (message) => {
   globalNotification.value = { message };
@@ -43,14 +29,11 @@ const triggerGlobalNotif = (message) => {
   }, 6000);
 };
 
-// FITUR BARU: Lapor Online secara Global tanpa ganggu Notif
 const setupGlobalPresence = (userId) => {
   if (!userId || presenceChannel) return;
-
   presenceChannel = supabase.channel("global-presence", {
     config: { presence: { key: userId } },
   });
-
   presenceChannel.subscribe(async (status) => {
     if (status === "SUBSCRIBED") {
       await presenceChannel.track({
@@ -61,40 +44,65 @@ const setupGlobalPresence = (userId) => {
   });
 };
 
-const setupGlobalRealtime = (userId) => {
-  if (!userId || globalChannel) return;
+// FUNGSI NOTIFIKASI TERPADU (GABUNGAN & CERDAS)
+const listenToNotifications = async () => {
+  if (notificationChannel) supabase.removeChannel(notificationChannel);
 
-  globalChannel = supabase
-    .channel("global-notif")
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  notificationChannel = supabase
+    .channel("global-alerts")
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "bids" },
       async (payload) => {
-        if (payload.new.user_id !== userId) {
-          const { data: history } = await supabase
+        const newBid = payload.new;
+        if (newBid.user_id === user.id) return; // Abaikan jika bid sendiri
+
+        // Ambil data produk untuk cek kepemilikan & nama
+        const { data: prod } = await supabase
+          .from("products")
+          .select("name, owner_id")
+          .eq("id", newBid.product_id)
+          .single();
+
+        if (!prod) return;
+
+        // LOGIKA 1: Jika Mas adalah OWNER produk (Ada duit masuk)
+        if (prod.owner_id === user.id) {
+          toast.success(`INCOME! Seseorang menawar "${prod.name}" Mas!`, {
+            timeout: 6000,
+            onClick: () => router.push(`/product/${newBid.product_id}`),
+          });
+        }
+
+        // LOGIKA 2: Jika Mas adalah BIDDER yang disalip (Outbid)
+        else {
+          const { data: myPastBid } = await supabase
             .from("bids")
             .select("id")
-            .eq("product_id", payload.new.product_id)
-            .eq("user_id", userId)
+            .eq("product_id", newBid.product_id)
+            .eq("user_id", user.id)
             .limit(1);
 
-          if (history && history.length > 0) {
-            const { data: prod } = await supabase
-              .from("products")
-              .select("name")
-              .eq("id", payload.new.product_id)
-              .single();
-            if (prod)
-              triggerGlobalNotif(
-                `⚡ OUTBID: Seseorang menyalip bid Mas di "${prod.name}"!`,
-              );
+          if (myPastBid && myPastBid.length > 0) {
+            triggerGlobalNotif(
+              `⚡ OUTBID: Posisi Mas di "${prod.name}" disalip!`,
+            );
+            toast.warning(
+              `Waspada! Seseorang menyalip bid Mas di ${prod.name}`,
+              {
+                onClick: () => router.push(`/product/${newBid.product_id}`),
+              },
+            );
           }
         }
       },
     )
-    .subscribe((status) => {
-      if (status === "CLOSED") globalChannel = null;
-    });
+    .subscribe();
 };
 
 const syncSession = async () => {
@@ -111,8 +119,8 @@ const syncSession = async () => {
       if (data) {
         userProfile.value = data;
         presenceStore.initPresence(data.id);
-        setupGlobalRealtime(session.user.id);
-        setupGlobalPresence(session.user.id); // Jalankan laporan online global
+        setupGlobalPresence(session.user.id);
+        listenToNotifications(); // Langsung aktifkan notif
       }
     } else {
       userProfile.value = null;
@@ -123,37 +131,6 @@ const syncSession = async () => {
   }
 };
 
-// FITUR PUSH NOTIF REALTIME
-// Variabel buat nampung channel biar bisa dimatiin pas logout
-let notificationChannel = null;
-
-const listenToNotifications = async () => {
-  // Kalau channel sudah ada, kita matikan dulu biar nggak double notif (biar nggak boros RAM)
-  if (notificationChannel) supabase.removeChannel(notificationChannel);
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return;
-
-  notificationChannel = supabase
-    .channel("bid-alerts")
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "bids" },
-      async (payload) => {
-        // NOTIFIKASI MUNCUL DI SINI
-        toast.warning("NEW BID DETECTED! Check transmission.", {
-          timeout: 5000,
-          closeOnClick: true,
-          pauseOnHover: true,
-          onClick: () => router.push(`/product/${payload.new.product_id}`),
-        });
-      },
-    )
-    .subscribe();
-};
-
 onMounted(async () => {
   const safetyTimeout = setTimeout(() => {
     isInitialLoading.value = false;
@@ -162,22 +139,15 @@ onMounted(async () => {
 
   await syncSession();
 
-  if (userProfile.value) {
-    listenToNotifications();
-  }
-
   supabase.auth.onAuthStateChange((event, session) => {
     if (event === "SIGNED_IN") {
       syncSession();
-      listenToNotifications();
     }
     if (event === "SIGNED_OUT") {
       userProfile.value = null;
       if (notificationChannel) supabase.removeChannel(notificationChannel);
+      if (presenceChannel) supabase.removeChannel(presenceChannel);
       notificationChannel = null;
-      if (globalChannel) supabase.removeChannel(globalChannel);
-      if (presenceChannel) supabase.removeChannel(presenceChannel); // Bersihkan presence
-      globalChannel = null;
       presenceChannel = null;
     }
   });
@@ -185,9 +155,7 @@ onMounted(async () => {
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState === "visible") {
       await syncSession();
-      if (userProfile.value) {
-        presenceStore.refreshConnection();
-      }
+      if (userProfile.value) presenceStore.refreshConnection();
     }
   });
 });
@@ -218,6 +186,7 @@ onMounted(async () => {
       :userProfile="userProfile"
       :authReady="authReady"
     />
+
     <main class="min-h-screen bg-black">
       <router-view
         v-if="authReady"
@@ -225,6 +194,7 @@ onMounted(async () => {
         :key="route.fullPath"
       />
     </main>
+
     <BottomNav v-if="route.meta.showBottomNav" :userProfile="userProfile" />
 
     <transition name="notif">
@@ -251,6 +221,7 @@ onMounted(async () => {
 </template>
 
 <style>
+/* Style tetap sama sesuai permintaan */
 .fade-leave-active {
   transition: opacity 0.5s ease;
 }
