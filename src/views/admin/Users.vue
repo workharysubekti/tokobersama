@@ -13,12 +13,19 @@ const searchQuery = ref("");
 
 const fetchUsers = async () => {
   loading.value = true;
-  const { data } = await supabase
-    .from("profiles")
-    .select("*")
-    .order("created_at", { ascending: false });
-  users.value = data || [];
-  loading.value = false;
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*") // Narik semua data profile
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    users.value = data || [];
+  } catch (err) {
+    console.error("Gagal tarik user:", err.message);
+  } finally {
+    loading.value = false;
+  }
 };
 
 // Logika Banned User sederhana (kita asumsikan ada kolom status di profiles)
