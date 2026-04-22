@@ -102,7 +102,7 @@ onMounted(fetchUsers);
                 <div
                   class="w-10 h-10 rounded-full bg-yellow-500/10 flex items-center justify-center font-black italic text-yellow-500 border border-yellow-500/20"
                 >
-                  {{ user.username?.[0].toUpperCase() }}
+                  {{ user.avatar_url }}
                 </div>
                 <div>
                   <p class="text-xs font-black italic uppercase">
