@@ -98,6 +98,12 @@ const routes = [
     name: "ChatDetail",
     component: () => import("../src/views/ChatDetailView.vue"),
   },
+  {
+    path: "my-auctions",
+    name: "PublicAuctions",
+    component: () => import("../src/views/MyAuctions.vue"),
+    meta: { showBottomNav: true },
+  },
 ];
 
 const router = createRouter({

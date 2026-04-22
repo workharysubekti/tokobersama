@@ -6,6 +6,7 @@ import Header from "./components/Header.vue";
 import BottomNav from "./components/BottomNav.vue";
 import { XMarkIcon } from "@heroicons/vue/24/outline";
 import { usePresenceStore } from "./store/presence.js";
+import { useToast } from "vue-toastification";
 
 const presenceStore = usePresenceStore();
 const userProfile = ref(null);
@@ -16,6 +17,24 @@ const globalNotification = ref(null);
 
 let globalChannel = null;
 let presenceChannel = null;
+
+const toast = useToast();
+
+// Pantau tabel bids
+supabase
+  .channel("global-notifications")
+  .on(
+    "postgres_changes",
+    { event: "INSERT", schema: "public", table: "bids" },
+    async (payload) => {
+      // Cek apakah produk ini punya saya (owner_id == my_id)
+      // Jika ya, munculkan Toast
+      toast.info("Someone placed a bid on your item! Click to check.", {
+        onClick: () => router.push(`/product/${payload.new.product_id}`),
+      });
+    },
+  )
+  .subscribe();
 
 const triggerGlobalNotif = (message) => {
   globalNotification.value = { message };
@@ -104,6 +123,37 @@ const syncSession = async () => {
   }
 };
 
+// FITUR PUSH NOTIF REALTIME
+// Variabel buat nampung channel biar bisa dimatiin pas logout
+let notificationChannel = null;
+
+const listenToNotifications = async () => {
+  // Kalau channel sudah ada, kita matikan dulu biar nggak double notif (biar nggak boros RAM)
+  if (notificationChannel) supabase.removeChannel(notificationChannel);
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  notificationChannel = supabase
+    .channel("bid-alerts")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "bids" },
+      async (payload) => {
+        // NOTIFIKASI MUNCUL DI SINI
+        toast.warning("NEW BID DETECTED! Check transmission.", {
+          timeout: 5000,
+          closeOnClick: true,
+          pauseOnHover: true,
+          onClick: () => router.push(`/product/${payload.new.product_id}`),
+        });
+      },
+    )
+    .subscribe();
+};
+
 onMounted(async () => {
   const safetyTimeout = setTimeout(() => {
     isInitialLoading.value = false;
@@ -112,10 +162,19 @@ onMounted(async () => {
 
   await syncSession();
 
+  if (userProfile.value) {
+    listenToNotifications();
+  }
+
   supabase.auth.onAuthStateChange((event, session) => {
-    if (event === "SIGNED_IN") syncSession();
+    if (event === "SIGNED_IN") {
+      syncSession();
+      listenToNotifications();
+    }
     if (event === "SIGNED_OUT") {
       userProfile.value = null;
+      if (notificationChannel) supabase.removeChannel(notificationChannel);
+      notificationChannel = null;
       if (globalChannel) supabase.removeChannel(globalChannel);
       if (presenceChannel) supabase.removeChannel(presenceChannel); // Bersihkan presence
       globalChannel = null;
