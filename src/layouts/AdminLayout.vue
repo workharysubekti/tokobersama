@@ -42,8 +42,9 @@ const logout = () => {
         </div>
         <span
           class="hidden md:block font-[1000] italic text-xl tracking-tighter uppercase"
-          >ADMIN<span class="text-yellow-500">VAULT</span></span
         >
+          ADMIN<span class="text-yellow-500">VAULT</span>
+        </span>
       </div>
 
       <nav class="flex-1 px-3 space-y-2 mt-4">
@@ -54,7 +55,7 @@ const logout = () => {
           class="flex items-center gap-4 px-4 py-3 rounded-2xl transition-all group"
           :class="
             route.path === item.path
-              ? 'bg-yellow-500 text-black shadow-[0_0_20px_rgba(234,179,8,0.2)]'
+              ? 'bg-yellow-500 text-black shadow-lg'
               : 'hover:bg-white/5 text-gray-500'
           "
         >
@@ -80,11 +81,9 @@ const logout = () => {
       </div>
     </aside>
 
-    <main
-      class="flex-1 overflow-y-auto no-scrollbar bg-[#050505] relative flex flex-col"
-    >
+    <main class="flex-1 overflow-y-auto no-scrollbar bg-[#050505]">
       <header
-        class="fixed top-0 right-0 left-20 md:left-64 z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 px-8 py-6 flex justify-between items-center"
+        class="sticky top-0 z-40 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 px-8 py-6 flex justify-between items-center w-full"
       >
         <h2
           class="font-black italic uppercase tracking-widest text-[11px] text-gray-500"
@@ -92,7 +91,9 @@ const logout = () => {
           Active Session: <span class="text-white">Authorized Admin</span>
         </h2>
         <div class="flex items-center gap-4">
-          <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+          <div
+            class="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_#22c55e]"
+          ></div>
           <span
             class="text-[9px] font-black uppercase italic tracking-widest text-green-500"
             >System Live</span
@@ -100,7 +101,7 @@ const logout = () => {
         </div>
       </header>
 
-      <div class="p-8 mt-[84px] md:mt-[88px]">
+      <div class="p-8">
         <router-view />
       </div>
     </main>
