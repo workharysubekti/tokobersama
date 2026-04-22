@@ -7,17 +7,16 @@ import {
   MagnifyingGlassIcon,
 } from "@heroicons/vue/24/solid";
 
-const searchQuery = ref("");
+const searchQuery = ref(""); // Cukup deklarasi satu kali di sini
 const users = ref([]);
 const loading = ref(true);
-const searchQuery = ref("");
 
 const fetchUsers = async () => {
   loading.value = true;
   try {
     const { data, error } = await supabase
       .from("profiles")
-      .select("*") // Narik semua data profile
+      .select("*")
       .order("updated_at", { ascending: false });
 
     if (error) throw error;
@@ -29,7 +28,6 @@ const fetchUsers = async () => {
   }
 };
 
-// Logika Banned User sederhana (kita asumsikan ada kolom status di profiles)
 const toggleBanUser = async (user) => {
   const newStatus = user.status === "banned" ? "active" : "banned";
   const { error } = await supabase
@@ -40,15 +38,16 @@ const toggleBanUser = async (user) => {
   if (!error) fetchUsers();
 };
 
+// LOGIKA FILTER: Ngetik dikit langsung nyaring sendiri tanpa perlu ENTER
 const filteredUsers = computed(() => {
   if (!searchQuery.value) return users.value;
 
   return users.value.filter((user) => {
-    const name = user.username?.toLowerCase() || "";
-    const fullName = user.full_name?.toLowerCase() || "";
+    const username = (user.username || "").toLowerCase();
+    const fullName = (user.full_name || "").toLowerCase();
     const query = searchQuery.value.toLowerCase();
 
-    return name.includes(query) || fullName.includes(query);
+    return username.includes(query) || fullName.includes(query);
   });
 });
 
@@ -100,10 +99,21 @@ onMounted(fetchUsers);
             <td class="px-8 py-6">
               <div class="flex items-center gap-4">
                 <div
-                  class="w-10 h-10 rounded-full flex items-center justify-center border-yellow-500/20"
+                  class="w-10 h-10 rounded-full overflow-hidden bg-gray-900 border border-white/10 flex items-center justify-center shrink-0"
                 >
-                  {{ user.avatar_url }}
+                  <img
+                    v-if="user.avatar_url"
+                    :src="user.avatar_url"
+                    class="w-full h-full object-cover"
+                  />
+                  <span
+                    v-else
+                    class="text-[10px] font-black text-yellow-500 italic"
+                  >
+                    {{ user.username?.[0]?.toUpperCase() }}
+                  </span>
                 </div>
+
                 <div>
                   <p class="text-xs font-black italic uppercase">
                     @{{ user.username }}
@@ -119,17 +129,18 @@ onMounted(fetchUsers);
             <td class="px-8 py-6">
               <span
                 class="text-[10px] font-black italic text-yellow-500 uppercase tracking-widest"
-                >{{ user.reputation_score || 0 }} PTS</span
               >
+                {{ user.reputation_score || 0 }} PTS
+              </span>
             </td>
             <td class="px-8 py-6">
               <span
                 :class="
                   user.status === 'banned'
-                    ? 'bg-red-500/10 text-red-500'
-                    : 'bg-green-500/10 text-green-500'
+                    ? 'bg-red-500/10 text-red-500 border-red-500/20'
+                    : 'bg-green-500/10 text-green-500 border-green-500/20'
                 "
-                class="px-3 py-1 rounded-full text-[8px] font-black uppercase italic border border-current"
+                class="px-3 py-1 rounded-full text-[8px] font-black uppercase italic border"
               >
                 {{ user.status || "Active" }}
               </span>
@@ -150,6 +161,14 @@ onMounted(fetchUsers);
           </tr>
         </tbody>
       </table>
+
+      <div v-if="filteredUsers.length === 0" class="py-20 text-center">
+        <p
+          class="text-[8px] font-black text-gray-700 uppercase tracking-[0.5em] italic"
+        >
+          Frequency Mismatch: User Not Found
+        </p>
+      </div>
     </div>
   </div>
 </template>
