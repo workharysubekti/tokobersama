@@ -36,22 +36,34 @@ const fetchAllAuctions = async () => {
 
 const deleteProduct = async (product) => {
   const confirmDelete = confirm(
-    `EKSEKUSI MATI: Hapus "${product.name}" secara permanen?`,
+    `PERINGATAN: Hapus "${product.name}" secara permanen?`,
   );
   if (!confirmDelete) return;
 
   try {
-    await supabase.form("bids").delete().eq("product_id", product.id);
-    const { error } = await supabase
+    // 1. Bersihkan Bid dulu (Langkah pencegahan agar tidak error Foreign Key)
+    const { error: bidError } = await supabase
+      .from("bids")
+      .delete()
+      .eq("product_id", product.id);
+
+    if (bidError) console.warn("Info: Tidak ada bid yang perlu dihapus.");
+
+    // 2. Eksekusi Hapus Produk
+    const { error: prodError } = await supabase
       .from("products")
       .delete()
-      .eq("id", product.id);
+      .match({ id: product.id }); // Kita pakai .match untuk memastikan presisi
 
-    if (error) throw error;
-    alert("Produk berhasil dimusnahkan dari database.");
-    fetchAllAuctions();
+    if (prodError) throw prodError;
+
+    alert("Eksekusi Berhasil: Data telah dimusnahkan.");
+
+    // Refresh list setelah berhasil
+    await fetchAllAuctions();
   } catch (err) {
-    alert("Gagal eksekusi: " + err.message);
+    console.error("Detail Error:", err);
+    alert("Gagal eksekusi: " + (err.message || "Terjadi kesalahan sistem"));
   }
 };
 
