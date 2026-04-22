@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { supabase } from "../../lib/supabase";
 import {
   UserMinusIcon,
@@ -7,6 +7,7 @@ import {
   MagnifyingGlassIcon,
 } from "@heroicons/vue/24/solid";
 
+const searchQuery = ref("");
 const users = ref([]);
 const loading = ref(true);
 const searchQuery = ref("");
@@ -38,6 +39,18 @@ const toggleBanUser = async (user) => {
 
   if (!error) fetchUsers();
 };
+
+const filteredUsers = computed(() => {
+  if (!searchQuery.value) return users.value;
+
+  return users.value.filter((user) => {
+    const name = user.username?.toLowerCase() || "";
+    const fullName = user.full_name?.toLowerCase() || "";
+    const query = searchQuery.value.toLowerCase();
+
+    return name.includes(query) || fullName.includes(query);
+  });
+});
 
 onMounted(fetchUsers);
 </script>
@@ -80,7 +93,7 @@ onMounted(fetchUsers);
         </thead>
         <tbody class="divide-y divide-white/5">
           <tr
-            v-for="user in users"
+            v-for="user in filteredUsers in users"
             :key="user.id"
             class="hover:bg-white/[0.01] transition-all"
           >
