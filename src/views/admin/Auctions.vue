@@ -152,17 +152,29 @@ onUnmounted(() => {
 
             <td class="px-8 py-6">
               <div
-                v-if="!isEnded(item.end_time)"
+                v-if="item.status === 'rejected'"
+                class="flex items-center gap-2 text-gray-500 opacity-50"
+              >
+                <div class="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
+                <span
+                  class="text-[9px] font-black uppercase italic tracking-widest"
+                  >Rejected / Terminated</span
+                >
+              </div>
+
+              <div
+                v-else-if="!isEnded(item.end_time)"
                 class="flex items-center gap-2 text-green-500"
               >
                 <div
-                  class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"
+                  class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_#22c55e]"
                 ></div>
                 <span
                   class="text-[9px] font-black uppercase italic tracking-widest"
                   >Live Bidding</span
                 >
               </div>
+
               <div
                 v-else
                 class="flex items-center gap-2 text-red-500 opacity-60"
@@ -170,7 +182,7 @@ onUnmounted(() => {
                 <CheckBadgeIcon class="w-3 h-3" />
                 <span
                   class="text-[9px] font-black uppercase italic tracking-widest"
-                  >Ended</span
+                  >Auction Ended</span
                 >
               </div>
             </td>
