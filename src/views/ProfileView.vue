@@ -12,9 +12,9 @@ import {
   BoltIcon,
   FireIcon,
   TrophyIcon,
-  ArrowPathIcon, // Ditambahkan karena digunakan di button loading
-  BellIcon, // Untuk menu Notifikasi
-  QueueListIcon, // Untuk menu Status Barang
+  ArrowPathIcon,
+  BellIcon,
+  QueueListIcon,
 } from "@heroicons/vue/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 
@@ -191,7 +191,7 @@ const handleUpdate = async () => {
 };
 
 const unreadCount = ref(0);
-const unreadNotif = ref(0); // Simulasi titik merah notifikasi (bisa ditarik dari DB nanti)
+const unreadNotif = ref(0);
 let messageSubscription = null;
 
 const fetchUnreadNotifications = async () => {
@@ -205,7 +205,7 @@ const fetchUnreadNotifications = async () => {
     .select("*", { count: "exact", head: true })
     .eq("user_id", user.id)
     .eq("is_read", false)
-    .eq("type", "activity"); // Fokus ke Activity dulu
+    .eq("type", "activity");
 
   unreadNotif.value = count || 0;
 };
@@ -220,12 +220,10 @@ const fetchUnreadCount = async () => {
 };
 
 onMounted(() => {
-  // 1. Ambil data awal
   fetchUserStats();
   fetchUnreadCount();
-  fetchUnreadNotifications(); // Fungsi baru buat cek titik merah notif
+  fetchUnreadNotifications();
 
-  // 2. Channel untuk Pesan (Message)
   messageSubscription = supabase
     .channel("profile-messages")
     .on(
@@ -240,7 +238,6 @@ onMounted(() => {
     )
     .subscribe();
 
-  // 3. Channel untuk Notifikasi (Activity/Titik Merah)
   const notifSubscription = supabase
     .channel("profile-notifications")
     .on(
@@ -251,7 +248,7 @@ onMounted(() => {
         table: "notifications",
         filter: `user_id=eq.${props.userProfile.id}`,
       },
-      fetchUnreadNotifications, // Panggil fungsi ini tiap ada perubahan di tabel notif
+      fetchUnreadNotifications,
     )
     .subscribe();
 });
@@ -268,9 +265,9 @@ onUnmounted(() => {
     <div v-if="userProfile" class="max-w-2xl mx-auto relative">
       <button
         @click="handleLogout"
-        class="absolute -top-16 right-0 p-3 bg-white/5 border border-white/10 rounded-2xl text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-xl z-50"
+        class="absolute top-0 right-0 p-2.5 bg-white/5 border border-white/10 rounded-2xl text-red-500 hover:bg-red-600/20 hover:border-red-500/50 transition-all shadow-xl z-10"
       >
-        <ArrowRightOnRectangleIcon class="w-6 h-6" />
+        <ArrowRightOnRectangleIcon class="w-5 h-5" />
       </button>
 
       <div class="flex flex-col items-center mb-12">
@@ -452,5 +449,4 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
-  //...
 </template>
