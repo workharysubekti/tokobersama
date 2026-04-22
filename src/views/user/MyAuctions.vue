@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed } from "vue";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../../lib/supabase.js";
 import { formatPrice } from "../../utils/format";
 import {
   ClockIcon,

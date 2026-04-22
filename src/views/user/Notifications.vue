@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from "vue";
-import { supabase } from "../lib/supabase.js";
+import { supabase } from "../../lib/supabase.js";
 import { useRouter } from "vue-router";
 import {
   BellIcon,
