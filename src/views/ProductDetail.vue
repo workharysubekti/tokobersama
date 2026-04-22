@@ -114,13 +114,12 @@ const placeBid = async () => {
   }
 
   const latestTopPrice =
-    recentBids.value.length > 0
-      ? recentBids.value[0].amount
-      : product.value.current_bid || product.value.starting_bid;
+    product.value.current_bid || product.value.starting_bid || 0;
 
   if (bidAmount.value <= latestTopPrice) {
-    alert(
-      `Waduh! Harga sudah naik ke ${formatPrice(latestTopPrice)}. Harap bid lebih tinggi.`,
+    notify.error(
+      "Bid Terlalu Rendah",
+      `Harga sudah di ${formatPrice(latestTopPrice)}`,
     );
     bidAmount.value = latestTopPrice + 10000;
     return;
@@ -185,6 +184,11 @@ onMounted(() => {
         (payload) => {
           if (product.value) {
             product.value.current_bid = payload.new.current_bid;
+            const newTopPrice =
+              payload.new.current_bid || product.value.starting_bid;
+            if (bidAmount.value <= newTopPrice) {
+              bidAmount.value = newTopPrice + 10000;
+            }
           }
         },
       )
