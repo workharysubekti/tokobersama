@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, onUnmounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../lib/supabase.js";
+import { notify } from "../utils/notify"; // Pastikan notify terimport
 import {
   ClockIcon,
   ArrowLeftIcon,
@@ -36,6 +37,7 @@ const formatPrice = (price) => {
   }).format(price || 0);
 };
 
+// --- LOGIKA UTAMA: AMBIL BID TERTINGGI SECARA MUTLAK ---
 const fetchBids = async () => {
   if (!route.params.id) return;
   const { data } = await supabase
@@ -44,13 +46,25 @@ const fetchBids = async () => {
     .eq("product_id", route.params.id)
     .order("amount", { ascending: false })
     .limit(8);
-  if (data) recentBids.value = data;
+
+  if (data) {
+    recentBids.value = data;
+    // Jika ada data bids, pastikan harga di UI mengikuti bid tertinggi ini
+    if (data.length > 0 && product.value) {
+      product.value.current_bid = data[0].amount;
+      // Update bidAmount otomatis jika tertinggal
+      if (bidAmount.value <= data[0].amount) {
+        bidAmount.value = Number(data[0].amount) + 10000;
+      }
+    }
+  }
 };
 
 const fetchProductDetail = async () => {
   if (!route.params.id) return;
   loading.value = true;
   try {
+    // 1. Ambil Data Produk
     const { data, error } = await supabase
       .from("products")
       .select(
@@ -65,8 +79,25 @@ const fetchProductDetail = async () => {
     }
 
     product.value = data;
-    const currentPrice = data.current_bid || data.starting_bid || 0;
-    bidAmount.value = currentPrice + 10000;
+
+    // 2. Ambil Bid Tertinggi secara manual (Teknik MyBids/Home)
+    const { data: topBidData } = await supabase
+      .from("bids")
+      .select("amount")
+      .eq("product_id", route.params.id)
+      .order("amount", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // 3. Tentukan Harga Tertinggi Aktif
+    const highestPrice = topBidData
+      ? topBidData.amount
+      : data.current_bid || data.starting_bid || 0;
+
+    // Sinkronkan ke UI
+    product.value.current_bid = highestPrice;
+    bidAmount.value = Number(highestPrice) + 10000;
+
     await fetchBids();
   } catch (err) {
     console.error("Fetch Error:", err);
@@ -113,20 +144,23 @@ const placeBid = async () => {
     return alert("Lelang sudah berakhir! Transmisi ditutup.");
   }
 
+  // Ambil harga tertinggi saat ini dari UI (yang sudah sinkron)
   const latestTopPrice =
     product.value.current_bid || product.value.starting_bid || 0;
 
   if (bidAmount.value <= latestTopPrice) {
     notify.error(
       "Bid Terlalu Rendah",
-      `Harga sudah di ${formatPrice(latestTopPrice)}`,
+      `Harga sudah naik ke ${formatPrice(latestTopPrice)}`,
     );
-    bidAmount.value = latestTopPrice + 10000;
+    bidAmount.value = Number(latestTopPrice) + 10000;
     return;
   }
 
   try {
     isSubmitting.value = true;
+
+    // 1. Insert ke tabel Bids
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
       user_id: props.userProfile.id,
@@ -134,13 +168,17 @@ const placeBid = async () => {
     });
     if (bidErr) throw bidErr;
 
+    // 2. Update tabel Products (untuk sinkronisasi legacy)
     await supabase
       .from("products")
       .update({ current_bid: bidAmount.value, winner_id: props.userProfile.id })
       .eq("id", product.value.id);
 
+    // Update UI Lokal langsung
     product.value.current_bid = bidAmount.value;
-    bidAmount.value = bidAmount.value + 10000;
+    bidAmount.value = Number(bidAmount.value) + 10000;
+
+    notify.success("Gacor!", "Penawaran berhasil dikirim.");
   } catch (err) {
     alert(err.message);
   } finally {
@@ -155,6 +193,7 @@ onMounted(() => {
   if (route.params.id) {
     bidSubscription = supabase
       .channel(`live-auction-${route.params.id}`)
+      // DENGERIN TABEL BIDS (Sama seperti Home)
       .on(
         "postgres_changes",
         {
@@ -164,15 +203,19 @@ onMounted(() => {
           filter: `product_id=eq.${route.params.id}`,
         },
         (payload) => {
-          fetchBids();
+          fetchBids(); // Refresh list bids
           if (product.value) {
-            product.value.current_bid = payload.new.amount;
-            if (bidAmount.value <= payload.new.amount) {
-              bidAmount.value = payload.new.amount + 10000;
+            // Langsung timpa harga di layar detail dengan amount terbaru dari tabel bids
+            if (payload.new.amount > (product.value.current_bid || 0)) {
+              product.value.current_bid = payload.new.amount;
+              if (bidAmount.value <= payload.new.amount) {
+                bidAmount.value = Number(payload.new.amount) + 10000;
+              }
             }
           }
         },
       )
+      // DENGERIN TABEL PRODUCTS (Jika ada update info barang)
       .on(
         "postgres_changes",
         {
@@ -183,12 +226,9 @@ onMounted(() => {
         },
         (payload) => {
           if (product.value) {
-            product.value.current_bid = payload.new.current_bid;
-            const newTopPrice =
-              payload.new.current_bid || product.value.starting_bid;
-            if (bidAmount.value <= newTopPrice) {
-              bidAmount.value = newTopPrice + 10000;
-            }
+            // Update info dasar, tapi harga tetap diprioritaskan dari bids di atas
+            product.value.status = payload.new.status;
+            product.value.winner_id = payload.new.winner_id;
           }
         },
       )
@@ -413,7 +453,9 @@ onUnmounted(() => {
             >
               Asset Dossier
             </p>
-            <p class="text-gray-400 text-sm italic leading-relaxed normal-case">
+            <p
+              class="text-gray-400 text-sm italic leading-relaxed normal-case text-justify"
+            >
               {{ product.description }}
             </p>
           </div>
