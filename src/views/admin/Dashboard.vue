@@ -108,26 +108,26 @@ onMounted(fetchAdminData);
           </thead>
           <tbody class="divide-y divide-white/5">
             <tr
-              v-for="item in pendingProducts"
-              :key="item.id"
+              v-for="products in pendingProducts"
+              :key="products.id"
               class="hover:bg-white/[0.02] transition-all"
             >
               <td class="px-8 py-6">
                 <div class="flex items-center gap-4">
                   <img
-                    :src="item.image_url"
+                    :src="products.image_url"
                     class="w-14 h-14 rounded-2xl object-cover border border-white/10"
                   />
                   <div>
                     <p
                       class="text-sm font-black italic uppercase tracking-tight leading-none mb-1"
                     >
-                      {{ item.name }}
+                      {{ products.name }}
                     </p>
                     <p
                       class="text-[8px] text-gray-600 font-bold uppercase italic tracking-widest"
                     >
-                      {{ item.category }}
+                      {{ products.category }}
                     </p>
                   </div>
                 </div>
@@ -135,25 +135,25 @@ onMounted(fetchAdminData);
               <td class="px-8 py-6">
                 <span
                   class="text-[10px] font-black italic uppercase text-gray-400"
-                  >@{{ item.profiles?.username }}</span
+                  >@{{ products.profiles?.username }}</span
                 >
               </td>
               <td class="px-8 py-6">
                 <span
                   class="text-sm font-[1000] italic text-yellow-500 uppercase"
-                  >{{ formatPrice(item.starting_bid) }}</span
+                  >{{ formatPrice(products.starting_bid) }}</span
                 >
               </td>
               <td class="px-8 py-6">
                 <div class="flex justify-end gap-3">
                   <button
-                    @click="updateStatus(item.id, 'active')"
+                    @click="updateStatus(products.id, 'active')"
                     class="p-2.5 bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-black rounded-xl transition-all"
                   >
                     <CheckBadgeIcon class="w-5 h-5" />
                   </button>
                   <button
-                    @click="updateStatus(item.id, 'rejected')"
+                    @click="updateStatus(products.id, 'rejected')"
                     class="p-2.5 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all"
                   >
                     <XCircleIcon class="w-5 h-5" />

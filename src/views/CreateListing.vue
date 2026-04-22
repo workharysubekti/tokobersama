@@ -31,7 +31,7 @@ const form = ref({
   name: "", // Menggunakan 'name' agar sinkron dengan database
   category: "TCG",
   description: "",
-  current_bid: "",
+  starting_bid: "",
   end_time: "", // Menggunakan 'end_time' agar sinkron dengan AdminPanel
   image_url: "",
 });
@@ -70,7 +70,7 @@ const handleImageUpload = async (event) => {
 const createListing = async () => {
   if (
     !form.value.name ||
-    !form.value.current_bid ||
+    !form.value.starting_bid ||
     !form.value.image_url ||
     !form.value.end_time
   ) {
@@ -90,7 +90,7 @@ const createListing = async () => {
       category: form.value.category,
       description: form.value.description,
       image_url: form.value.image_url,
-      current_bid: parseInt(form.value.current_bid.replace(/[^0-9]/g, "")),
+      starting_bid: parseInt(form.value.starting_bid.replace(/[^0-9]/g, "")),
       owner_id: session?.user.id,
       status: "pending", // Review admin..
       end_time: new Date(form.value.end_time).toISOString(),
@@ -110,7 +110,7 @@ const createListing = async () => {
 
 const formatCurrencyInput = (event) => {
   let value = event.target.value.replace(/[^0-9]/g, "");
-  form.value.current_bid = value
+  form.value.starting_bid = value
     ? new Intl.NumberFormat("id-ID").format(value)
     : "";
 };
@@ -241,7 +241,7 @@ const formatCurrencyInput = (event) => {
                 class="absolute left-4 top-4 w-5 h-5 text-gray-700"
               />
               <input
-                v-model="form.current_bid"
+                v-model="form.starting_bid"
                 @input="formatCurrencyInput"
                 type="text"
                 placeholder="0"
