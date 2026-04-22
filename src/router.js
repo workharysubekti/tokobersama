@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import Home from "./views/Home.vue";
 import ProductDetail from "./views/ProductDetail.vue";
 import Login from "./views/Login.vue";
+import { supabase } from "./lib/supabase.js";
 
 const routes = [
   { path: "/", component: Home, meta: { showBottomNav: true } },
@@ -36,7 +37,15 @@ const routes = [
   },
   {
     path: "/admin",
-    component: () => import("../src/components/AdminPanel.vue"),
+    component: () => import("../src/layouts/AdminLayout.vue"),
+    meta: { requiresAdmin: true },
+    children: [
+      {
+        path: "",
+        name: "AdminDashboard",
+        component: () => import("../src/views/admin/Dashboard.vue"),
+      },
+    ],
   },
   { path: "/login", component: Login },
   {
@@ -71,4 +80,32 @@ const router = createRouter({
   routes,
 });
 
+router.beforeEach(async (to, from, next) => {
+  // 1. Ambil session user dari Supabase
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  // 2. Jika route butuh Admin
+  if (to.meta.requiresAdmin) {
+    if (!session) {
+      return next("/login"); // Belum login? Tendang ke Login
+    }
+
+    // 3. Cek apakah user ini Admin di tabel profiles
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", session.user.id)
+      .single();
+
+    if (profile && profile.is_admin) {
+      next(); // OK, silakan masuk bos!
+    } else {
+      next("/"); // Bukan admin? Tendang ke Home
+    }
+  } else {
+    next(); // Route biasa, silakan lewat
+  }
+});
 export default router;

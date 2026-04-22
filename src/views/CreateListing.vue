@@ -92,8 +92,9 @@ const createListing = async () => {
       image_url: form.value.image_url,
       current_bid: parseInt(form.value.current_bid.replace(/[^0-9]/g, "")),
       owner_id: session?.user.id,
-      status: "active", // HARUS "active" agar muncul di Home.vue
-      end_time: new Date(form.value.end_time).toISOString(), // Gunakan 'end_time'
+      status: "pending", // Review admin..
+      end_time: new Date(form.value.end_time).toISOString(),
+      is_priority: false,
     });
 
     if (error) throw error;
