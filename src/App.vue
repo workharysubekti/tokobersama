@@ -69,26 +69,26 @@ const listenToNotifications = async () => {
         event: "INSERT", 
         schema: "public", 
         table: "notifications",
-        filter: `user_id=eq.${user.id}` // Hanya dengerin notif milik user aktif
+        filter: `user_id=eq.${user.id}` 
       },
       (payload) => {
         const notif = payload.new;
 
-        // 1. Tampilkan Pop-up Custom Toast
+        // Cukup satu pemicu saja: Custom Toast (Kuning)
+        // Ini sudah mencakup INCOME ALERT maupun OUTBID!
         showToast(
           notif.title,
           notif.message,
           notif.related_id
         );
-
-        // 2. Jika ini tipe Outbid, munculkan juga Global Notif (Market Alert Merah)
-        if (notif.title === "OUTBID!") {
-          triggerGlobalNotif(`⚡ ${notif.message}`);
-        }
+        
+        // Pemicu triggerGlobalNotif (Merah) dihapus dari sini 
+        // supaya tidak muncul double atas-bawah.
       }
     )
     .subscribe();
 };
+  
 
 const syncSession = async () => {
   try {
