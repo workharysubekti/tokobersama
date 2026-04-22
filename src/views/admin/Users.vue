@@ -100,7 +100,7 @@ onMounted(fetchUsers);
             <td class="px-8 py-6">
               <div class="flex items-center gap-4">
                 <div
-                  class="w-10 h-10 rounded-full bg-yellow-500/10 flex items-center justify-center font-black italic text-yellow-500 border border-yellow-500/20"
+                  class="w-10 h-10 rounded-full flex items-center justify-center border-yellow-500/20"
                 >
                   {{ user.avatar_url }}
                 </div>
