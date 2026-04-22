@@ -191,9 +191,24 @@ const handleUpdate = async () => {
 };
 
 const unreadCount = ref(0);
-const unreadNotif = ref(1); // Simulasi titik merah notifikasi (bisa ditarik dari DB nanti)
+const unreadNotif = ref(0); // Simulasi titik merah notifikasi (bisa ditarik dari DB nanti)
 let messageSubscription = null;
 
+const fetchUnreadNotifications = async () => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { count } = await supabase
+    .from("notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("is_read", false)
+    .eq("type", "activity"); // Fokus ke Activity dulu
+
+  unreadNotif.value = count || 0;
+};
 const fetchUnreadCount = async () => {
   if (!props.userProfile?.id) return;
   const { count } = await supabase
@@ -205,14 +220,38 @@ const fetchUnreadCount = async () => {
 };
 
 onMounted(() => {
+  // 1. Ambil data awal
   fetchUserStats();
   fetchUnreadCount();
+  fetchUnreadNotifications(); // Fungsi baru buat cek titik merah notif
+
+  // 2. Channel untuk Pesan (Message)
   messageSubscription = supabase
-    .channel("public:messages")
+    .channel("profile-messages")
     .on(
       "postgres_changes",
-      { event: "INSERT", schema: "public", table: "messages" },
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter: `receiver_id=eq.${props.userProfile.id}`,
+      },
       fetchUnreadCount,
+    )
+    .subscribe();
+
+  // 3. Channel untuk Notifikasi (Activity/Titik Merah)
+  const notifSubscription = supabase
+    .channel("profile-notifications")
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${props.userProfile.id}`,
+      },
+      fetchUnreadNotifications, // Panggil fungsi ini tiap ada perubahan di tabel notif
     )
     .subscribe();
 });
