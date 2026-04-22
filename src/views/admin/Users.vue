@@ -93,7 +93,7 @@ onMounted(fetchUsers);
         </thead>
         <tbody class="divide-y divide-white/5">
           <tr
-            v-for="user in filteredUsers in users"
+            v-for="user in filteredUsers"
             :key="user.id"
             class="hover:bg-white/[0.01] transition-all"
           >
