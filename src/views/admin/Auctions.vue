@@ -22,7 +22,7 @@ const fetchAllAuctions = async () => {
     const { data, error } = await supabase
       .from("products")
       .select("*, profiles!owner_id(username)")
-      .neq("status", "pending") // Kecuali yang masih antre moderasi
+      .in("status", ["active", "ended"]) // Kecuali yang masih antre moderasi
       .order("end_time", { ascending: false });
 
     if (error) throw error;
@@ -41,6 +41,7 @@ const deleteProduct = async (product) => {
   if (!confirmDelete) return;
 
   try {
+    await supabase.form("bids").delete().eq("product_id", product.id);
     const { error } = await supabase
       .from("products")
       .delete()
