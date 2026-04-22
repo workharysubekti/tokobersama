@@ -9,6 +9,7 @@ import {
   ShieldCheckIcon,
   ChatBubbleLeftRightIcon,
   BanknotesIcon,
+  FireIcon,
 } from "@heroicons/vue/24/outline";
 
 const router = useRouter();
@@ -16,6 +17,7 @@ const route = useRoute();
 
 const menuItems = [
   { name: "Dashboard", icon: Squares2X2Icon, path: "/admin" },
+  { name: "Live Auctions", icon: FireIcon, path: "/admin/auctions" },
   { name: "Users", icon: UsersIcon, path: "/admin/users" },
   { name: "Tickets", icon: ChatBubbleLeftRightIcon, path: "/admin/tickets" },
   { name: "Stats", icon: ChartBarIcon, path: "/admin/stats" },
