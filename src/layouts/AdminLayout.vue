@@ -32,7 +32,7 @@ const logout = () => {
 <template>
   <div class="flex h-screen bg-[#050505] text-white font-sans overflow-hidden">
     <aside
-      class="w-20 md:w-64 bg-[#0d0d0d] border-r border-white/5 flex flex-col transition-all duration-300"
+      class="w-20 md:w-64 bg-[#0d0d0d] border-r border-white/5 flex flex-col transition-all duration-300 shrink-0"
     >
       <div class="p-6 flex items-center gap-3">
         <div
@@ -80,15 +80,16 @@ const logout = () => {
       </div>
     </aside>
 
-    <main class="flex-1 overflow-y-auto no-scrollbar bg-[#050505] relative">
+    <main
+      class="flex-1 overflow-y-auto no-scrollbar bg-[#050505] relative flex flex-col"
+    >
       <header
         class="fixed top-0 right-0 left-20 md:left-64 z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-white/5 px-8 py-6 flex justify-between items-center"
       >
         <h2
           class="font-black italic uppercase tracking-widest text-[11px] text-gray-500"
         >
-          Authorized:
-          <span class="text-white">{{ userProfile?.username }}</span>
+          Active Session: <span class="text-white">Authorized Admin</span>
         </h2>
         <div class="flex items-center gap-4">
           <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
@@ -99,7 +100,7 @@ const logout = () => {
         </div>
       </header>
 
-      <div class="p-8 pt-28">
+      <div class="p-8 mt-[84px] md:mt-[88px]">
         <router-view />
       </div>
     </main>
