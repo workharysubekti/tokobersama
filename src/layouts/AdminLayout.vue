@@ -15,9 +15,10 @@ const route = useRoute();
 
 const menuItems = [
   { name: "Dashboard", icon: Squares2X2Icon, path: "/admin" },
-  { name: "Moderasi Produk", icon: ShoppingBagIcon, path: "/admin/products" },
-  { name: "Manajemen User", icon: UsersIcon, path: "/admin/users" },
-  { name: "Statistik", icon: ChartBarIcon, path: "/admin/stats" },
+  { name: "Users", icon: UsersIcon, path: "/admin/users" },
+  { name: "Tickets", icon: ChatBubbleLeftRightIcon, path: "/admin/tickets" },
+  { name: "Stats", icon: ChartBarIcon, path: "/admin/stats" }, // TAMBAH INI
+  { name: "Income", icon: BanknotesIcon, path: "/admin/income" }, // TAMBAH INI
 ];
 
 const logout = () => {
