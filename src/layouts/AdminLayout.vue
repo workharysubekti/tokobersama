@@ -8,6 +8,8 @@ import {
   ChartBarIcon,
   ArrowLeftOnRectangleIcon,
   ShieldCheckIcon,
+  ChatBubbleLeftRightIcon,
+  BanknotesIcon,
 } from "@heroicons/vue/24/outline";
 
 const router = useRouter();
