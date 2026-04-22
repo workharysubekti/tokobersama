@@ -107,7 +107,7 @@ const routes = [
   {
     path: "/notifications",
     name: "Notifications",
-    component: () => import("../views/user/Notifications.vue"),
+    component: () => import("../src/views/user/Notifications.vue"),
     meta: { showBottomNav: true },
   },
 ];
