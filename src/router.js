@@ -101,7 +101,7 @@ const routes = [
   {
     path: "my-auctions",
     name: "PublicAuctions",
-    component: () => import("../src/views/MyAuctions.vue"),
+    component: () => import("../src/views/user/MyAuctions.vue"),
     meta: { showBottomNav: true },
   },
 ];
