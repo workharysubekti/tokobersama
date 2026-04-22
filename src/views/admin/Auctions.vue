@@ -22,7 +22,7 @@ const fetchAllAuctions = async () => {
     const { data, error } = await supabase
       .from("products")
       .select("*, profiles!owner_id(username)")
-      .in("status", ["active", "ended"]) // Kecuali yang masih antre moderasi
+      .neq("status", "pending") // Kecuali yang masih antre moderasi
       .order("end_time", { ascending: false });
 
     if (error) throw error;
@@ -41,29 +41,31 @@ const deleteProduct = async (product) => {
   if (!confirmDelete) return;
 
   try {
-    // 1. Bersihkan Bid dulu (Langkah pencegahan agar tidak error Foreign Key)
+    // 1. Bersihkan Bids dulu secara eksplisit
+    // Kadang 'delete' gagal diam-diam kalau ada data anak (bids) yang mengunci data bapak (products)
     const { error: bidError } = await supabase
       .from("bids")
       .delete()
       .eq("product_id", product.id);
 
-    if (bidError) console.warn("Info: Tidak ada bid yang perlu dihapus.");
+    if (bidError) throw bidError;
 
     // 2. Eksekusi Hapus Produk
     const { error: prodError } = await supabase
       .from("products")
       .delete()
-      .match({ id: product.id }); // Kita pakai .match untuk memastikan presisi
+      .eq("id", product.id); // Pake .eq saja Mas, lebih stabil di semua versi
 
     if (prodError) throw prodError;
 
-    alert("Eksekusi Berhasil: Data telah dimusnahkan.");
-
-    // Refresh list setelah berhasil
+    // 3. PAKSA REFRESH
+    // Kita panggil fetchAllAuctions() dan tunggu sampai beres (await)
     await fetchAllAuctions();
+
+    alert("Target Tereliminasi: Data telah dihapus dari sistem.");
   } catch (err) {
     console.error("Detail Error:", err);
-    alert("Gagal eksekusi: " + (err.message || "Terjadi kesalahan sistem"));
+    alert("Gagal eksekusi: " + (err.message || "Koneksi Database Terputus"));
   }
 };
 
