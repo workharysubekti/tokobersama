@@ -41,14 +41,26 @@ const fetchAdminData = async () => {
 };
 
 const updateStatus = async (id, newStatus) => {
-  const { error } = await supabase
-    .from("products")
-    .update({ status: newStatus })
-    .eq("id", id);
+  loading.value = true;
+  try {
+    const { error } = await supabase
+      .from("products")
+      .update({ status: newStatus })
+      .eq("id", id);
 
-  if (!error) {
+    if (error) {
+      console.error("Update Error:", error.message);
+      notify.error("Gagal Update", error.message);
+    }
+
     pendingProducts.value = pendingProducts.value.filter((p) => p.id !== id);
+    notify.success("Success", `Barang Berhasil di ${newStatus}`);
+
     fetchAdminData();
+  } catch (e) {
+    notify.error("System Error", e.message);
+  } finally {
+    loading.value = false;
   }
 };
 
