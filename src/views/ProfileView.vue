@@ -12,6 +12,9 @@ import {
   BoltIcon,
   FireIcon,
   TrophyIcon,
+  ArrowPathIcon, // Ditambahkan karena digunakan di button loading
+  BellIcon, // Untuk menu Notifikasi
+  QueueListIcon, // Untuk menu Status Barang
 } from "@heroicons/vue/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 
@@ -19,7 +22,7 @@ const props = defineProps({ userProfile: Object });
 const router = useRouter();
 const loading = ref(false);
 const isEditing = ref(false);
-const fileInput = ref(null); // Ref untuk input file
+const fileInput = ref(null);
 
 const OWNER_ID = "68f80a52-d38c-4ac4-b483-8386026f436c";
 
@@ -27,6 +30,14 @@ const totalTx = ref(0);
 const followersCount = ref(0);
 const followingCount = ref(0);
 const averageRating = ref("5.0");
+
+// --- FUNGSI LOGOUT ---
+const handleLogout = async () => {
+  const confirmLogout = confirm("Konfirmasi Logout dari sistem?");
+  if (!confirmLogout) return;
+  await supabase.auth.signOut();
+  router.push("/login");
+};
 
 // --- FUNGSI UPLOAD AVATAR ---
 const triggerFileInput = () => {
@@ -43,19 +54,16 @@ const uploadAvatar = async (event) => {
     const fileName = `${props.userProfile.id}-${Math.random()}.${fileExt}`;
     const filePath = `avatars/${fileName}`;
 
-    // Upload ke Storage
     const { error: uploadError } = await supabase.storage
       .from("avatars")
       .upload(filePath, file);
 
     if (uploadError) throw uploadError;
 
-    // Ambil Public URL
     const {
       data: { publicUrl },
     } = supabase.storage.from("avatars").getPublicUrl(filePath);
 
-    // Update Tabel Profiles
     const { error: updateError } = await supabase
       .from("profiles")
       .update({ avatar_url: publicUrl })
@@ -183,6 +191,7 @@ const handleUpdate = async () => {
 };
 
 const unreadCount = ref(0);
+const unreadNotif = ref(1); // Simulasi titik merah notifikasi (bisa ditarik dari DB nanti)
 let messageSubscription = null;
 
 const fetchUnreadCount = async () => {
@@ -217,7 +226,14 @@ onUnmounted(() => {
   <div
     class="min-h-screen bg-[#050505] pt-28 pb-32 px-6 text-white font-sans uppercase italic font-[1000]"
   >
-    <div v-if="userProfile" class="max-w-2xl mx-auto">
+    <div v-if="userProfile" class="max-w-2xl mx-auto relative">
+      <button
+        @click="handleLogout"
+        class="absolute -top-16 right-0 p-3 bg-white/5 border border-white/10 rounded-2xl text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-xl z-50"
+      >
+        <ArrowRightOnRectangleIcon class="w-6 h-6" />
+      </button>
+
       <div class="flex flex-col items-center mb-12">
         <div class="relative group mb-6">
           <div
@@ -353,23 +369,40 @@ onUnmounted(() => {
       >
         <router-link
           v-for="(item, index) in [
-            { name: 'Pesan', path: '/messages', count: unreadCount },
+            {
+              name: 'Notifikasi',
+              path: '/notifications',
+              count: unreadNotif,
+              type: 'notif',
+            },
+            {
+              name: 'Pesan',
+              path: '/messages',
+              count: unreadCount,
+              type: 'message',
+            },
+            { name: 'Status Barang', path: '/my-auctions', count: 0 },
             { name: 'Inventory', path: '/vault', count: 0 },
-            { name: 'Wishlist', path: '/my-bids', count: 0 },
             { name: 'Pengaturan Akun', path: '/settings', count: 0 },
           ]"
           :key="item.path"
           :to="item.path"
           class="flex items-center justify-between p-7 hover:bg-white/[0.04] transition-all border-white/5"
-          :class="{ 'border-b': index !== 3 }"
+          :class="{ 'border-b': index !== 4 }"
         >
           <div class="flex items-center gap-4">
             <span
               class="text-xs font-[1000] uppercase italic tracking-widest text-gray-200"
               >{{ item.name }}</span
             >
+
             <div
-              v-if="item.count > 0"
+              v-if="item.type === 'notif' && item.count > 0"
+              class="w-2 h-2 bg-red-600 rounded-full animate-ping shadow-[0_0_10px_#dc2626]"
+            ></div>
+
+            <div
+              v-if="item.type === 'message' && item.count > 0"
               class="bg-red-600 text-white text-[9px] px-2 py-0.5 rounded-full font-black animate-pulse"
             >
               {{ item.count }}
