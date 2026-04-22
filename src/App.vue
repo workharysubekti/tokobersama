@@ -1,26 +1,35 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from "vue";
-import { useRoute, useRouter } from "vue-router"; // useRouter ditambahkan
+import { useRoute, useRouter } from "vue-router";
 import { supabase } from "./lib/supabase.js";
 import Header from "./components/Header.vue";
 import BottomNav from "./components/BottomNav.vue";
-import { XMarkIcon } from "@heroicons/vue/24/outline";
+import { XMarkIcon, BellIcon } from "@heroicons/vue/24/outline"; // BellIcon ditambahkan
 import { usePresenceStore } from "./store/presence.js";
-import { useToast } from "vue-toastification";
 
 const presenceStore = usePresenceStore();
 const userProfile = ref(null);
 const isInitialLoading = ref(true);
 const route = useRoute();
-const router = useRouter(); // Inisialisasi router
+const router = useRouter();
 const authReady = ref(false);
 const globalNotification = ref(null);
+
+// STATE UNTUK CUSTOM TOAST
+const customToast = ref(null);
 
 let globalChannel = null;
 let presenceChannel = null;
 let notificationChannel = null;
 
-const toast = useToast();
+// FUNGSI UNTUK MEMUNCULKAN NOTIFIKASI INTERNAL
+const showToast = (title, message, productId) => {
+  customToast.value = { title, message, productId };
+  // Hilang otomatis setelah 6 detik
+  setTimeout(() => {
+    customToast.value = null;
+  }, 6000);
+};
 
 const triggerGlobalNotif = (message) => {
   globalNotification.value = { message };
@@ -44,7 +53,6 @@ const setupGlobalPresence = (userId) => {
   });
 };
 
-// FUNGSI NOTIFIKASI TERPADU (GABUNGAN & CERDAS)
 const listenToNotifications = async () => {
   if (notificationChannel) supabase.removeChannel(notificationChannel);
 
@@ -60,9 +68,8 @@ const listenToNotifications = async () => {
       { event: "INSERT", schema: "public", table: "bids" },
       async (payload) => {
         const newBid = payload.new;
-        if (newBid.user_id === user.id) return; // Abaikan jika bid sendiri
+        if (newBid.user_id === user.id) return;
 
-        // Ambil data produk untuk cek kepemilikan & nama
         const { data: prod } = await supabase
           .from("products")
           .select("name, owner_id")
@@ -71,16 +78,14 @@ const listenToNotifications = async () => {
 
         if (!prod) return;
 
-        // LOGIKA 1: Jika Mas adalah OWNER produk (Ada duit masuk)
         if (prod.owner_id === user.id) {
-          toast.success(`INCOME! Seseorang menawar "${prod.name}" Mas!`, {
-            timeout: 6000,
-            onClick: () => router.push(`/product/${newBid.product_id}`),
-          });
-        }
-
-        // LOGIKA 2: Jika Mas adalah BIDDER yang disalip (Outbid)
-        else {
+          // Ganti toast.success dengan custom toast
+          showToast(
+            "INCOME ALERT",
+            `Seseorang menawar "${prod.name}" Mas!`,
+            newBid.product_id,
+          );
+        } else {
           const { data: myPastBid } = await supabase
             .from("bids")
             .select("id")
@@ -92,11 +97,11 @@ const listenToNotifications = async () => {
             triggerGlobalNotif(
               `⚡ OUTBID: Posisi Mas di "${prod.name}" disalip!`,
             );
-            toast.warning(
-              `Waspada! Seseorang menyalip bid Mas di ${prod.name}`,
-              {
-                onClick: () => router.push(`/product/${newBid.product_id}`),
-              },
+            // Ganti toast.warning dengan custom toast
+            showToast(
+              "OUTBID!",
+              `Waspada! Seseorang menyalip bid Mas di "${prod.name}"`,
+              newBid.product_id,
             );
           }
         }
@@ -120,7 +125,7 @@ const syncSession = async () => {
         userProfile.value = data;
         presenceStore.initPresence(data.id);
         setupGlobalPresence(session.user.id);
-        listenToNotifications(); // Langsung aktifkan notif
+        listenToNotifications();
       }
     } else {
       userProfile.value = null;
@@ -181,6 +186,37 @@ onMounted(async () => {
       </div>
     </transition>
 
+    <transition name="notif-pop">
+      <div
+        v-if="customToast"
+        @click="
+          router.push(`/product/${customToast.productId}`);
+          customToast = null;
+        "
+        class="fixed top-6 left-4 right-4 z-[9999] bg-[#111]/90 backdrop-blur-xl border border-yellow-500/50 p-4 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,1)] flex items-center gap-4 active:scale-95 transition-all cursor-pointer max-w-md mx-auto"
+      >
+        <div
+          class="w-10 h-10 bg-yellow-500 rounded-2xl flex items-center justify-center shrink-0"
+        >
+          <BellIcon class="w-5 h-5 text-black" />
+        </div>
+        <div class="flex-1 min-w-0">
+          <p
+            class="text-[9px] font-black text-yellow-500 uppercase italic tracking-widest"
+          >
+            {{ customToast.title }}
+          </p>
+          <p class="text-[11px] font-bold text-white uppercase truncate italic">
+            {{ customToast.message }}
+          </p>
+        </div>
+        <XMarkIcon
+          @click.stop="customToast = null"
+          class="w-5 h-5 text-gray-600 hover:text-white"
+        />
+      </div>
+    </transition>
+
     <Header
       v-if="!$route.meta.requiresAdmin"
       :userProfile="userProfile"
@@ -221,7 +257,22 @@ onMounted(async () => {
 </template>
 
 <style>
-/* Style tetap sama sesuai permintaan */
+/* Style transisi notifikasi custom */
+.notif-pop-enter-active {
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.notif-pop-leave-active {
+  transition: all 0.3s ease-in;
+}
+.notif-pop-enter-from {
+  transform: translateY(-100px);
+  opacity: 0;
+}
+.notif-pop-leave-to {
+  transform: translateY(-100px);
+  opacity: 0;
+}
+
 .fade-leave-active {
   transition: opacity 0.5s ease;
 }
