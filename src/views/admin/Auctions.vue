@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from "vue";
-import { supabase } from "../../lib/supabase";
-import { formatPrice } from "../../utils/format";
+import { supabase } from "../../lib/supabase.js";
+import { formatPrice } from "../../utils/format.js";
 import {
   FireIcon,
   EyeIcon,
