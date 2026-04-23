@@ -17,6 +17,7 @@ import {
 const router = useRouter();
 const loading = ref(false);
 const uploading = ref(false);
+const duration = ref("3"); // Default durasi lelang 3 hari
 
 const categories = [
   "TCG",
@@ -32,7 +33,6 @@ const form = ref({
   category: "TCG",
   description: "",
   starting_bid: "",
-  end_time: "", // Menggunakan 'end_time' agar sinkron dengan AdminPanel
   image_url: "",
 });
 
@@ -68,12 +68,8 @@ const handleImageUpload = async (event) => {
 
 // --- FUNGSI SUBMIT KE TABEL PRODUCTS ---
 const createListing = async () => {
-  if (
-    !form.value.name ||
-    !form.value.starting_bid ||
-    !form.value.image_url ||
-    !form.value.end_time
-  ) {
+  // Validasi: end_time manual dihapus karena sekarang otomatis via sistem duration
+  if (!form.value.name || !form.value.starting_bid || !form.value.image_url) {
     notify.error("Data Incomplete", "Semua kolom wajib diisi!");
     return;
   }
@@ -84,16 +80,22 @@ const createListing = async () => {
       data: { session },
     } = await supabase.auth.getSession();
 
-    // PERBAIKAN: Field disesuaikan dengan database dan filter Home.vue
+    // --- LOGIKA SISTEM WAKTU OTOMATIS ---
+    // Menghitung Tanggal Berakhir: Waktu Sekarang + Jumlah Hari yang dipilih user
+    const calculatedEndTime = new Date();
+    calculatedEndTime.setDate(
+      calculatedEndTime.getDate() + parseInt(duration.value),
+    );
+
     const { error } = await supabase.from("products").insert({
-      name: form.value.name, // Gunakan 'name', bukan 'title'
+      name: form.value.name,
       category: form.value.category,
       description: form.value.description,
       image_url: form.value.image_url,
       starting_bid: parseInt(form.value.starting_bid.replace(/[^0-9]/g, "")),
       owner_id: session?.user.id,
       status: "pending", // Review admin..
-      end_time: new Date(form.value.end_time).toISOString(),
+      end_time: calculatedEndTime.toISOString(), // Mengirim hasil kalkulasi sistem
       is_priority: false,
     });
 
@@ -215,20 +217,19 @@ const formatCurrencyInput = (event) => {
                 </select>
               </div>
             </div>
-            <div>
-              <label class="text-[10px] text-gray-600 block mb-2"
-                >Deadline</label
+            <div class="space-y-2">
+              <label
+                class="text-[10px] font-black uppercase italic text-gray-500"
+                >Durasi Lelang</label
               >
-              <div class="relative">
-                <CalendarDaysIcon
-                  class="absolute left-4 top-4 w-5 h-5 text-gray-700"
-                />
-                <input
-                  v-model="form.end_time"
-                  type="datetime-local"
-                  class="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-[11px] outline-none focus:border-yellow-500 text-white"
-                />
-              </div>
+              <select
+                v-model="duration"
+                class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-bold uppercase italic text-xs outline-none focus:border-yellow-500 transition-all"
+              >
+                <option value="1">1 Hari (Kilat)</option>
+                <option value="3">3 Hari (Standar)</option>
+                <option value="7">7 Hari (Mingguan)</option>
+              </select>
             </div>
           </div>
 
