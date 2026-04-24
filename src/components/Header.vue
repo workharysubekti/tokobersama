@@ -162,37 +162,46 @@ const categories = [
                 </button>
 
                 <transition
-                  enter-active-class="transition duration-100"
-                  enter-from-class="opacity-0 scale-95"
-                  enter-to-class="opacity-100 scale-100"
-                >
-                  <div
-                    v-if="isProfileOpen"
-                    class="absolute right-0 mt-3 w-56 bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl py-2 z-[110]"
-                  >
-                    <div class="sm:hidden px-4 py-3 border-b border-white/5 bg-white/5 mb-1">
-                       <span class="text-[8px] font-black uppercase tracking-widest text-gray-500 italic">Saldo</span>
-                       <p class="text-xs font-black text-yellow-500 italic">Rp 500.000</p>
-                    </div>
+  enter-active-class="transition duration-100"
+  enter-from-class="opacity-0 scale-95"
+  enter-to-class="opacity-100 scale-100"
+>
+  <div
+    v-if="isProfileOpen"
+    class="absolute right-0 mt-3 w-56 bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl py-2 z-[110]"
+  >
+    <div class="sm:hidden px-4 py-3 border-b border-white/5 bg-white/5 mb-1">
+       <span class="text-[8px] font-black uppercase tracking-widest text-gray-500 italic">Saldo</span>
+       <p class="text-xs font-black text-yellow-500 italic">Rp 500.000</p>
+    </div>
 
-                    <router-link
-                      to="/profile"
-                      @click="isProfileOpen = false"
-                      class="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
-                    >
-                      <UserCircleIcon class="w-5 h-5 text-yellow-500" />
-                      <span class="text-[9px] font-black uppercase tracking-widest italic">Pengaturan Profil</span>
-                    </router-link>
+    <router-link
+      to="/profile"
+      @click="isProfileOpen = false"
+      class="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+    >
+      <UserCircleIcon class="w-5 h-5 text-yellow-500" />
+      <span class="text-[9px] font-black uppercase tracking-widest italic">Pengaturan Profil</span>
+    </router-link>
 
-                    <button
-                      @click="handleLogout"
-                      class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-red-500/10 text-gray-500 hover:text-red-500 transition-colors border-t border-white/5 mt-1"
-                    >
-                      <ArrowRightOnRectangleIcon class="w-5 h-5" />
-                      <span class="text-[9px] font-black uppercase tracking-widest italic">Keluar Akun</span>
-                    </button>
-                  </div>
-                </transition>
+    <router-link
+      to="/my-bids"
+      @click="isProfileOpen = false"
+      class="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+    >
+      <TrophyIcon class="w-5 h-5 text-yellow-500" />
+      <span class="text-[9px] font-black uppercase tracking-widest italic">Riwayat Penawaran</span>
+    </router-link>
+
+    <button
+      @click="handleLogout"
+      class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-red-500/10 text-gray-500 hover:text-red-500 transition-colors border-t border-white/5 mt-1"
+    >
+      <ArrowRightOnRectangleIcon class="w-5 h-5" />
+      <span class="text-[9px] font-black uppercase tracking-widest italic">Keluar Akun</span>
+    </button>
+  </div>
+</transition>
               </div>
             </div>
 
