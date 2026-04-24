@@ -37,11 +37,11 @@ const handleLogout = async () => {
 
 // Dummy Kategori - Nanti bisa Mas pindahin ke Database
 const categories = [
-  "Elektronik",
-  "Fashion & Sneakers",
-  "Hobi & Koleksi",
-  "Voucher Game",
-  "Otomotif"
+  "Trading Card Game(TCG)",
+  "Action Figure",
+  "Diecast",
+  "Virtual Item",
+  "Ekslusif"
 ];
 </script>
 
