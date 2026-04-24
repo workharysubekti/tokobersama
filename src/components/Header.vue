@@ -9,8 +9,7 @@ import {
   ArrowRightOnRectangleIcon,
   TrophyIcon,
   ChevronDownIcon,
-  WalletIcon, // Tambahan icon saldo
-  Squares2X2Icon, // Icon kategori
+  WalletIcon,
 } from "@heroicons/vue/24/outline";
 import { supabase } from "../lib/supabase.js";
 
@@ -22,7 +21,7 @@ const props = defineProps({
 const router = useRouter();
 const searchStore = useSearchStore();
 const isProfileOpen = ref(false);
-const isCategoryOpen = ref(false); // Ref untuk kategori
+const isCategoryOpen = ref(false);
 
 const handleSearch = () => {
   if (searchStore.searchQuery.trim()) {
@@ -35,13 +34,27 @@ const handleLogout = async () => {
   router.push("/").then(() => window.location.reload());
 };
 
-// Dummy Kategori - Nanti bisa Mas pindahin ke Database
+// Fungsi Smooth Scroll ke Elite Section
+const scrollToElite = () => {
+  const element = document.getElementById('elite-section');
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth' });
+  } else {
+    // Kalau user lagi di halaman lain, balik ke home dulu baru scroll
+    router.push('/').then(() => {
+      setTimeout(() => {
+        document.getElementById('elite-section')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    });
+  }
+};
+
 const categories = [
   "Trading Card Game(TCG)",
   "Action Figure",
   "Diecast",
   "Virtual Item",
-  "Ekslusif"
+  "Eksklusif"
 ];
 </script>
 
@@ -53,7 +66,7 @@ const categories = [
       <div
         class="flex items-center justify-between h-16 md:h-20 gap-2 md:gap-6"
       >
-        <div class="flex items-center gap-8">
+        <div class="flex items-center gap-4 lg:gap-8">
           <div class="flex-shrink-0">
             <router-link
               to="/"
@@ -72,29 +85,30 @@ const categories = [
             </router-link>
           </div>
 
-          <div class="hidden lg:flex items-center gap-6">
-            <router-link to="/" class="text-[10px] font-black uppercase tracking-widest italic text-gray-400 hover:text-yellow-500 transition-colors">Beranda</router-link>
-            
-            <div class="relative">
+          <div class="hidden md:flex items-center gap-4 lg:gap-6">
+            <div class="relative group">
               <button 
                 @click="isCategoryOpen = !isCategoryOpen"
                 class="flex items-center space-x-1 text-[10px] font-black uppercase tracking-widest italic text-gray-400 hover:text-yellow-500 transition-colors"
               >
                 <span>Kategori</span>
-                <ChevronDownIcon class="w-3 h-3" />
+                <ChevronDownIcon class="w-3 h-3 transition-transform group-hover:rotate-180" />
               </button>
               
-              <div v-if="isCategoryOpen" @click.away="isCategoryOpen = false" class="absolute top-full mt-4 w-48 bg-[#0a0a0a] border border-white/10 rounded-2xl py-2 shadow-2xl">
-                <a v-for="cat in categories" :key="cat" href="#" class="block px-4 py-2 text-[9px] font-black uppercase tracking-widest italic text-gray-400 hover:bg-white/5 hover:text-yellow-500">
+              <div v-if="isCategoryOpen" class="absolute top-full mt-4 w-48 bg-[#0a0a0a] border border-white/10 rounded-2xl py-2 shadow-2xl z-[120]">
+                <a v-for="cat in categories" :key="cat" href="#" class="block px-4 py-3 text-[9px] font-black uppercase tracking-widest italic text-gray-400 hover:bg-white/5 hover:text-yellow-500 border-b border-white/5 last:border-0">
                   {{ cat }}
                 </a>
               </div>
             </div>
 
-            <router-link to="/elite" class="flex items-center space-x-1 text-[10px] font-black uppercase tracking-widest italic text-yellow-500 hover:text-white transition-colors">
-              <TrophyIcon class="w-3 h-3" />
+            <button 
+              @click="scrollToElite"
+              class="flex items-center space-x-1.5 text-[10px] font-black uppercase tracking-widest italic text-yellow-500 hover:text-white transition-colors"
+            >
+              <TrophyIcon class="w-3.5 h-3.5" />
               <span>Elite Section</span>
-            </router-link>
+            </button>
           </div>
         </div>
 
@@ -114,13 +128,11 @@ const categories = [
         <div class="flex-shrink-0 flex items-center">
           <div v-if="authReady" class="flex items-center gap-3 md:gap-4 lg:gap-6">
             
-            <div v-if="userProfile" class="hidden md:flex flex-col items-end px-3 py-1.5 border-r border-white/10">
+            <div v-if="userProfile" class="hidden sm:flex flex-col items-end px-3 py-1.5 border-r border-white/10">
               <span class="text-[8px] font-black uppercase tracking-[0.2em] text-gray-500 italic">Dompet Saya</span>
-              <div class="flex items-center gap-1.5">
-                <span class="text-[11px] font-black text-white italic tracking-wider">Rp 500.000</span>
-                <div class="w-4 h-4 bg-yellow-500/10 rounded flex items-center justify-center">
-                  <WalletIcon class="w-3 h-3 text-yellow-500" />
-                </div>
+              <div class="flex items-center gap-1.5 font-black italic">
+                <span class="text-[11px] text-white tracking-wider">Rp 500.000</span>
+                <WalletIcon class="w-3.5 h-3.5 text-yellow-500" />
               </div>
             </div>
 
@@ -158,8 +170,8 @@ const categories = [
                     v-if="isProfileOpen"
                     class="absolute right-0 mt-3 w-56 bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl py-2 z-[110]"
                   >
-                    <div class="md:hidden px-4 py-3 border-b border-white/5 bg-white/5 mb-1">
-                       <span class="text-[8px] font-black uppercase tracking-widest text-gray-500 italic">Saldo Anda</span>
+                    <div class="sm:hidden px-4 py-3 border-b border-white/5 bg-white/5 mb-1">
+                       <span class="text-[8px] font-black uppercase tracking-widest text-gray-500 italic">Saldo</span>
                        <p class="text-xs font-black text-yellow-500 italic">Rp 500.000</p>
                     </div>
 
@@ -169,22 +181,7 @@ const categories = [
                       class="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
                     >
                       <UserCircleIcon class="w-5 h-5 text-yellow-500" />
-                      <span
-                        class="text-[9px] font-black uppercase tracking-widest italic"
-                        >Pengaturan Profil</span
-                      >
-                    </router-link>
-
-                    <router-link
-                      to="/my-bids"
-                      @click="isProfileOpen = false"
-                      class="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
-                    >
-                      <TrophyIcon class="w-5 h-5 text-yellow-500" />
-                      <span
-                        class="text-[9px] font-black uppercase tracking-widest italic"
-                        >Penawaran Saya</span
-                      >
+                      <span class="text-[9px] font-black uppercase tracking-widest italic">Pengaturan Profil</span>
                     </router-link>
 
                     <button
@@ -192,10 +189,7 @@ const categories = [
                       class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-red-500/10 text-gray-500 hover:text-red-500 transition-colors border-t border-white/5 mt-1"
                     >
                       <ArrowRightOnRectangleIcon class="w-5 h-5" />
-                      <span
-                        class="text-[9px] font-black uppercase tracking-widest italic"
-                        >Keluar Akun</span
-                      >
+                      <span class="text-[9px] font-black uppercase tracking-widest italic">Keluar Akun</span>
                     </button>
                   </div>
                 </transition>
