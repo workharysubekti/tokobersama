@@ -9,6 +9,8 @@ import {
   ArrowRightOnRectangleIcon,
   TrophyIcon,
   ChevronDownIcon,
+  WalletIcon, // Tambahan icon saldo
+  Squares2X2Icon, // Icon kategori
 } from "@heroicons/vue/24/outline";
 import { supabase } from "../lib/supabase.js";
 
@@ -20,6 +22,7 @@ const props = defineProps({
 const router = useRouter();
 const searchStore = useSearchStore();
 const isProfileOpen = ref(false);
+const isCategoryOpen = ref(false); // Ref untuk kategori
 
 const handleSearch = () => {
   if (searchStore.searchQuery.trim()) {
@@ -31,6 +34,15 @@ const handleLogout = async () => {
   await supabase.auth.signOut();
   router.push("/").then(() => window.location.reload());
 };
+
+// Dummy Kategori - Nanti bisa Mas pindahin ke Database
+const categories = [
+  "Elektronik",
+  "Fashion & Sneakers",
+  "Hobi & Koleksi",
+  "Voucher Game",
+  "Otomotif"
+];
 </script>
 
 <template>
@@ -41,24 +53,49 @@ const handleLogout = async () => {
       <div
         class="flex items-center justify-between h-16 md:h-20 gap-2 md:gap-6"
       >
-        <div class="flex-shrink-0">
-          <router-link
-            to="/"
-            class="flex items-center space-x-2 md:space-x-3 group"
-          >
-            <div
-              class="w-8 h-8 md:w-9 md:h-9 bg-yellow-500 rounded-lg md:rounded-xl flex items-center justify-center transform group-hover:rotate-12 transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)]"
+        <div class="flex items-center gap-8">
+          <div class="flex-shrink-0">
+            <router-link
+              to="/"
+              class="flex items-center space-x-2 md:space-x-3 group"
             >
-              <span class="text-black font-black text-lg md:text-xl italic"
-                >T</span
+              <div
+                class="w-8 h-8 md:w-9 md:h-9 bg-yellow-500 rounded-lg md:rounded-xl flex items-center justify-center transform group-hover:rotate-12 transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)]"
               >
+                <span class="text-black font-black text-lg md:text-xl italic">T</span>
+              </div>
+              <span
+                class="hidden lg:block text-sm md:text-xl font-[1000] italic tracking-tighter uppercase text-white"
+              >
+                TOKO<span class="text-yellow-500">BERSAMA</span>
+              </span>
+            </router-link>
+          </div>
+
+          <div class="hidden lg:flex items-center gap-6">
+            <router-link to="/" class="text-[10px] font-black uppercase tracking-widest italic text-gray-400 hover:text-yellow-500 transition-colors">Beranda</router-link>
+            
+            <div class="relative">
+              <button 
+                @click="isCategoryOpen = !isCategoryOpen"
+                class="flex items-center space-x-1 text-[10px] font-black uppercase tracking-widest italic text-gray-400 hover:text-yellow-500 transition-colors"
+              >
+                <span>Kategori</span>
+                <ChevronDownIcon class="w-3 h-3" />
+              </button>
+              
+              <div v-if="isCategoryOpen" @click.away="isCategoryOpen = false" class="absolute top-full mt-4 w-48 bg-[#0a0a0a] border border-white/10 rounded-2xl py-2 shadow-2xl">
+                <a v-for="cat in categories" :key="cat" href="#" class="block px-4 py-2 text-[9px] font-black uppercase tracking-widest italic text-gray-400 hover:bg-white/5 hover:text-yellow-500">
+                  {{ cat }}
+                </a>
+              </div>
             </div>
-            <span
-              class="hidden sm:block text-sm md:text-xl font-[1000] italic tracking-tighter uppercase text-white"
-            >
-              TOKO<span class="text-yellow-500">BERSAMA</span>
-            </span>
-          </router-link>
+
+            <router-link to="/elite" class="flex items-center space-x-1 text-[10px] font-black uppercase tracking-widest italic text-yellow-500 hover:text-white transition-colors">
+              <TrophyIcon class="w-3 h-3" />
+              <span>Elite Section</span>
+            </router-link>
+          </div>
         </div>
 
         <div class="flex-1 max-w-md relative group">
@@ -75,15 +112,26 @@ const handleLogout = async () => {
         </div>
 
         <div class="flex-shrink-0 flex items-center">
-          <div v-if="authReady" class="flex items-center gap-3 md:gap-6">
-            <div v-if="userProfile" class="flex items-center gap-3 md:gap-6">
+          <div v-if="authReady" class="flex items-center gap-3 md:gap-4 lg:gap-6">
+            
+            <div v-if="userProfile" class="hidden md:flex flex-col items-end px-3 py-1.5 border-r border-white/10">
+              <span class="text-[8px] font-black uppercase tracking-[0.2em] text-gray-500 italic">Dompet Saya</span>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[11px] font-black text-white italic tracking-wider">Rp 500.000</span>
+                <div class="w-4 h-4 bg-yellow-500/10 rounded flex items-center justify-center">
+                  <WalletIcon class="w-3 h-3 text-yellow-500" />
+                </div>
+              </div>
+            </div>
+
+            <div v-if="userProfile" class="flex items-center gap-3 md:gap-4">
               <router-link
                 to="/create-listing"
-                class="hidden md:flex items-center space-x-2 bg-yellow-500 hover:bg-white text-black px-4 py-2 rounded-xl transition-all shadow-lg active:scale-95"
+                class="hidden sm:flex items-center space-x-2 bg-yellow-500 hover:bg-white text-black px-4 py-2 rounded-xl transition-all shadow-lg active:scale-95"
               >
                 <PlusIcon class="w-5 h-5 stroke-[3px]" />
                 <span
-                  class="text-[10px] font-black uppercase tracking-widest italic"
+                  class="hidden lg:block text-[10px] font-black uppercase tracking-widest italic"
                   >Buka Lelang</span
                 >
               </router-link>
@@ -91,7 +139,7 @@ const handleLogout = async () => {
               <div class="relative">
                 <button
                   @click="isProfileOpen = !isProfileOpen"
-                  class="flex items-center p-1 bg-white/5 rounded-xl border border-white/10"
+                  class="flex items-center p-1 bg-white/5 rounded-xl border border-white/10 hover:border-yellow-500/50 transition-colors"
                 >
                   <div
                     class="w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gray-800 border border-white/10 flex items-center justify-center font-black text-yellow-500 italic text-sm"
@@ -108,8 +156,13 @@ const handleLogout = async () => {
                 >
                   <div
                     v-if="isProfileOpen"
-                    class="absolute right-0 mt-3 w-48 bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl py-2 z-[110]"
+                    class="absolute right-0 mt-3 w-56 bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl py-2 z-[110]"
                   >
+                    <div class="md:hidden px-4 py-3 border-b border-white/5 bg-white/5 mb-1">
+                       <span class="text-[8px] font-black uppercase tracking-widest text-gray-500 italic">Saldo Anda</span>
+                       <p class="text-xs font-black text-yellow-500 italic">Rp 500.000</p>
+                    </div>
+
                     <router-link
                       to="/profile"
                       @click="isProfileOpen = false"
@@ -118,17 +171,30 @@ const handleLogout = async () => {
                       <UserCircleIcon class="w-5 h-5 text-yellow-500" />
                       <span
                         class="text-[9px] font-black uppercase tracking-widest italic"
-                        >Profil</span
+                        >Pengaturan Profil</span
                       >
                     </router-link>
+
+                    <router-link
+                      to="/my-bids"
+                      @click="isProfileOpen = false"
+                      class="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+                    >
+                      <TrophyIcon class="w-5 h-5 text-yellow-500" />
+                      <span
+                        class="text-[9px] font-black uppercase tracking-widest italic"
+                        >Penawaran Saya</span
+                      >
+                    </router-link>
+
                     <button
                       @click="handleLogout"
-                      class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-red-500/10 text-gray-500 hover:text-red-500 transition-colors"
+                      class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-red-500/10 text-gray-500 hover:text-red-500 transition-colors border-t border-white/5 mt-1"
                     >
                       <ArrowRightOnRectangleIcon class="w-5 h-5" />
                       <span
                         class="text-[9px] font-black uppercase tracking-widest italic"
-                        >Log Out</span
+                        >Keluar Akun</span
                       >
                     </button>
                   </div>
