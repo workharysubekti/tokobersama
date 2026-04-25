@@ -268,11 +268,14 @@ onMounted(async () => {
       :authReady="authReady"
     />
 
-    <main class="min-h-screen bg-black pt-16">
+    <main
+      class="min-h-screen bg-black transition-all duration-300"
+      :class="{ 'pt-16': !$route.meta.requiresAdmin }"
+    >
       <router-view
         v-if="authReady"
         :userProfile="userProfile"
-        :key="route.fullPath"
+        :key="$route.fullPath"
       />
     </main>
 
