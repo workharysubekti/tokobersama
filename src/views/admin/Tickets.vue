@@ -27,15 +27,15 @@ const fetchReports = async () => {
   loading.value = true;
   try {
     const { data, error } = await supabase
-      .from("reports")
-      .select(`
-        *,
-        reporter:profiles!reporter_id(username, full_name, avatar_url),
-        target:profiles!target_user_id(username, full_name, avatar_url),
-        product:products(id, name, image_url, status, owner_id)
-      `)
-      .order("created_at", { ascending: false });
-
+  .from("reports")
+  .select(`
+    *,
+    reporter:profiles!reporter_id(username, full_name, avatar_url),
+    target:profiles!target_user_id(username, full_name, avatar_url),
+    product:products(id, name, image_url, status, owner_id)
+  `)
+  .order("created_at", { ascending: false });
+    
     if (error) throw error;
     allReports.value = data;
   } catch (err) {
