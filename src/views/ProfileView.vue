@@ -15,9 +15,8 @@ import {
   ArrowPathIcon,
   BanknotesIcon,
   UserIcon,
-  StarIcon,
-  WalletIcon,
-  ArrowUpRightIcon
+  ArrowUpRightIcon,
+  IdentificationIcon
 } from "@heroicons/vue/24/outline";
 
 const props = defineProps({ userProfile: Object });
@@ -110,7 +109,6 @@ const userRank = computed(() => {
   const count = followersCount.value;
   if (count >= 100) return { name: "LEGEND", color: "text-yellow-500", bg: "bg-yellow-500/10", icon: TrophyIcon };
   if (count >= 30) return { name: "EXPERT", color: "text-red-500", bg: "bg-red-500/10", icon: FireIcon };
-  if (count >= 10) return { name: "INTERMEDIATE", color: "text-purple-500", bg: "bg-purple-500/10", icon: BoltIcon };
   return { name: "NEWBIE", color: "text-blue-500", bg: "bg-blue-500/10", icon: ShieldCheckIcon };
 });
 
@@ -151,7 +149,6 @@ const handleUpdate = async () => {
 
 const unreadCount = ref(0);
 const unreadNotif = ref(0);
-let messageSubscription = null;
 
 const fetchUnreadNotifications = async () => {
   const { data: { user } } = await supabase.auth.getUser();
@@ -193,109 +190,112 @@ onMounted(() => {
         <ArrowRightOnRectangleIcon class="w-5 h-5" />
       </button>
 
-      <div class="flex flex-col items-center mb-10">
+      <div class="flex flex-col items-center mb-8">
         <div class="relative group mb-6">
-          <div class="w-32 h-32 md:w-36 md:h-36 rounded-full border-4 border-white/5 overflow-hidden shadow-2xl bg-black">
+          <div class="w-32 h-32 md:w-36 md:h-36 rounded-full border-4 border-white/5 overflow-hidden bg-black shadow-2xl">
             <img :src="userProfile.avatar_url || 'https://via.placeholder.com/150'" class="w-full h-full object-cover" />
           </div>
           <input type="file" ref="fileInput" class="hidden" accept="image/*" @change="uploadAvatar" />
-          <button @click="triggerFileInput" :disabled="loading" class="absolute bottom-1 right-1 bg-yellow-500 p-2.5 rounded-full text-black shadow-xl hover:scale-110 transition-all disabled:opacity-50">
+          <button @click="triggerFileInput" :disabled="loading" class="absolute bottom-1 right-1 bg-yellow-500 p-2.5 rounded-full text-black shadow-xl hover:scale-110 transition-all">
             <CameraIcon v-if="!loading" class="w-5 h-5" />
             <ArrowPathIcon v-else class="w-5 h-5 animate-spin" />
           </button>
         </div>
 
-        <h1 class="text-3xl tracking-tighter mb-1 text-white">{{ userProfile.full_name || "MEMBER" }}</h1>
-        <p class="text-[10px] text-yellow-500/50 tracking-[0.4em] mb-6">@{{ userProfile.username }}</p>
-
-        <div class="flex items-center gap-4 mb-6 text-[10px] tracking-widest text-gray-500">
-          <button @click="router.push(`/user/${userProfile.username}/followers`)" class="flex items-center gap-1.5 hover:text-white transition-colors">
-            <span class="text-white">{{ followersCount }}</span> <span>Followers</span>
-          </button>
-          <span class="text-white/10 text-xs font-light">|</span>
-          <button @click="router.push(`/user/${userProfile.username}/following`)" class="flex items-center gap-1.5 hover:text-white transition-colors">
-            <span class="text-white">{{ followingCount }}</span> <span>Following</span>
-          </button>
-        </div>
+        <h1 class="text-3xl tracking-tighter mb-1">{{ userProfile.full_name || "MEMBER" }}</h1>
+        <p class="text-[10px] text-gray-600 tracking-[0.4em] mb-6">@{{ userProfile.username }}</p>
 
         <router-link 
           to="/reputation-info"
-          class="inline-flex flex-col items-center group mb-8"
+          class="inline-flex items-center gap-3 px-6 py-2.5 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 active:scale-95 transition-all mb-8 shadow-lg"
         >
-          <div :class="[userRank.bg, userRank.color]" class="px-8 py-3 rounded-2xl border border-white/10 flex items-center gap-3 shadow-xl group-hover:bg-white/10 group-active:scale-95 transition-all">
+          <div :class="[userRank.bg, userRank.color]" class="p-1.5 rounded-lg border border-white/5">
             <component :is="userRank.icon" class="w-4 h-4" />
-            <span class="text-[11px] font-[1000] tracking-widest">{{ userRank.name }}</span>
-            <ChevronRightIcon class="w-3 h-3 opacity-50" />
           </div>
-          <p class="text-[7px] mt-2 text-gray-700 tracking-[0.4em] font-black uppercase">Click for Reputation Protocol</p>
+          <div class="text-left border-l border-white/10 pl-3">
+            <p class="text-[9px] text-white leading-none mb-1">{{ userRank.name }} PROTOCOL</p>
+            <p class="text-[7px] text-gray-600 tracking-widest leading-none">VIEW RANK SYSTEM</p>
+          </div>
+          <ChevronRightIcon class="w-3 h-3 text-gray-700 ml-2" />
         </router-link>
 
+        <div class="flex items-center gap-4 mb-6 text-[10px] tracking-widest text-gray-500">
+          <button @click="router.push(`/user/${userProfile.username}/followers`)" class="hover:text-white transition-colors">
+            <span class="text-white">{{ followersCount }}</span> FOLLOWERS
+          </button>
+          <span class="text-white/10 text-xs font-light">|</span>
+          <button @click="router.push(`/user/${userProfile.username}/following`)" class="hover:text-white transition-colors">
+            <span class="text-white">{{ followingCount }}</span> FOLLOWING
+          </button>
+        </div>
+
         <div class="mb-4 max-w-md text-center">
-          <p class="text-[11px] leading-relaxed text-gray-400 normal-case italic font-bold">
-            {{ userProfile.bio || "MEMBER HAS NOT TRANSMITTED A BIO DATA." }}
+          <p class="text-[11px] leading-relaxed text-gray-500 normal-case italic font-bold">
+            {{ userProfile.bio || "NO TRANSMISSION LOGS FOUND." }}
           </p>
         </div>
         
-        <button @click="isEditing = !isEditing" class="text-yellow-500 text-[9px] tracking-widest font-black italic border border-yellow-500/20 px-4 py-1.5 rounded-full hover:bg-yellow-500/5">
-            {{ isEditing ? "BATAL EDIT" : "MODIFIKASI BIODATA" }}
+        <button @click="isEditing = !isEditing" class="text-[8px] text-gray-700 tracking-[0.3em] font-black border border-white/5 px-4 py-2 rounded-xl hover:text-yellow-500 hover:border-yellow-500/20 transition-all uppercase">
+            {{ isEditing ? "CANCEL MODIFICATION" : "MODIFY BIODATA" }}
         </button>
       </div>
 
-      <div v-if="isEditing" class="mb-8 bg-white/[0.03] border border-white/5 rounded-[32px] p-6 space-y-4 animate-in fade-in duration-300">
-          <input v-model="editData.full_name" type="text" placeholder="Full Name" class="w-full bg-black border border-white/10 rounded-2xl p-5 text-xs text-white outline-none focus:border-yellow-500" />
-          <textarea v-model="editData.bio" rows="3" placeholder="Bio..." class="w-full bg-black border border-white/10 rounded-2xl p-5 text-xs text-white normal-case italic font-bold resize-none outline-none focus:border-yellow-500"></textarea>
-          <button @click="handleUpdate" class="w-full bg-yellow-500 text-black py-4 rounded-2xl font-black text-[10px] uppercase italic active:scale-95 transition-all">Save Changes</button>
+      <div v-if="isEditing" class="mb-8 bg-white/[0.02] border border-white/5 rounded-[32px] p-6 space-y-4">
+          <input v-model="editData.full_name" type="text" placeholder="Full Name" class="w-full bg-black border border-white/5 rounded-2xl p-5 text-xs text-white outline-none focus:border-white/20" />
+          <textarea v-model="editData.bio" rows="3" placeholder="Bio..." class="w-full bg-black border border-white/5 rounded-2xl p-5 text-xs text-white normal-case italic font-bold outline-none focus:border-white/20"></textarea>
+          <button @click="handleUpdate" class="w-full bg-white text-black py-4 rounded-2xl font-black text-[10px] uppercase italic active:scale-95 transition-all">Apply Changes</button>
       </div>
 
       <div class="grid grid-cols-2 gap-4 mb-8">
-        <router-link to="/wallet" class="bg-white/[0.03] border border-white/5 rounded-[32px] p-6 hover:bg-white/[0.06] transition-all group flex flex-col justify-between aspect-square">
+        <router-link to="/wallet" class="bg-white/[0.02] border border-white/5 rounded-[32px] p-6 hover:bg-white/[0.04] transition-all group flex flex-col justify-between aspect-square">
           <div class="flex justify-between items-start">
-            <div class="p-3 bg-yellow-500/10 rounded-2xl border border-yellow-500/20">
-                <BanknotesIcon class="w-5 h-5 text-yellow-500" />
+            <div class="p-2 bg-white/5 rounded-xl border border-white/5">
+                <BanknotesIcon class="w-4 h-4 text-white" />
             </div>
-            <ArrowUpRightIcon class="w-4 h-4 text-gray-700 group-hover:text-yellow-500 transition-colors" />
+            <ArrowUpRightIcon class="w-3.5 h-3.5 text-gray-800 group-hover:text-white transition-colors" />
           </div>
           <div>
-            <p class="text-[8px] text-gray-500 tracking-widest mb-1 font-black">SALDO AKTIF</p>
-            <p class="text-xl font-[1000] text-white">Rp {{ balance.toLocaleString() }}</p>
+            <p class="text-[7px] text-gray-600 tracking-[0.3em] mb-1 font-black italic">ACCOUNT BALANCE</p>
+            <p class="text-base font-[1000] text-white tracking-tighter">Rp {{ balance.toLocaleString() }}</p>
           </div>
         </router-link>
 
-        <router-link :to="`/user/${userProfile.username}`" class="bg-white/[0.03] border border-white/5 rounded-[32px] p-6 hover:bg-white/[0.06] transition-all group flex flex-col justify-between aspect-square">
+        <router-link :to="`/user/${userProfile.username}`" class="bg-white/[0.02] border border-white/5 rounded-[32px] p-6 hover:bg-white/[0.04] transition-all group flex flex-col justify-between aspect-square">
           <div class="flex justify-between items-start">
-            <div class="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20">
-                <UserIcon class="w-5 h-5 text-blue-500" />
+            <div class="p-2 bg-white/5 rounded-xl border border-white/5">
+                <IdentificationIcon class="w-4 h-4 text-white" />
             </div>
-            <ArrowUpRightIcon class="w-4 h-4 text-gray-700 group-hover:text-blue-500 transition-colors" />
+            <ArrowUpRightIcon class="w-3.5 h-3.5 text-gray-800 group-hover:text-white transition-colors" />
           </div>
           <div>
-            <p class="text-[8px] text-gray-500 tracking-widest mb-1 font-black">PUBLIC VIEW</p>
-            <p class="text-xl font-[1000] text-white">SWITCH <span class="text-blue-500">PROFILE</span></p>
+            <p class="text-[7px] text-gray-600 tracking-[0.3em] mb-1 font-black italic">VIEW IDENTITY</p>
+            <p class="text-base font-[1000] text-white tracking-tighter">PUBLIC <span class="text-gray-500">SWITCH</span></p>
           </div>
         </router-link>
       </div>
 
-      <div class="bg-white/[0.02] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl">
+      <div class="bg-white/[0.01] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl">
         <router-link
           v-for="(item, index) in [
-            { name: 'Notifikasi', path: '/notifications', count: unreadNotif, type: 'notif' },
-            { name: 'Pesan', path: '/messages', count: unreadCount, type: 'message' },
-            { name: 'Transaksi Saya', path: '/my-auctions', count: totalTx, type: 'deal' },
+            { name: 'Notifications', path: '/notifications', count: unreadNotif, type: 'notif' },
+            { name: 'Direct Messages', path: '/messages', count: unreadCount, type: 'message' },
+            { name: 'Transmission Logs', path: '/my-auctions', count: totalTx, type: 'deal' },
             { name: 'Inventory Vault', path: '/vault' },
-            { name: 'Account Settings', path: '/settings' },
+            { name: 'System Settings', path: '/settings' },
           ]"
           :key="item.path"
           :to="item.path"
-          class="flex items-center justify-between p-7 hover:bg-white/[0.04] transition-all border-white/5 border-b"
+          class="flex items-center justify-between p-7 hover:bg-white/[0.02] transition-all border-white/5"
+          :class="{ 'border-b': index !== 4 }"
         >
           <div class="flex items-center gap-4">
-            <span class="text-xs font-[1000] uppercase italic tracking-widest text-gray-200">{{ item.name }}</span>
+            <span class="text-[10px] font-[1000] uppercase italic tracking-[0.2em] text-gray-400">{{ item.name }}</span>
 
-            <div v-if="item.type === 'notif' && item.count > 0" class="w-2 h-2 bg-red-600 rounded-full animate-ping shadow-[0_0_8px_red]"></div>
-            <div v-if="item.type === 'message' && item.count > 0" class="bg-red-600 text-white text-[9px] px-2 py-0.5 rounded-full font-black animate-pulse">{{ item.count }}</div>
-            <div v-if="item.type === 'deal' && item.count > 0" class="text-[10px] text-yellow-500/40 italic font-black">{{ item.count }} DEALS</div>
+            <div v-if="item.type === 'notif' && item.count > 0" class="w-1.5 h-1.5 bg-red-600 rounded-full animate-pulse"></div>
+            <div v-if="item.type === 'message' && item.count > 0" class="bg-white text-black text-[8px] px-2 py-0.5 rounded-lg font-black">{{ item.count }}</div>
+            <div v-if="item.type === 'deal' && item.count > 0" class="text-[8px] text-yellow-500/40 italic font-black tracking-widest">{{ item.count }} DEALS</div>
           </div>
-          <ChevronRightIcon class="w-4 h-4 text-gray-800" />
+          <ChevronRightIcon class="w-3.5 h-3.5 text-gray-800" />
         </router-link>
       </div>
     </div>
