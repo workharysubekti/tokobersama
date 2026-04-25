@@ -143,15 +143,15 @@ const averageRating = computed(() => {
   return base;
 });
 
-const OWNER_ID = "68f80a52-d38c-4ac4-b483-8386026f436c";
 const userRank = computed(() => {
-  if (profile.value?.id === OWNER_ID)
+  if (profile.value?.is_admin) {
     return {
       name: "OWNER",
       color: "text-red-600",
       bg: "bg-red-600/10",
       icon: ShieldCheckIcon,
     };
+  }
   const rep = profile.value?.reputation || 0;
   const followers = followersCount.value;
   if (rep >= 500 || followers >= 100)
