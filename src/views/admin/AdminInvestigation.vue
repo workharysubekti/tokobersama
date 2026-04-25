@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from "vue";
-import { supabase } from "../lib/supabase";
+import { supabase } from "../../lib/supabase.js";
 
 const testData = ref("Koneksi Supabase OK");
 
