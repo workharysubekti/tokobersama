@@ -18,19 +18,26 @@ const loading = ref(true);
 const fetchReports = async () => {
   loading.value = true;
   try {
+    // Kita hapus bagian !reporter_id dan !product_id biar auto-detect
     const { data, error } = await supabase
       .from("reports")
       .select(
         `
         *,
-        reporter:profiles!reporter_id(username, full_name, avatar_url),
-        product:products!product_id(id, name, image_url, status)
+        profiles(username, full_name, avatar_url),
+        products(id, name, image_url, status)
       `,
       )
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    reports.value = data;
+
+    // Sesuaikan mapping data jika Supabase mengembalikan array atau object tunggal
+    reports.value = data.map((item) => ({
+      ...item,
+      reporter: item.profiles, // mapping manual biar template gak rusak
+      product: item.products,
+    }));
   } catch (err) {
     console.error("Fetch Error:", err);
     notify.error("System Error", "Gagal mengambil data investigasi.");
