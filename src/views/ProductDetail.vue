@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, onUnmounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../lib/supabase.js";
-import { notify } from "../utils/notify"; // Pastikan notify terimport
+import { notify } from "../utils/notify.js";
 import {
   ClockIcon,
   ArrowLeftIcon,
@@ -13,6 +13,7 @@ import {
   ArrowPathIcon,
   UserCircleIcon,
   TagIcon,
+  ExclamationTriangleIcon, // Icon untuk Report
 } from "@heroicons/vue/24/outline";
 
 const props = defineProps({ userProfile: Object });
@@ -26,6 +27,40 @@ const bidAmount = ref(0);
 const isSubmitting = ref(false);
 const timeLeft = ref("");
 
+// --- LOGIKA MULTI-IMAGE STACK ---
+const activeImgIndex = ref(0);
+const allImages = computed(() => {
+  if (!product.value) return [];
+  // Gabungkan foto utama dengan array foto tambahan
+  const extra = product.value.additional_images || [];
+  return [product.value.image_url, ...extra].filter((url) => url);
+});
+
+const nextImage = () => {
+  if (allImages.value.length <= 1) return;
+  activeImgIndex.value = (activeImgIndex.value + 1) % allImages.value.length;
+};
+
+// --- LOGIKA REPORT ---
+const submitReport = async () => {
+  if (!props.userProfile)
+    return notify.error("Akses Ditolak", "Login untuk melapor.");
+  const reason = prompt("Alasan melaporkan produk ini (Minimal 5 karakter):");
+  if (!reason || reason.length < 5) return;
+
+  try {
+    const { error } = await supabase.from("reports").insert({
+      product_id: product.value.id,
+      reporter_id: props.userProfile.id,
+      reason: reason,
+    });
+    if (error) throw error;
+    notify.success("Laporan Terkirim", "Admin akan segera meninjau aset ini.");
+  } catch (err) {
+    notify.error("Gagal Melapor", err.message);
+  }
+};
+
 let timerInterval = null;
 let bidSubscription = null;
 
@@ -37,7 +72,6 @@ const formatPrice = (price) => {
   }).format(price || 0);
 };
 
-// --- LOGIKA UTAMA: AMBIL BID TERTINGGI SECARA MUTLAK ---
 const fetchBids = async () => {
   if (!route.params.id) return;
   const { data } = await supabase
@@ -49,10 +83,8 @@ const fetchBids = async () => {
 
   if (data) {
     recentBids.value = data;
-    // Jika ada data bids, pastikan harga di UI mengikuti bid tertinggi ini
     if (data.length > 0 && product.value) {
       product.value.current_bid = data[0].amount;
-      // Update bidAmount otomatis jika tertinggal
       if (bidAmount.value <= data[0].amount) {
         bidAmount.value = Number(data[0].amount) + 10000;
       }
@@ -64,7 +96,6 @@ const fetchProductDetail = async () => {
   if (!route.params.id) return;
   loading.value = true;
   try {
-    // 1. Ambil Data Produk
     const { data, error } = await supabase
       .from("products")
       .select(
@@ -73,14 +104,9 @@ const fetchProductDetail = async () => {
       .eq("id", route.params.id)
       .maybeSingle();
 
-    if (error || !data) {
-      console.error("Asset not found");
-      return router.push("/");
-    }
-
+    if (error || !data) return router.push("/");
     product.value = data;
 
-    // 2. Ambil Bid Tertinggi secara manual (Teknik MyBids/Home)
     const { data: topBidData } = await supabase
       .from("bids")
       .select("amount")
@@ -89,12 +115,9 @@ const fetchProductDetail = async () => {
       .limit(1)
       .maybeSingle();
 
-    // 3. Tentukan Harga Tertinggi Aktif
     const highestPrice = topBidData
       ? topBidData.amount
       : data.current_bid || data.starting_bid || 0;
-
-    // Sinkronkan ke UI
     product.value.current_bid = highestPrice;
     bidAmount.value = Number(highestPrice) + 10000;
 
@@ -115,52 +138,41 @@ const updateTimer = () => {
     timeLeft.value = "ENDED";
     return;
   }
-
   const d = Math.floor(diff / (1000 * 60 * 60 * 24));
   const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   const s = Math.floor((diff % (1000 * 60)) / 1000);
-
-  if (d > 0) {
-    timeLeft.value = `${d}D ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  } else {
-    timeLeft.value = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  }
+  timeLeft.value =
+    d > 0
+      ? `${d}D ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+      : `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 };
 
 const goToSeller = () => {
-  if (product.value?.profiles?.username) {
+  if (product.value?.profiles?.username)
     router.push(`/user/${product.value.profiles.username}`);
-  }
 };
 
 const placeBid = async () => {
-  if (!props.userProfile) return alert("Login dulu bosku!");
+  if (!props.userProfile)
+    return notify.error("Auth Required", "Login dulu bosku!");
   if (isSubmitting.value || !product.value) return;
 
   const now = new Date().getTime();
   const end = new Date(product.value.end_time).getTime();
-  if (now >= end || timeLeft.value === "ENDED") {
-    return alert("Lelang sudah berakhir! Transmisi ditutup.");
-  }
+  if (now >= end || timeLeft.value === "ENDED")
+    return notify.error("Lelang Berakhir", "Transmisi ditutup.");
 
-  // Ambil harga tertinggi saat ini dari UI (yang sudah sinkron)
   const latestTopPrice =
     product.value.current_bid || product.value.starting_bid || 0;
-
   if (bidAmount.value <= latestTopPrice) {
-    notify.error(
-      "Bid Terlalu Rendah",
-      `Harga sudah naik ke ${formatPrice(latestTopPrice)}`,
-    );
+    notify.error("Bid Low", `Harga naik ke ${formatPrice(latestTopPrice)}`);
     bidAmount.value = Number(latestTopPrice) + 10000;
     return;
   }
 
   try {
     isSubmitting.value = true;
-
-    // 1. Insert ke tabel Bids
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
       user_id: props.userProfile.id,
@@ -168,19 +180,16 @@ const placeBid = async () => {
     });
     if (bidErr) throw bidErr;
 
-    // 2. Update tabel Products (untuk sinkronisasi legacy)
     await supabase
       .from("products")
       .update({ current_bid: bidAmount.value, winner_id: props.userProfile.id })
       .eq("id", product.value.id);
 
-    // Update UI Lokal langsung
     product.value.current_bid = bidAmount.value;
     bidAmount.value = Number(bidAmount.value) + 10000;
-
     notify.success("Gacor!", "Penawaran berhasil dikirim.");
   } catch (err) {
-    alert(err.message);
+    notify.error("Error", err.message);
   } finally {
     isSubmitting.value = false;
   }
@@ -193,7 +202,6 @@ onMounted(() => {
   if (route.params.id) {
     bidSubscription = supabase
       .channel(`live-auction-${route.params.id}`)
-      // DENGERIN TABEL BIDS (Sama seperti Home)
       .on(
         "postgres_changes",
         {
@@ -203,19 +211,17 @@ onMounted(() => {
           filter: `product_id=eq.${route.params.id}`,
         },
         (payload) => {
-          fetchBids(); // Refresh list bids
-          if (product.value) {
-            // Langsung timpa harga di layar detail dengan amount terbaru dari tabel bids
-            if (payload.new.amount > (product.value.current_bid || 0)) {
-              product.value.current_bid = payload.new.amount;
-              if (bidAmount.value <= payload.new.amount) {
-                bidAmount.value = Number(payload.new.amount) + 10000;
-              }
-            }
+          fetchBids();
+          if (
+            product.value &&
+            payload.new.amount > (product.value.current_bid || 0)
+          ) {
+            product.value.current_bid = payload.new.amount;
+            if (bidAmount.value <= payload.new.amount)
+              bidAmount.value = Number(payload.new.amount) + 10000;
           }
         },
       )
-      // DENGERIN TABEL PRODUCTS (Jika ada update info barang)
       .on(
         "postgres_changes",
         {
@@ -226,7 +232,6 @@ onMounted(() => {
         },
         (payload) => {
           if (product.value) {
-            // Update info dasar, tapi harga tetap diprioritaskan dari bids di atas
             product.value.status = payload.new.status;
             product.value.winner_id = payload.new.winner_id;
           }
@@ -263,28 +268,68 @@ onUnmounted(() => {
           Live Auction Feed
         </h1>
       </div>
-      <div class="w-10"></div>
+      <button
+        @click="submitReport"
+        class="p-2 hover:bg-red-500/10 rounded-xl transition-all text-red-500"
+      >
+        <ExclamationTriangleIcon class="w-6 h-6" />
+      </button>
     </div>
 
     <div v-if="!loading && product" class="pt-24 px-5 max-w-7xl mx-auto">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
         <div class="lg:col-span-7 space-y-10">
           <div
-            class="relative aspect-square md:aspect-video rounded-[40px] overflow-hidden border border-white/10 shadow-2xl bg-[#080808]"
+            class="relative w-full aspect-square md:aspect-video overflow-hidden mt-4"
           >
-            <img :src="product.image_url" class="w-full h-full object-cover" />
-            <div
-              class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60"
-            ></div>
-
-            <div
-              class="absolute bottom-6 left-6 bg-black/60 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-3"
-            >
-              <ClockIcon class="w-4 h-4 text-yellow-500 animate-pulse" />
-              <span
-                class="text-xs font-[1000] italic tracking-widest uppercase"
-                >{{ timeLeft }}</span
+            <div class="relative w-full h-full" @click="nextImage">
+              <div
+                v-for="(img, index) in allImages"
+                :key="index"
+                :class="[
+                  index < activeImgIndex ? '-translate-x-full opacity-0' : '',
+                  index === activeImgIndex ? 'z-30 scale-100 opacity-100' : '',
+                  index > activeImgIndex ? 'z-20 opacity-100' : '',
+                ]"
+                :style="{
+                  transform:
+                    index > activeImgIndex
+                      ? `translateX(${(index - activeImgIndex) * 15}px) scale(${1 - (index - activeImgIndex) * 0.05})`
+                      : '',
+                  zIndex: allImages.length - index,
+                }"
+                class="absolute inset-0 w-full h-full transition-all duration-500 ease-in-out cursor-pointer"
               >
+                <div
+                  class="w-full h-full rounded-[40px] border border-white/10 overflow-hidden shadow-2xl bg-[#080808]"
+                >
+                  <img
+                    :src="img"
+                    class="w-full h-full object-cover"
+                    :class="{ 'opacity-40': index !== activeImgIndex }"
+                  />
+                  <div
+                    class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60"
+                  ></div>
+                </div>
+              </div>
+
+              <div
+                class="absolute bottom-6 left-6 z-[40] bg-black/60 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-3"
+              >
+                <ClockIcon class="w-4 h-4 text-yellow-500 animate-pulse" />
+                <span
+                  class="text-xs font-[1000] italic tracking-widest uppercase"
+                  >{{ timeLeft }}</span
+                >
+              </div>
+
+              <div
+                v-if="allImages.length > 1"
+                class="absolute bottom-6 right-6 z-[40] bg-yellow-500 text-black px-4 py-1 rounded-full text-[10px] font-[1000] italic"
+              >
+                {{ activeImgIndex + 1 }} / {{ allImages.length }}
+              </div>
             </div>
           </div>
 
@@ -502,7 +547,6 @@ onUnmounted(() => {
               <div
                 class="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"
               ></div>
-
               <div class="flex items-center gap-4 mb-6">
                 <TrophyIcon class="w-6 h-6 text-green-500 animate-bounce" />
                 <h3
@@ -511,7 +555,6 @@ onUnmounted(() => {
                   Contract Finalized: Winner
                 </h3>
               </div>
-
               <div class="flex items-center gap-6">
                 <div
                   class="w-16 h-16 rounded-3xl bg-green-500/20 border border-green-500/40 flex items-center justify-center"
@@ -539,7 +582,6 @@ onUnmounted(() => {
                   </div>
                 </div>
               </div>
-
               <div class="mt-8 pt-6 border-t border-green-500/20">
                 <p
                   class="text-[10px] text-gray-500 font-black italic uppercase tracking-widest mb-1"

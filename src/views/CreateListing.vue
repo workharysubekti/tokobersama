@@ -24,7 +24,7 @@ const loading = ref(false);
 const uploading = ref(false);
 const duration = ref("3");
 
-// Kategori sesuai list terbaru Mas Hary
+// Kategori
 const categories = [
   "TCG & Kartu",
   "Action Figure",
@@ -118,7 +118,7 @@ const cropImage = async () => {
 
     notify.success("Asset Encoded", "Foto berhasil dikalibrasi.");
   } catch (error) {
-    // Tampilkan error yang lebih spesifik biar Mas tau rusaknya dimana
+    // Tampilkan error yang lebih spesifik
     notify.error(
       "Upload Failed",
       error.message || "Gangguan koneksi, silakan coba lagi.",
@@ -168,7 +168,7 @@ const createListing = async () => {
 
     if (error) throw error;
 
-    notify.success("Gacor!", "Lelang dikirim ke sistem approval!");
+    notify.success("Selamat!", "Lelang dikirim ke sistem approval!");
     router.push("/vault");
   } catch (error) {
     notify.error("System Error", error.message);
