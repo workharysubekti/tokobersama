@@ -279,12 +279,20 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="min-h-screen bg-black text-white font-[1000] pb-26 uppercase italic"
+    class="min-h-screen bg-black text-white font-sans uppercase italic font-[1000] pb-26"
   >
     <div v-if="profile" class="relative">
       <div
         class="sticky top-0 inset-x-0 z-[40] bg-black/80 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between lg:hidden"
       >
+        <div class="w-10"></div>
+      </div>
+
+      <div
+        class="h-48 bg-gradient-to-b from-yellow-500/10 to-transparent"
+      ></div>
+
+      <div class="max-w-2xl mx-auto px-6 -mt-20 flex flex-col items-center">
         <button
           @click="router.back()"
           class="p-2 bg-white/5 rounded-xl border border-white/10"
@@ -294,14 +302,6 @@ onUnmounted(() => {
         <p class="text-[10px] tracking-[0.3em] text-yellow-500">
           PROFILE TRANSMISSION
         </p>
-        <div class="w-10"></div>
-      </div>
-
-      <div
-        class="h-48 bg-gradient-to-b from-yellow-500/10 to-transparent"
-      ></div>
-
-      <div class="max-w-2xl mx-auto px-6 -mt-20 flex flex-col items-center">
         <div
           class="w-32 h-32 rounded-full border-4 border-black overflow-hidden shadow-2xl mb-6 bg-black"
         >
