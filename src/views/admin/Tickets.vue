@@ -23,10 +23,10 @@ const fetchReports = async () => {
       .from("reports")
       .select(
         `
-        *,
-        profiles(username, full_name, avatar_url),
-        products(id, name, image_url, status)
-      `,
+  *,
+  profiles(username, full_name, avatar_url),
+  products(id, name, image_url, status, user_id) // <-- Tambahkan user_id di sini
+`,
       )
       .order("created_at", { ascending: false });
 
@@ -63,31 +63,39 @@ const markReviewed = async (id) => {
 };
 
 // --- TINDAKAN 2: TAKE DOWN (Banned Asset) ---
-const takeDown = async (reportId, productId) => {
-  const confirmBanned = confirm("Take down aset ini secara permanen?");
+const takeDown = async (reportId, productId, sellerId) => {
+  if (!sellerId) return notify.error("Error", "ID Seller tidak ditemukan!");
+
+  const confirmBanned = confirm(
+    "Take down aset ini? Reputasi seller akan dipotong 50 poin.",
+  );
   if (!confirmBanned) return;
 
   try {
-    // 1. Update Status Produk
-    const { error: prodErr } = await supabase
+    // 1. Banned Produk
+    await supabase
       .from("products")
       .update({ status: "banned" })
       .eq("id", productId);
 
-    if (prodErr) throw prodErr;
+    // 2. Potong Reputasi (Panggil fungsi SQL tadi)
+    const { error: repErr } = await supabase.rpc("decrease_reputation", {
+      user_id: sellerId,
+      amount: 50,
+    });
 
-    // 2. Update Status Laporan
+    if (repErr) throw repErr;
+
+    // 3. Update Status Laporan
     await supabase
       .from("reports")
       .update({ status: "action_taken" })
       .eq("id", reportId);
 
-    notify.success(
-      "Asset Banned",
-      "Barang telah dihapus dari transmisi publik.",
-    );
+    notify.success("Justice Served", "Aset di-banned & Poin dipotong.");
     fetchReports();
   } catch (err) {
+    console.error("Gagal eksekusi hukuman:", err);
     notify.error("Execution Failed", err.message);
   }
 };
@@ -253,9 +261,14 @@ onMounted(() => {
 
                   <button
                     v-if="report.product?.status !== 'banned'"
-                    @click="takeDown(report.id, report.product_id)"
+                    @click="
+                      takeDown(
+                        report.id,
+                        report.product_id,
+                        report.product.user_id,
+                      )
+                    "
                     class="p-3 bg-red-600/10 rounded-xl hover:bg-red-600/20 transition-all border border-red-600/20"
-                    title="Banned Asset"
                   >
                     <TrashIcon class="w-4 h-4 text-red-600" />
                   </button>

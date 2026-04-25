@@ -19,6 +19,7 @@ import {
   FireIcon,
   TrophyIcon,
   XMarkIcon,
+  ExclamationTriangleIcon, // Import icon report
 } from "@heroicons/vue/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 
@@ -40,6 +41,11 @@ const followingCount = ref(0);
 const showReviewModal = ref(false);
 const submittingReview = ref(false);
 const newReview = ref({ rating: 5, comment: "" });
+
+// --- STATE REPORT MODAL ---
+const showReportModal = ref(false);
+const isSubmittingReport = ref(false);
+const reportForm = ref({ category: "Lainnya", details: "" });
 
 // Real-time currency bid
 const higherBids = ref([]);
@@ -64,13 +70,13 @@ const fetchData = async () => {
     if (profileError) throw profileError;
     profile.value = profileData;
 
-    // Ambil semua data pendukung secara Paralel (Followers, Following, Reviews, Products)
     const [productsRes, reviewsRes, followersRes, followingRes] =
       await Promise.all([
         supabase
           .from("products")
           .select("*")
           .eq("owner_id", profileData.id)
+          .neq("status", "banned") // Sembunyikan yang dibanned
           .order("created_at", { ascending: false }),
         supabase
           .from("reviews")
@@ -89,12 +95,10 @@ const fetchData = async () => {
           .eq("follower_id", profileData.id),
       ]);
 
-    // Set Data Reputasi & Social (Agar tidak 0/NaN)
     reviews.value = reviewsRes.data || [];
     followersCount.value = followersRes.count || 0;
     followingCount.value = followingRes.count || 0;
 
-    // Logika Real-time Bid untuk Listings
     const productsData = productsRes.data || [];
     if (productsData.length > 0) {
       const ProductsIds = productsData.map((p) => p.id);
@@ -133,24 +137,20 @@ const fetchData = async () => {
   }
 };
 
-const fetchHigherBids = async () => {
-  if (!profile.value?.id) return;
-  const { data, error } = await supabase
-    .from("bids")
-    .select("*, products(name, end_time)")
-    .eq("user_id", profile.value.id)
-    .order("created_at", { ascending: false });
-  if (!error) higherBids.value = data;
-};
-
-// --- LOGIKA REPUTASI ---
+// --- LOGIKA REPUTASI & RATING ---
 const averageRating = computed(() => {
   if (!reviews.value || reviews.value.length === 0) return "5.0";
   const sum = reviews.value.reduce((acc, curr) => acc + curr.rating, 0);
-  return (sum / reviews.value.length).toFixed(1);
+  let base = (sum / reviews.value.length).toFixed(1);
+
+  // Penalti Visual: Jika poin reputasi di database drop, rating ikut turun
+  if (profile.value?.reputation < 50) base = (Number(base) - 0.5).toFixed(1);
+  if (profile.value?.reputation < 0) base = "1.0";
+
+  return base;
 });
 
-// --- LOGIKA RANK BADGE (KODE SUCI) ---
+// --- LOGIKA RANK BADGE (KODE SUCI - UPDATED WITH REPUTATION) ---
 const OWNER_ID = "68f80a52-d38c-4ac4-b483-8386026f436c";
 const userRank = computed(() => {
   if (profile.value?.id === OWNER_ID)
@@ -160,28 +160,33 @@ const userRank = computed(() => {
       bg: "bg-red-600/10",
       icon: ShieldCheckIcon,
     };
-  const count = followersCount.value;
-  if (count >= 100)
+
+  const rep = profile.value?.reputation || 0;
+  const followers = followersCount.value;
+
+  // Rank Sekarang dihitung dari Reputasi & Followers
+  if (rep >= 500 || followers >= 100)
     return {
       name: "LEGEND",
       color: "text-yellow-500",
       bg: "bg-yellow-500/10",
       icon: TrophyIcon,
     };
-  if (count >= 30)
+  if (rep >= 200 || followers >= 30)
     return {
       name: "EXPERT",
       color: "text-red-500",
       bg: "bg-red-500/10",
       icon: FireIcon,
     };
-  if (count >= 10)
+  if (rep >= 100 || followers >= 10)
     return {
       name: "INTERMEDIATE",
       color: "text-purple-500",
       bg: "bg-purple-500/10",
       icon: BoltIcon,
     };
+
   return {
     name: "NEWBIE",
     color: "text-blue-500",
@@ -189,6 +194,28 @@ const userRank = computed(() => {
     icon: ShieldCheckIcon,
   };
 });
+
+const submitReport = async () => {
+  if (!currentUser.value) return router.push("/login");
+  if (reportForm.value.details.length < 5) return notify.error("Need details");
+  isSubmittingReport.value = true;
+  try {
+    const { error } = await supabase.from("reports").insert({
+      reporter_id: currentUser.value.id,
+      reason_category: reportForm.value.category,
+      reason: reportForm.value.details,
+      status: "pending",
+      // Di sini kita tidak kirim product_id karena ini report profil (Opsional)
+    });
+    if (error) throw error;
+    notify.success("Report Transmission Sent");
+    showReportModal.value = false;
+  } catch (e) {
+    notify.error("Report failed");
+  } finally {
+    isSubmittingReport.value = false;
+  }
+};
 
 const toggleFollow = async () => {
   if (!currentUser.value) return router.push("/login");
@@ -236,7 +263,6 @@ const submitReview = async () => {
   }
 };
 
-// --- REAL-TIME MONITORING ---
 watch(
   () => profile.value,
   (newVal) => {
@@ -247,9 +273,7 @@ watch(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "bids" },
           async (payload) => {
-            console.log("New Bid Detected, Refreshing Listings...");
             await fetchData();
-            await fetchHigherBids();
           },
         )
         .subscribe();
@@ -272,6 +296,21 @@ onUnmounted(() => {
     class="min-h-screen bg-black text-white font-sans uppercase italic font-[1000] pb-26"
   >
     <div v-if="profile" class="relative">
+      <button
+        @click="router.back()"
+        class="absolute top-6 left-6 z-50 p-2 bg-black/50 rounded-full border border-white/10"
+      >
+        <ArrowLeftIcon class="w-5 h-5" />
+      </button>
+
+      <button
+        v-if="currentUser && currentUser.id !== profile.id"
+        @click="showReportModal = true"
+        class="absolute top-6 right-6 z-50 p-2 bg-red-500/10 rounded-full border border-red-500/20 text-red-500"
+      >
+        <ExclamationTriangleIcon class="w-5 h-5" />
+      </button>
+
       <div
         class="h-48 bg-gradient-to-b from-yellow-500/10 to-transparent"
       ></div>
@@ -300,6 +339,13 @@ onUnmounted(() => {
           <div class="text-center">
             <p class="text-white text-lg mb-0.5">{{ followingCount }}</p>
             <p>FOLLOWING</p>
+          </div>
+          <div class="w-px h-8 bg-white/10"></div>
+          <div class="text-center">
+            <p class="text-white text-lg mb-0.5">
+              {{ profile.reputation || 0 }}
+            </p>
+            <p>REPUTATION</p>
           </div>
         </div>
 
@@ -428,6 +474,43 @@ onUnmounted(() => {
         >
           + LOG NEW OBSERVATION
         </button>
+      </div>
+    </div>
+
+    <div
+      v-if="showReportModal"
+      class="fixed inset-0 z-[200] flex items-center justify-center px-6"
+    >
+      <div
+        class="absolute inset-0 bg-black/90 backdrop-blur-md"
+        @click="showReportModal = false"
+      ></div>
+      <div
+        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-10 shadow-2xl overflow-hidden"
+      >
+        <div class="text-center mb-8">
+          <ExclamationTriangleIcon class="w-8 h-8 text-red-500 mx-auto mb-4" />
+          <h3 class="text-xl font-[1000] italic uppercase text-white">
+            Report Profil
+          </h3>
+        </div>
+        <div class="space-y-6">
+          <textarea
+            v-model="reportForm.details"
+            rows="4"
+            placeholder="Kenapa profil ini bermasalah?"
+            class="w-full bg-white/5 border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-red-500 resize-none italic"
+          ></textarea>
+          <button
+            @click="submitReport"
+            :disabled="isSubmittingReport"
+            class="w-full bg-red-600 text-white py-5 rounded-[24px] font-[1000] italic uppercase text-[10px]"
+          >
+            {{
+              isSubmittingReport ? "TRANSMITTING..." : "SUBMIT INVESTIGATION"
+            }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
