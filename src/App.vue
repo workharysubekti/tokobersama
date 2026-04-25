@@ -269,12 +269,8 @@ onMounted(async () => {
         :authReady="authReady"
         class="fixed top-0 inset-x-0 z-[100]"
       />
-      <main
-        :class="[
-          'min-h-screen transition-all',
-          !$route.meta.requiresAdmin ? 'pt-[64px]' : 'pt-0',
-        ]"
-      >
+
+      <main class="relative">
         <router-view
           v-if="authReady"
           :userProfile="userProfile"

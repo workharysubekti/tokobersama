@@ -167,9 +167,8 @@ const isSlotAvailable = computed(
 </script>
 
 <template>
-  <div
-    class="bg-black min-h-screen text-white antialiased overflow-x-hidden pt-16 md:pt-20"
-  >
+  <div class="bg-black min-h-screen">
+    <div class="h-16 w-full"></div>
     <section
       class="relative w-full h-[35vh] md:h-[60vh] flex items-center justify-center overflow-hidden bg-[#050505]"
     >
