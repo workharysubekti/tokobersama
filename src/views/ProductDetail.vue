@@ -78,7 +78,7 @@ const handleSwipe = () => {
   if (swipeDistance < -50) prevImage(); // Swipe Kanan ke Kiri
 };
 
-// --- LOGIKA REPORT ---
+// --- LOGIKA REPORT (FIXED) ---
 const showReportModal = ref(false);
 const isSubmittingReport = ref(false);
 const reportForm = ref({
@@ -103,12 +103,13 @@ const submitReport = async () => {
   try {
     isSubmittingReport.value = true;
 
-    // SESUAIKAN DENGAN NAMA KOLOM SQL MAS (product_id, reporter_id, reason_category, reason)
+    // UPDATE: Menambahkan target_user_id agar muncul di Admin Dashboard
     const { error } = await supabase.from("reports").insert({
       product_id: product.value.id,
       reporter_id: props.userProfile.id,
+      target_user_id: product.value.owner_id, // SINKRONISASI PEMILIK BARANG
       reason_category: reportForm.value.category,
-      reason: reportForm.value.details, // Kolom 'reason' di tabel
+      reason: reportForm.value.details,
       status: "pending",
     });
 
