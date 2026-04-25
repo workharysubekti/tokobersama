@@ -281,7 +281,7 @@ onUnmounted(() => {
   <div
     class="min-h-screen bg-black text-white font-[1000] pb-26 uppercase italic"
   >
-    <div v-if="!$route.meta.requiresAdmin" class="h-16 w-full lg:hidden">
+    <div v-if="profile" class="relative">
       <div
         class="sticky top-0 inset-x-0 z-[40] bg-black/80 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between lg:hidden"
       >
