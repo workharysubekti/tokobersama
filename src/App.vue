@@ -262,22 +262,21 @@ onMounted(async () => {
       </div>
     </transition>
 
-    <Header
-      v-if="!$route.meta.requiresAdmin"
-      :userProfile="userProfile"
-      :authReady="authReady"
-    />
-
-    <main
-      class="min-h-screen bg-black transition-all duration-300"
-      :class="{ 'pt-16': !$route.meta.requiresAdmin }"
-    >
-      <router-view
-        v-if="authReady"
+    <div class="min-h-screen grid grid-rows-[auto_1fr] bg-black">
+      <Header
+        v-if="!$route.meta.requiresAdmin"
         :userProfile="userProfile"
-        :key="$route.fullPath"
+        :authReady="authReady"
+        class="sticky top-0 z-[100]"
       />
-    </main>
+      <main class="relative">
+        <router-view
+          v-if="authReady"
+          :userProfile="userProfile"
+          :key="$route.fullPath"
+        />
+      </main>
+    </div>
 
     <BottomNav v-if="route.meta.showBottomNav" :userProfile="userProfile" />
 

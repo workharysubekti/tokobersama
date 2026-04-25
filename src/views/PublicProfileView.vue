@@ -215,12 +215,10 @@ const toggleFollow = async () => {
         .eq("following_id", profile.value.id);
       followersCount.value--;
     } else {
-      await supabase
-        .from("follows")
-        .insert({
-          follower_id: currentUser.value.id,
-          following_id: profile.value.id,
-        });
+      await supabase.from("follows").insert({
+        follower_id: currentUser.value.id,
+        following_id: profile.value.id,
+      });
       followersCount.value++;
     }
     isFollowing.value = !isFollowing.value;
@@ -234,14 +232,12 @@ const submitReview = async () => {
     return notify.error("Log entry required");
   submittingReview.value = true;
   try {
-    const { error } = await supabase
-      .from("reviews")
-      .insert({
-        target_user_id: profile.value.id,
-        reviewer_id: currentUser.value.id,
-        rating: newReview.value.rating,
-        comment: newReview.value.comment,
-      });
+    const { error } = await supabase.from("reviews").insert({
+      target_user_id: profile.value.id,
+      reviewer_id: currentUser.value.id,
+      rating: newReview.value.rating,
+      comment: newReview.value.comment,
+    });
     if (error) throw error;
     notify.success("Transmission logged");
     showReviewModal.value = false;
@@ -287,7 +283,7 @@ onUnmounted(() => {
   >
     <div v-if="profile" class="relative">
       <div
-        class="fixed top-0 inset-x-0 z-[60] bg-black/80 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between lg:hidden"
+        class="sticky top-0 inset-x-0 z-[40] bg-black/80 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between lg:hidden"
       >
         <button
           @click="router.back()"
@@ -305,7 +301,7 @@ onUnmounted(() => {
         class="h-48 bg-gradient-to-b from-yellow-500/10 to-transparent"
       ></div>
 
-      <div class="max-w-2xl mx-auto px-6 -mt-24 flex flex-col items-center">
+      <div class="max-w-2xl mx-auto px-6 -mt-20 flex flex-col items-center">
         <div
           class="w-32 h-32 rounded-full border-4 border-black overflow-hidden shadow-2xl mb-6 bg-black"
         >

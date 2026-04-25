@@ -319,7 +319,7 @@ onUnmounted(() => {
       <div class="w-10"></div>
     </div>
 
-    <div v-if="!loading && product" class="pt-24 px-5 max-w-7xl mx-auto">
+    <div v-if="!loading && product" class="pt-20 px-5 max-w-7xl mx-auto">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
         <div class="lg:col-span-7 space-y-10">
           <div
