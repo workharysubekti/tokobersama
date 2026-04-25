@@ -24,7 +24,7 @@ const loading = ref(false);
 const isEditing = ref(false);
 const fileInput = ref(null);
 
-const OWNER_ID = "68f80a52-d38c-4ac4-b483-8386026f436c";
+// OWNER_ID DIHAPUS - Kita beralih ke sistem is_admin database
 
 const totalTx = ref(0);
 const followersCount = ref(0);
@@ -116,8 +116,10 @@ const fetchUserStats = async () => {
   }
 };
 
+// --- LOGIKA RANK (DIPERBARUI) ---
 const userRank = computed(() => {
-  if (props.userProfile?.id === OWNER_ID) {
+  // Cek field is_admin langsung dari profil database
+  if (props.userProfile?.is_admin === true) {
     return {
       name: "OWNER",
       color: "text-red-600",
