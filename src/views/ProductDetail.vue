@@ -79,22 +79,48 @@ const handleSwipe = () => {
 };
 
 // --- LOGIKA REPORT ---
+const showReportModal = ref(false);
+const isSubmittingReport = ref(false);
+const reportForm = ref({
+  category: Palsu / Kw,
+  details: "",
+});
+
+const reportCategories = [
+  "Palsu / KW",
+  "Penipuan Harga",
+  "Foto Tidak Sesuai",
+  "Kategori Salah",
+  "Mengandung Unsur SARA/Pornografi",
+  "Lainnya",
+];
+
 const submitReport = async () => {
-  if (!props.userProfile)
-    return notify.error("Akses Ditolak", "Login untuk melapor.");
-  const reason = prompt("Alasan melaporkan produk ini (Minimal 5 karakter):");
-  if (!reason || reason.length < 5) return;
+  if (!props.userProfile) return notify.error("Auth Required", "Login dulu!");
+  if (reportForm.value.details.length < 5)
+    return notify.error("Data Kurang", "Berikan alasan minimal 5 karakter.");
+
   try {
+    isSubmittingReport.value = true;
+
+    // SESUAIKAN DENGAN NAMA KOLOM SQL MAS (product_id, reporter_id, reason_category, reason)
     const { error } = await supabase.from("reports").insert({
       product_id: product.value.id,
       reporter_id: props.userProfile.id,
       reason_category: reportForm.value.category,
-      reason: reportForm.value.details,
+      reason: reportForm.value.details, // Kolom 'reason' di tabel
+      status: "pending",
     });
+
     if (error) throw error;
-    notify.success("Laporan Terkirim", "Admin akan segera meninjau aset ini.");
+
+    notify.success("Laporan Masuk", "Admin akan segera meninjau aset ini.");
+    showReportModal.value = false;
+    reportForm.value.details = ""; // Reset form
   } catch (err) {
-    notify.error("Gagal Melapor", err.message);
+    notify.error("Gagal Mengirim", err.message);
+  } finally {
+    isSubmittingReport.value = false;
   }
 };
 
@@ -572,6 +598,95 @@ onUnmounted(() => {
       >
         Scanning Frequency...
       </p>
+    </div>
+    <div
+      v-if="showReportModal"
+      class="fixed inset-0 z-[200] flex items-center justify-center px-6"
+    >
+      <div
+        class="absolute inset-0 bg-black/90 backdrop-blur-md"
+        @click="showReportModal = false"
+      ></div>
+
+      <div
+        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-8 lg:p-10 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300"
+      >
+        <div
+          class="absolute -top-24 -right-24 w-48 h-48 bg-red-600/10 rounded-full blur-3xl"
+        ></div>
+
+        <div class="text-center mb-8">
+          <div
+            class="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-red-500/20"
+          >
+            <ExclamationTriangleIcon class="w-8 h-8 text-red-500" />
+          </div>
+          <h3
+            class="text-xl font-[1000] italic uppercase tracking-tighter text-white"
+          >
+            Report Asset
+          </h3>
+          <p
+            class="text-[9px] font-black text-gray-500 tracking-[0.3em] uppercase mt-1"
+          >
+            Maintenance Security System
+          </p>
+        </div>
+
+        <div class="space-y-6">
+          <div>
+            <label
+              class="text-[9px] font-black text-gray-600 uppercase tracking-widest block mb-3 italic"
+              >Reason Category</label
+            >
+            <select
+              v-model="reportForm.category"
+              class="w-full bg-black border border-white/10 rounded-2xl p-4 text-xs font-bold text-white outline-none focus:border-red-500 transition-all appearance-none cursor-pointer"
+            >
+              <option
+                v-for="cat in reportCategories"
+                :key="cat"
+                :value="cat"
+                class="bg-gray-900"
+              >
+                {{ cat }}
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label
+              class="text-[9px] font-black text-gray-600 uppercase tracking-widest block mb-3 italic"
+              >Additional Details</label
+            >
+            <textarea
+              v-model="reportForm.details"
+              rows="4"
+              placeholder="Jelaskan alasan pelaporan secara rinci..."
+              class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs font-bold text-white outline-none focus:border-red-500 resize-none normal-case italic"
+            ></textarea>
+          </div>
+
+          <div class="flex gap-3">
+            <button
+              @click="showReportModal = true"
+              class="flex items-center gap-2 bg-red-500/10 px-3 py-1.5 rounded-full border border-red-500/20 active:scale-95 transition-all"
+            >
+              <ExclamationTriangleIcon class="w-3.5 h-3.5 text-red-500" />
+              <span class="text-[8px] font-black text-red-500 uppercase italic"
+                >Report</span
+              >
+            </button>
+            <button
+              @click="submitReport"
+              :disabled="isSubmittingReport"
+              class="flex-[2] bg-red-600 text-white py-5 rounded-[24px] font-[1000] italic uppercase tracking-[0.1em] text-[10px] active:scale-95 transition-all shadow-lg shadow-red-600/20 disabled:opacity-50"
+            >
+              {{ isSubmittingReport ? "TRANSMITTING..." : "CONFIRM REPORT" }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
