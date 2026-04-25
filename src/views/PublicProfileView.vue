@@ -293,7 +293,7 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="min-h-screen bg-black text-white font-sans uppercase italic font-[1000] pt-28 pb-26"
+    class="min-h-screen bg-black text-white font-sans uppercase italic font-[1000] pt-25 pb-26"
   >
     <div v-if="profile" class="relative">
       <button
