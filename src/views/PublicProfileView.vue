@@ -283,8 +283,17 @@ onUnmounted(() => {
   >
     <div v-if="profile" class="relative">
       <div
-        class="sticky top-0 inset-x-0 z-[40] bg-black/80 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between lg:hidden"
+        class="flex items-center justify-between px-6 py-6 border-b border-white/5 bg-black lg:hidden"
       >
+        <button
+          @click="router.back()"
+          class="p-2 bg-white/5 rounded-xl border border-white/10 active:scale-90 transition-all"
+        >
+          <ArrowLeftIcon class="w-5 h-5" />
+        </button>
+        <p class="text-[10px] tracking-[0.3em] text-yellow-500">
+          PROFILE TRANSMISSION
+        </p>
         <div class="w-10"></div>
       </div>
 
@@ -292,16 +301,7 @@ onUnmounted(() => {
         class="h-48 bg-gradient-to-b from-yellow-500/10 to-transparent"
       ></div>
 
-      <div class="max-w-2xl mx-auto px-6 -mt-20 flex flex-col items-center">
-        <button
-          @click="router.back()"
-          class="p-2 bg-white/5 rounded-xl border border-white/10"
-        >
-          <ArrowLeftIcon class="w-5 h-5" />
-        </button>
-        <p class="text-[10px] tracking-[0.3em] text-yellow-500">
-          PROFILE TRANSMISSION
-        </p>
+      <div class="max-w-2xl mx-auto px-6 -mt-16 flex flex-col items-center">
         <div
           class="w-32 h-32 rounded-full border-4 border-black overflow-hidden shadow-2xl mb-6 bg-black"
         >
@@ -349,14 +349,12 @@ onUnmounted(() => {
           >
             {{ isFollowing ? "UNFOLLOW" : "FOLLOW" }}
           </button>
-
           <button
             @click="router.push(`/messages/${profile.id}`)"
             class="flex-1 p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center hover:bg-white/10 transition-all"
           >
             <ChatBubbleLeftEllipsisIcon class="w-5 h-5 text-yellow-500" />
           </button>
-
           <button
             v-if="currentUser && currentUser.id !== profile.id"
             @click="showReportModal = true"
@@ -385,141 +383,6 @@ onUnmounted(() => {
             <span class="text-[11px] font-[1000] tracking-widest italic"
               >{{ averageRating }}/5.0</span
             >
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="profile" class="max-w-2xl mx-auto px-6 mt-12">
-      <div class="flex border-b border-white/5 mb-8">
-        <button
-          v-for="tab in ['transmissions', 'observations']"
-          :key="tab"
-          @click="activeTab = tab"
-          :class="
-            activeTab === tab
-              ? 'text-yellow-500 border-b-2 border-yellow-500'
-              : 'text-gray-600'
-          "
-          class="flex-1 py-4 text-[10px] tracking-[0.3em] font-black uppercase"
-        >
-          {{ tab }}
-        </button>
-      </div>
-
-      <div v-if="activeTab === 'transmissions'" class="grid grid-cols-2 gap-4">
-        <div
-          v-for="item in listings"
-          :key="item.id"
-          @click="router.push(`/product/${item.id}`)"
-          class="bg-white/[0.02] border border-white/5 rounded-3xl overflow-hidden aspect-square relative group cursor-pointer"
-        >
-          <img
-            :src="item.image_url"
-            class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all"
-          />
-          <div class="absolute bottom-4 left-4 right-4">
-            <p class="text-[10px] truncate mb-1">{{ item.name }}</p>
-            <p class="text-yellow-500 text-xs">
-              IDR {{ item.display_price?.toLocaleString() }}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="activeTab === 'observations'" class="space-y-4">
-        <div
-          v-for="review in reviews"
-          :key="review.id"
-          class="bg-white/[0.02] border border-white/5 rounded-3xl p-6"
-        >
-          <div class="flex justify-between items-start mb-4">
-            <div class="flex items-center gap-3">
-              <img
-                :src="review.reviewer?.avatar_url"
-                class="w-8 h-8 rounded-full border border-white/10"
-              />
-              <div>
-                <p class="text-[10px] text-white">
-                  @{{ review.reviewer?.username }}
-                </p>
-                <div class="flex gap-0.5 mt-1">
-                  <StarIconSolid
-                    v-for="i in 5"
-                    :key="i"
-                    :class="
-                      i <= review.rating ? 'text-yellow-500' : 'text-gray-900'
-                    "
-                    class="w-2.5 h-2.5"
-                  />
-                </div>
-              </div>
-            </div>
-            <span class="text-[8px] text-gray-700">{{
-              new Date(review.created_at).toLocaleDateString()
-            }}</span>
-          </div>
-          <p
-            class="text-[11px] leading-relaxed text-gray-400 normal-case italic font-bold"
-          >
-            {{ review.comment }}
-          </p>
-        </div>
-        <button
-          v-if="currentUser && currentUser.id !== profile.id"
-          @click="showReviewModal = true"
-          class="w-full py-4 bg-white/5 border border-dashed border-white/10 rounded-2xl text-[10px] tracking-widest text-gray-500 hover:text-yellow-500 mb-10"
-        >
-          + LOG NEW OBSERVATION
-        </button>
-      </div>
-    </div>
-
-    <div
-      v-if="showReportModal"
-      class="fixed inset-0 z-[200] flex items-center justify-center px-6"
-    >
-      <div
-        class="absolute inset-0 bg-black/95 backdrop-blur-lg"
-        @click="showReportModal = false"
-      ></div>
-      <div
-        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-10 shadow-2xl overflow-hidden"
-      >
-        <div class="text-center mb-8">
-          <div
-            class="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-red-500/20"
-          >
-            <ExclamationTriangleIcon class="w-8 h-8 text-red-500" />
-          </div>
-          <h3 class="text-xl font-black italic uppercase text-white">
-            Report Profil
-          </h3>
-          <p class="text-[9px] text-gray-500 tracking-[0.3em] uppercase mt-1">
-            Maintenance Security
-          </p>
-        </div>
-        <div class="space-y-6">
-          <textarea
-            v-model="reportForm.details"
-            rows="4"
-            placeholder="Alasan pelaporan..."
-            class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-red-500 resize-none italic"
-          ></textarea>
-          <div class="flex gap-3">
-            <button
-              @click="showReportModal = false"
-              class="flex-1 py-5 bg-white/5 rounded-3xl text-[10px] font-black"
-            >
-              CANCEL
-            </button>
-            <button
-              @click="submitReport"
-              :disabled="isSubmittingReport"
-              class="flex-[2] bg-red-600 text-white py-5 rounded-3xl font-black text-[10px] italic"
-            >
-              {{ isSubmittingReport ? "TRANSMITTING..." : "CONFIRM REPORT" }}
-            </button>
           </div>
         </div>
       </div>
