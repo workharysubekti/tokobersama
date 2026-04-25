@@ -22,7 +22,8 @@ import {
   ExclamationTriangleIcon,
   ArchiveBoxIcon,
   ShoppingBagIcon,
-  CheckBadgeIcon
+  CheckBadgeIcon,
+  InboxStackIcon
 } from "@heroicons/vue/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 
@@ -31,14 +32,17 @@ const router = useRouter();
 const username = route.params.username;
 
 const profile = ref(null);
-const listings = ref([]); // Tab LIVE
-const soldItems = ref([]); // Tab RECORDS (Sold)
-const wonItems = ref([]); // Tab RECORDS (Won)
+const listings = ref([]); 
+const soldItems = ref([]); 
+const wonItems = ref([]); 
+const archivedItems = ref([]); // Tambahan untuk Archive
 const reviews = ref([]);
 const loading = ref(true);
 const isFollowing = ref(false);
 const currentUser = ref(null);
-const activeTab = ref("live"); // Default ke LIVE
+
+const activeTab = ref("live");
+const activeRecordTab = ref("sold"); // Sub-tab default untuk Records
 
 const followersCount = ref(0);
 const followingCount = ref(0);
@@ -68,30 +72,35 @@ const fetchData = async () => {
     if (profileError) throw profileError;
     profile.value = profileData;
 
-    // AMBIL SEMUA DATA (LIVE, SOLD, WON, REVIEWS, STATS)
-    const [liveRes, soldRes, wonRes, reviewsRes, followersRes, followingRes] =
+    const now = new Date().toISOString();
+
+    const [liveRes, soldRes, wonRes, archRes, reviewsRes, followersRes, followingRes] =
       await Promise.all([
-        // 1. LIVE AUCTIONS (Status Active)
-        supabase.from("products").select("*").eq("owner_id", profileData.id).eq("status", "active").order("created_at", { ascending: false }),
-        // 2. SOLD ITEMS (Status Closed & Owner adalah dia)
-        supabase.from("products").select("*").eq("owner_id", profileData.id).eq("status", "closed").order("updated_at", { ascending: false }),
-        // 3. WON ITEMS (Status Closed & Winner adalah dia)
+        // 1. LIVE
+        supabase.from("products").select("*").eq("owner_id", profileData.id).eq("status", "active").gt("end_time", now).order("created_at", { ascending: false }),
+        
+        // 2. SOLD: Barang dia laku (Status closed & owner dia)
+        supabase.from("products").select("*").eq("owner_id", profileData.id).eq("status", "closed").not("winner_id", "is", null).order("updated_at", { ascending: false }),
+        
+        // 3. BOUGHT: Barang dia beli (Winner dia)
         supabase.from("products").select("*").eq("winner_id", profileData.id).eq("status", "closed").order("updated_at", { ascending: false }),
-        // 4. REVIEWS
+
+        // 4. ARCHIVE: Barang dia yang sudah berakhir (Apapun statusnya yang penting sudah end_time)
+        supabase.from("products").select("*").eq("owner_id", profileData.id).lt("end_time", now).order("end_time", { ascending: false }),
+        
+        // 5. REVIEWS & FOLLOWS
         supabase.from("reviews").select("*, reviewer:profiles!reviews_reviewer_id_fkey(username, avatar_url)").eq("target_user_id", profileData.id).order("created_at", { ascending: false }),
-        // 5. FOLLOWERS
         supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", profileData.id),
-        // 6. FOLLOWING
         supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", profileData.id),
       ]);
 
     reviews.value = reviewsRes.data || [];
     soldItems.value = soldRes.data || [];
     wonItems.value = wonRes.data || [];
+    archivedItems.value = archRes.data || [];
     followersCount.value = followersRes.count || 0;
     followingCount.value = followingRes.count || 0;
 
-    // Map harga tertinggi untuk LIVE listings
     const productsData = liveRes.data || [];
     if (productsData.length > 0) {
       const ProductsIds = productsData.map((p) => p.id);
@@ -111,11 +120,8 @@ const fetchData = async () => {
       const { data: followData } = await supabase.from("follows").select("id").eq("follower_id", currentUser.value.id).eq("following_id", profileData.id).single();
       isFollowing.value = !!followData;
     }
-  } catch (error) {
-    console.error("Error fetching profile:", error.message);
-  } finally {
-    loading.value = false;
-  }
+  } catch (error) { console.error("Error:", error.message); }
+  finally { loading.value = false; }
 };
 
 const averageRating = computed(() => {
@@ -123,19 +129,15 @@ const averageRating = computed(() => {
   const sum = reviews.value.reduce((acc, curr) => acc + curr.rating, 0);
   let base = (sum / reviews.value.length).toFixed(1);
   if (profile.value?.reputation < 50) base = (Number(base) - 0.5).toFixed(1);
-  if (profile.value?.reputation < 0) base = "1.0";
   return base;
 });
 
 const userRank = computed(() => {
-  if (profile.value?.is_admin) {
-    return { name: "OWNER", color: "text-red-600", bg: "bg-red-600/10", icon: ShieldCheckIcon };
-  }
+  if (profile.value?.is_admin) return { name: "OWNER", color: "text-red-600", bg: "bg-red-600/10", icon: ShieldCheckIcon };
   const rep = profile.value?.reputation || 0;
-  const followers = followersCount.value;
-  if (rep >= 500 || followers >= 100) return { name: "LEGEND", color: "text-yellow-500", bg: "bg-yellow-500/10", icon: TrophyIcon };
-  if (rep >= 200 || followers >= 30) return { name: "EXPERT", color: "text-red-500", bg: "bg-red-600/10", icon: FireIcon };
-  return { name: "NEWBIE", color: "text-blue-500", bg: "bg-blue-500/10", icon: ShieldCheckIcon };
+  if (rep >= 500) return { name: "LEGEND", color: "text-yellow-500", bg: "bg-yellow-500/10", icon: TrophyIcon };
+  if (rep >= 200) return { name: "EXPERT", color: "text-red-500", bg: "bg-red-600/10", icon: FireIcon };
+  return { name: "MEMBER", color: "text-blue-500", bg: "bg-blue-500/10", icon: ShieldCheckIcon };
 });
 
 const toggleFollow = async () => {
@@ -146,27 +148,20 @@ const toggleFollow = async () => {
       followersCount.value--;
     } else {
       await supabase.from("follows").insert({ follower_id: currentUser.value.id, following_id: profile.value.id });
-      
-      // LOGIKA NOTIFIKASI FOLLOW / FOLLOW BACK
       const { data: checkBack } = await supabase.from("follows").select("id").eq("follower_id", profile.value.id).eq("following_id", currentUser.value.id).single();
       const isFB = !!checkBack;
-      
       await supabase.from("notifications").insert({
         user_id: profile.value.id,
         title: isFB ? "Follow Back!" : "New Follower!",
         message: `@${currentUser.value.user_metadata.username || 'Seseorang'} ${isFB ? 'mengikuti balik Anda.' : 'mulai mengikuti Anda.'}`,
         type: "activity"
       });
-
       followersCount.value++;
     }
     isFollowing.value = !isFollowing.value;
-  } catch (error) {
-    notify.error("Action failed");
-  }
+  } catch (error) { notify.error("Action failed"); }
 };
 
-// --- LOGIKA REPORT & REVIEW TETAP SAMA (SUCI) ---
 const submitReport = async () => {
   if (!currentUser.value) return router.push("/login");
   if (reportForm.value.details.length < 5) return notify.error("Need details");
@@ -214,11 +209,11 @@ onUnmounted(() => { if (bidSubscription) supabase.removeChannel(bidSubscription)
 <template>
   <div class="min-h-screen bg-black text-white font-sans uppercase italic font-[1000] pb-26">
     <div v-if="profile" class="relative">
-      <div class="flex items-center justify-between px-6 py-6 border-b border-white/5 bg-black">
+      <div class="flex items-center justify-between px-6 py-6 border-b border-white/5 bg-black sticky top-0 z-50">
         <button @click="router.back()" class="p-2 bg-white/5 rounded-xl border border-white/10 active:scale-90 transition-all">
           <ArrowLeftIcon class="w-5 h-5" />
         </button>
-        <p class="text-[10px] tracking-[0.3em] text-yellow-500">Profile Transmission</p>
+        <p class="text-[10px] tracking-[0.3em] text-yellow-500 uppercase">Profile Transmission</p>
         <div class="w-10"></div>
       </div>
 
@@ -272,7 +267,7 @@ onUnmounted(() => { if (bidSubscription) supabase.removeChannel(bidSubscription)
     </div>
 
     <div v-if="profile" class="max-w-2xl mx-auto px-6 mt-12">
-      <div class="flex border-b border-white/5 mb-8 bg-black sticky top-0 z-20">
+      <div class="flex border-b border-white/5 mb-8 bg-black sticky top-16 z-40">
         <button v-for="tab in ['live', 'records', 'reviews']" :key="tab" @click="activeTab = tab" 
           :class="activeTab === tab ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-600'" 
           class="flex-1 py-4 text-[10px] tracking-[0.3em] font-black uppercase italic">
@@ -283,37 +278,49 @@ onUnmounted(() => { if (bidSubscription) supabase.removeChannel(bidSubscription)
       <div v-if="activeTab === 'live'" class="grid grid-cols-2 gap-4">
         <div v-for="item in listings" :key="item.id" @click="router.push(`/product/${item.id}`)" class="bg-white/[0.02] border border-white/5 rounded-3xl overflow-hidden aspect-square relative group cursor-pointer">
           <img :src="item.image_url" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all" />
-          <div class="absolute bottom-4 left-4 right-4">
-            <p class="text-[10px] truncate mb-1">{{ item.name }}</p>
-            <p class="text-yellow-500 text-xs font-black">IDR {{ item.display_price?.toLocaleString() }}</p>
-          </div>
+          <div v-if="item.is_priority" class="absolute top-2 right-2 bg-yellow-500 p-1.5 rounded-full shadow-xl border-2 border-black z-10"><StarIconSolid class="w-2.5 h-2.5 text-black" /></div>
+          <div class="absolute bottom-4 left-4 right-4"><p class="text-[10px] truncate mb-1 text-white">{{ item.name }}</p><p class="text-yellow-500 text-xs font-black italic">IDR {{ item.display_price?.toLocaleString() }}</p></div>
         </div>
         <div v-if="listings.length === 0" class="col-span-2 py-20 text-center opacity-20"><ArchiveBoxIcon class="w-12 h-12 mx-auto mb-4" /><p class="text-[8px] tracking-[0.5em]">NO LIVE TRANSMISSIONS</p></div>
       </div>
 
-      <div v-if="activeTab === 'records'" class="space-y-10">
-        <section>
-          <div class="flex items-center gap-3 mb-6"><ShoppingBagIcon class="w-5 h-5 text-blue-500" /><h4 class="text-[10px] tracking-widest text-blue-500">ASSETS DEPLOYED (SOLD)</h4></div>
-          <div class="grid grid-cols-2 gap-4">
-            <div v-for="item in soldItems" :key="item.id" class="bg-white/5 border border-white/5 rounded-3xl p-3 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
-              <img :src="item.image_url" class="w-full h-24 object-cover rounded-2xl mb-3" />
-              <p class="text-[9px] truncate font-black">{{ item.name }}</p>
-            </div>
-          </div>
-          <div v-if="soldItems.length === 0" class="py-10 text-center opacity-10 text-[8px] tracking-widest">NO SALES HISTORY</div>
-        </section>
+      <div v-if="activeTab === 'records'" class="space-y-6">
+        <div class="flex gap-2 p-1 bg-white/[0.03] border border-white/5 rounded-2xl">
+          <button v-for="sub in [{id:'sold', name:'SOLD'}, {id:'bought', name:'BOUGHT'}, {id:'archived', name:'ARCHIVE'}]" :key="sub.id"
+            @click="activeRecordTab = sub.id"
+            :class="activeRecordTab === sub.id ? 'bg-white/10 text-white shadow-lg' : 'text-gray-600'"
+            class="flex-1 py-2.5 rounded-xl text-[8px] font-black tracking-widest transition-all italic">
+            {{ sub.name }}
+          </button>
+        </div>
 
-        <section class="pt-10 border-t border-white/5">
-          <div class="flex items-center gap-3 mb-6"><TrophyIcon class="w-5 h-5 text-green-500" /><h4 class="text-[10px] tracking-widest text-green-500">AUCTION VICTORIES (WON)</h4></div>
-          <div class="grid grid-cols-2 gap-4">
-            <div v-for="item in wonItems" :key="item.id" class="bg-white/5 border border-white/5 rounded-3xl p-3 relative opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
-              <img :src="item.image_url" class="w-full h-24 object-cover rounded-2xl mb-3" />
-              <p class="text-[9px] truncate font-black">{{ item.name }}</p>
-              <CheckBadgeIcon class="absolute top-2 right-2 w-5 h-5 text-green-500 drop-shadow-lg" />
+        <div v-if="activeRecordTab === 'sold'" class="grid grid-cols-2 gap-4 animate-in fade-in duration-500">
+          <div v-for="item in soldItems" :key="item.id" class="bg-white/5 border border-white/5 rounded-3xl p-3 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
+            <img :src="item.image_url" class="w-full h-24 object-cover rounded-2xl mb-3" />
+            <p class="text-[9px] truncate font-black italic">{{ item.name }}</p>
+          </div>
+          <div v-if="soldItems.length === 0" class="col-span-2 py-20 text-center opacity-10 text-[8px] tracking-widest uppercase italic">Empty Vault</div>
+        </div>
+
+        <div v-if="activeRecordTab === 'bought'" class="grid grid-cols-2 gap-4 animate-in fade-in duration-500">
+          <div v-for="item in wonItems" :key="item.id" class="bg-white/5 border border-white/5 rounded-3xl p-3 relative opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all">
+            <img :src="item.image_url" class="w-full h-24 object-cover rounded-2xl mb-3" />
+            <p class="text-[9px] truncate font-black italic">{{ item.name }}</p>
+            <CheckBadgeIcon class="absolute top-2 right-2 w-5 h-5 text-green-500 drop-shadow-lg" />
+          </div>
+          <div v-if="wonItems.length === 0" class="col-span-2 py-20 text-center opacity-10 text-[8px] tracking-widest uppercase italic">No Victories Recorded</div>
+        </div>
+
+        <div v-if="activeRecordTab === 'archived'" class="grid grid-cols-2 gap-4 animate-in fade-in duration-500">
+          <div v-for="item in archivedItems" :key="item.id" class="bg-white/5 border border-white/5 rounded-3xl p-3 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all flex flex-col">
+            <img :src="item.image_url" class="w-full h-24 object-cover rounded-2xl mb-3" />
+            <div class="flex justify-between items-center">
+              <p class="text-[9px] truncate font-black italic flex-1">{{ item.name }}</p>
+              <span class="text-[7px] text-gray-500 ml-2">ENDED</span>
             </div>
           </div>
-          <div v-if="wonItems.length === 0" class="py-10 text-center opacity-10 text-[8px] tracking-widest">NO VICTORIES RECORDED</div>
-        </section>
+          <div v-if="archivedItems.length === 0" class="col-span-2 py-20 text-center opacity-10 text-[8px] tracking-widest uppercase italic">No Archive History</div>
+        </div>
       </div>
 
       <div v-if="activeTab === 'reviews'" class="space-y-4">
@@ -321,16 +328,13 @@ onUnmounted(() => { if (bidSubscription) supabase.removeChannel(bidSubscription)
           <div class="flex justify-between items-start mb-4">
             <div class="flex items-center gap-3">
               <img :src="review.reviewer?.avatar_url" class="w-8 h-8 rounded-full border border-white/10" />
-              <div>
-                <p class="text-[10px] text-white">@{{ review.reviewer?.username }}</p>
-                <div class="flex gap-0.5 mt-1"><StarIconSolid v-for="i in 5" :key="i" :class="i <= review.rating ? 'text-yellow-500' : 'text-gray-900'" class="w-2.5 h-2.5" /></div>
-              </div>
+              <div><p class="text-[10px] text-white">@{{ review.reviewer?.username }}</p><div class="flex gap-0.5 mt-1"><StarIconSolid v-for="i in 5" :key="i" :class="i <= review.rating ? 'text-yellow-500' : 'text-gray-900'" class="w-2.5 h-2.5" /></div></div>
             </div>
-            <span class="text-[8px] text-gray-700">{{ new Date(review.created_at).toLocaleDateString() }}</span>
+            <span class="text-[8px] text-gray-700 italic font-black uppercase">{{ new Date(review.created_at).toLocaleDateString() }}</span>
           </div>
           <p class="text-[11px] leading-relaxed text-gray-400 normal-case italic font-bold">"{{ review.comment }}"</p>
         </div>
-        <button v-if="currentUser && currentUser.id !== profile.id" @click="showReviewModal = true" class="w-full py-4 bg-white/5 border border-dashed border-white/10 rounded-2xl text-[10px] tracking-widest text-gray-500 hover:text-yellow-500 mb-10">
+        <button v-if="currentUser && currentUser.id !== profile.id" @click="showReviewModal = true" class="w-full py-4 bg-white/5 border border-dashed border-white/10 rounded-2xl text-[10px] tracking-widest text-gray-500 hover:text-yellow-500 mb-10 italic font-black">
           + LOG NEW OBSERVATION
         </button>
       </div>
@@ -338,16 +342,13 @@ onUnmounted(() => { if (bidSubscription) supabase.removeChannel(bidSubscription)
 
     <div v-if="showReportModal" class="fixed inset-0 z-[200] flex items-center justify-center px-6">
       <div class="absolute inset-0 bg-black/95 backdrop-blur-lg" @click="showReportModal = false"></div>
-      <div class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-10 shadow-2xl overflow-hidden">
-        <div class="text-center mb-8">
-          <div class="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-red-500/20"><ExclamationTriangleIcon class="w-8 h-8 text-red-500" /></div>
-          <h3 class="text-xl font-black italic uppercase text-white">Report Profil</h3>
-        </div>
+      <div class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-10 shadow-2xl">
+        <div class="text-center mb-8"><div class="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-red-500/20"><ExclamationTriangleIcon class="w-8 h-8 text-red-500" /></div><h3 class="text-xl font-black italic uppercase text-white">Report Profil</h3></div>
         <div class="space-y-6">
-          <textarea v-model="reportForm.details" rows="4" placeholder="Alasan pelaporan..." class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-red-500 resize-none italic"></textarea>
+          <textarea v-model="reportForm.details" rows="4" placeholder="Alasan pelaporan..." class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-red-500 italic font-bold"></textarea>
           <div class="flex gap-3">
-            <button @click="showReportModal = false" class="flex-1 py-5 bg-white/5 rounded-3xl text-[10px] font-black">CANCEL</button>
-            <button @click="submitReport" :disabled="isSubmittingReport" class="flex-[2] bg-red-600 text-white py-5 rounded-3xl font-black text-[10px] italic">{{ isSubmittingReport ? "TRANSMITTING..." : "CONFIRM REPORT" }}</button>
+            <button @click="showReportModal = false" class="flex-1 py-5 bg-white/5 rounded-3xl text-[10px] font-black italic uppercase">CANCEL</button>
+            <button @click="submitReport" :disabled="isSubmittingReport" class="flex-[2] bg-red-600 text-white py-5 rounded-3xl font-black text-[10px] italic uppercase">{{ isSubmittingReport ? "TRANSMITTING..." : "CONFIRM REPORT" }}</button>
           </div>
         </div>
       </div>
@@ -355,12 +356,12 @@ onUnmounted(() => { if (bidSubscription) supabase.removeChannel(bidSubscription)
 
     <div v-if="showReviewModal" class="fixed inset-0 z-[200] flex items-center justify-center px-6">
       <div class="absolute inset-0 bg-black/95 backdrop-blur-lg" @click="showReviewModal = false"></div>
-      <div class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-10 shadow-2xl overflow-hidden">
+      <div class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-10 shadow-2xl">
         <div class="text-center mb-8"><h3 class="text-xl font-black italic uppercase text-white">Log Observation</h3></div>
         <div class="space-y-6">
           <div class="flex justify-center gap-2"><StarIconSolid v-for="i in 5" :key="i" @click="newReview.rating = i" :class="i <= newReview.rating ? 'text-yellow-500' : 'text-gray-800'" class="w-8 h-8 cursor-pointer" /></div>
-          <textarea v-model="newReview.comment" rows="4" placeholder="Describe quality..." class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-yellow-500 italic"></textarea>
-          <button @click="submitReview" :disabled="submittingReview" class="w-full bg-yellow-500 text-black py-5 rounded-3xl font-black text-[10px] italic">{{ submittingReview ? "SYNCING..." : "CONFIRM LOG" }}</button>
+          <textarea v-model="newReview.comment" rows="4" placeholder="Describe quality..." class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-yellow-500 italic font-bold"></textarea>
+          <button @click="submitReview" :disabled="submittingReview" class="w-full bg-yellow-500 text-black py-5 rounded-3xl font-black text-[10px] italic uppercase">{{ submittingReview ? "SYNCING..." : "CONFIRM LOG" }}</button>
         </div>
       </div>
     </div>
