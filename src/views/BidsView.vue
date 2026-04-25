@@ -19,17 +19,23 @@ const fetchMyBids = async () => {
 
   loading.value = true;
   try {
-    // 1. Ambil history produk yang pernah Mas bid
+    // 1. AMBIL HISTORY + JOIN PROFILE (Biar nggak Anonymous)
     const { data: userBids } = await supabase
       .from("bids")
-      .select(`product_id, products (*)`)
+      .select(`
+        product_id, 
+        products (
+          *, 
+          profiles!owner_id(username, full_name, avatar_url)
+        )
+      `)
       .eq("user_id", props.userProfile.id)
       .order("created_at", { ascending: false });
 
     if (userBids && userBids.length > 0) {
-      // Filter unik produk agar tidak duplikat di list
       const productsMap = new Map();
       userBids.forEach((item) => {
+        // Pastikan profiles ikut masuk ke dalam map
         if (item.products && !productsMap.has(item.product_id)) {
           productsMap.set(item.product_id, { ...item.products });
         }
@@ -38,8 +44,7 @@ const fetchMyBids = async () => {
       const uniqueProducts = Array.from(productsMap.values());
       const productIds = uniqueProducts.map((p) => p.id);
 
-      // 2. LOGIKA MUTLAK: Ambil bid TERMAHAL dari setiap produk di tabel 'bids'
-      // Kita pakai rpc atau query in filter untuk akurasi 100%
+      // 2. LOGIKA MUTLAK: Ambil bid TERMAHAL untuk penentuan Leading/Outbid
       const { data: allTopBids } = await supabase
         .from("bids")
         .select("product_id, user_id, amount")
@@ -47,7 +52,6 @@ const fetchMyBids = async () => {
         .order("amount", { ascending: false });
 
       myBids.value = uniqueProducts.map((p) => {
-        // Ambil data bid tertinggi (index 0) khusus untuk produk ID ini
         const biddingsForThisProduct = allTopBids?.filter(
           (b) => b.product_id === p.id,
         );
@@ -56,12 +60,10 @@ const fetchMyBids = async () => {
             ? biddingsForThisProduct[0]
             : null;
 
-        // Cek apakah penawar tertingginya adalah Mas
         const isLeading = topBid?.user_id === props.userProfile.id;
 
         return {
           ...p,
-          // TIMPA: Gunakan harga tertinggi dari tabel bids, jika kosong pakai starting_bid
           current_bid: topBid
             ? topBid.amount
             : p.current_bid || p.starting_bid || 0,
@@ -85,19 +87,17 @@ watch(
     if (newVal) {
       fetchMyBids();
       if (!realtimeChannel) {
-        // Listen ke INSERT tabel bids secara global
         realtimeChannel = supabase
           .channel(`bids-live-monitor`)
           .on(
             "postgres_changes",
             { event: "INSERT", schema: "public", table: "bids" },
             (payload) => {
-              // Cek apakah bid baru ini ada di list produk yang Mas ikuti
               const isRelevant = myBids.value.some(
                 (p) => p.id === payload.new.product_id,
               );
               if (isRelevant) {
-                fetchMyBids(); // Refresh total agar status Leading/Outbid update
+                fetchMyBids();
               }
             },
           )
