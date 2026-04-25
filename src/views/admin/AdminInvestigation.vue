@@ -22,8 +22,8 @@ const fetchReports = async () => {
       .select(
         `
         *,
-        reporter:profiles!reporter_id(username, full_name),
-        product:products!product_id(id, name, image_url, status)
+        profiles!reports_reporter_id_fkey(username, full_name),
+        products!reports_product_id_fkey(id, name, image_url, status)
       `,
       )
       .order("created_at", { ascending: false });
@@ -31,6 +31,7 @@ const fetchReports = async () => {
     if (error) throw error;
     reports.value = data;
   } catch (err) {
+    console.error("Detail Error:", err); // Liat di console log
     notify.error("Gagal Ambil Data", err.message);
   } finally {
     loading.value = false;
@@ -159,94 +160,6 @@ onMounted(() => {
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-white/5">
-          <tr
-            v-for="report in reports"
-            :key="report.id"
-            class="hover:bg-white/[0.01] transition-all group"
-          >
-            <td class="p-6">
-              <div class="flex items-center gap-4">
-                <img
-                  :src="report.product?.image_url"
-                  class="w-12 h-12 rounded-xl object-cover border border-white/10"
-                />
-                <div>
-                  <p class="text-sm font-black italic uppercase text-white">
-                    {{ report.product?.name }}
-                  </p>
-                  <p class="text-[8px] text-gray-600 font-bold tracking-widest">
-                    ID: {{ report.product_id }}
-                  </p>
-                </div>
-              </div>
-            </td>
-            <td class="p-6">
-              <p class="text-xs font-black italic text-yellow-500 uppercase">
-                @{{ report.reporter?.username }}
-              </p>
-              <p class="text-[8px] text-gray-600 font-bold uppercase">
-                {{ report.reporter?.full_name }}
-              </p>
-            </td>
-            <td class="p-6">
-              <span
-                class="text-[9px] px-3 py-1 bg-red-500/10 text-red-500 rounded-full font-black uppercase italic border border-red-500/20 mb-2 inline-block"
-              >
-                {{ report.reason_category }}
-              </span>
-              <p class="text-[11px] text-gray-400 italic leading-snug max-w-xs">
-                {{ report.reason }}
-              </p>
-            </td>
-            <td class="p-6">
-              <div class="flex items-center gap-2">
-                <div
-                  class="w-1.5 h-1.5 rounded-full"
-                  :class="
-                    report.status === 'pending'
-                      ? 'bg-orange-500 animate-pulse'
-                      : 'bg-green-500'
-                  "
-                ></div>
-                <span
-                  class="text-[10px] font-black uppercase italic tracking-widest"
-                  :class="
-                    report.status === 'pending'
-                      ? 'text-orange-500'
-                      : 'text-green-500'
-                  "
-                >
-                  {{ report.status }}
-                </span>
-              </div>
-            </td>
-            <td class="p-6">
-              <div class="flex items-center justify-end gap-2">
-                <button
-                  @click="$router.push(`/product/${report.product_id}`)"
-                  class="p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-all"
-                >
-                  <EyeIcon class="w-4 h-4 text-gray-400" />
-                </button>
-                <button
-                  v-if="report.status === 'pending'"
-                  @click="markAsReviewed(report.id)"
-                  class="p-3 bg-green-500/10 rounded-xl hover:bg-green-500/20 transition-all"
-                >
-                  <CheckBadgeIcon class="w-4 h-4 text-green-500" />
-                </button>
-                <button
-                  v-if="report.product?.status !== 'banned'"
-                  @click="takeDownProduct(report.id, report.product_id)"
-                  class="p-3 bg-red-500/10 rounded-xl hover:bg-red-500/20 transition-all"
-                >
-                  <TrashIcon class="w-4 h-4 text-red-500" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
       </table>
 
       <div v-if="reports.length === 0" class="p-20 text-center">
