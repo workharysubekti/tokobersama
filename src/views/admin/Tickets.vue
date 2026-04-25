@@ -25,7 +25,7 @@ const fetchReports = async () => {
         `
   *,
   profiles(username, full_name, avatar_url),
-  products(id, name, image_url, status, user_id) // <-- Tambahkan user_id di sini
+  products(id, name, image_url, status, owner_id) // <-- Tambahkan user_id di sini
 `,
       )
       .order("created_at", { ascending: false });
@@ -80,7 +80,7 @@ const takeDown = async (reportId, productId, sellerId) => {
 
     // 2. Potong Reputasi (Panggil fungsi SQL tadi)
     const { error: repErr } = await supabase.rpc("decrease_reputation", {
-      user_id: sellerId,
+      owner_id: sellerId,
       amount: 50,
     });
 
@@ -265,7 +265,7 @@ onMounted(() => {
                       takeDown(
                         report.id,
                         report.product_id,
-                        report.product.user_id,
+                        report.product.owner_id,
                       )
                     "
                     class="p-3 bg-red-600/10 rounded-xl hover:bg-red-600/20 transition-all border border-red-600/20"
