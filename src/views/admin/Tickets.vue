@@ -19,9 +19,11 @@ const allReports = ref([]);
 const loading = ref(true);
 const activeTab = ref("assets");
 
+// --- PEMISAH DATA (COMPUTED) ---
 const assetReports = computed(() => allReports.value.filter(r => r.product_id));
 const accountReports = computed(() => allReports.value.filter(r => !r.product_id && r.target_user_id));
 
+// --- AMBIL DATA LAPORAN ---
 const fetchReports = async () => {
   loading.value = true;
   try {
@@ -45,6 +47,7 @@ const fetchReports = async () => {
   }
 };
 
+// --- TINDAKAN 1: MARK AS REVIEWED ---
 const markReviewed = async (id) => {
   try {
     const { error } = await supabase.from("reports").update({ status: "reviewed" }).eq("id", id);
@@ -56,6 +59,7 @@ const markReviewed = async (id) => {
   }
 };
 
+// --- TINDAKAN 2: TAKE DOWN ASSET ---
 const takeDownProduct = async (reportId, productId, ownerId) => {
   if (!ownerId) return notify.error("Error", "Owner ID Missing!");
   const confirmBanned = confirm("Take down aset ini? Reputasi owner akan dipotong 50 poin.");
@@ -70,6 +74,7 @@ const takeDownProduct = async (reportId, productId, ownerId) => {
   } catch (err) { notify.error("Failed", err.message); }
 };
 
+// --- TINDAKAN 3: PUNISH USER ---
 const punishUser = async (reportId, targetUserId) => {
   if (!targetUserId) return notify.error("Error", "Target Missing!");
   const confirmPunish = confirm("Potong 50 poin reputasi user ini?");
@@ -89,89 +94,98 @@ onMounted(() => { fetchReports(); });
 <template>
   <div class="min-h-screen bg-black p-6 md:p-10 text-white uppercase italic font-black">
     
-    <div class="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+    <div class="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 relative z-20">
       <div>
         <div class="flex items-center gap-4 mb-2">
-          <ShieldExclamationIcon class="w-10 h-10 text-red-500" />
-          <h1 class="text-4xl md:text-5xl tracking-tighter">Investigation <span class="text-red-500">Room</span></h1>
+          <ShieldExclamationIcon class="w-10 h-10 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]" />
+          <h1 class="text-4xl md:text-5xl tracking-tighter">Investigation <span class="text-red-500 text-shadow-red">Room</span></h1>
         </div>
         <p class="text-[10px] tracking-[0.4em] text-gray-500">Moderation Control Center</p>
       </div>
 
-      <div class="flex bg-white/5 p-1 rounded-2xl border border-white/10">
-        <button @click="activeTab = 'assets'" :class="activeTab === 'assets' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'text-gray-500 hover:text-white'" class="px-8 py-3 rounded-xl text-[10px] tracking-widest transition-all flex items-center gap-2">
+      <div class="flex bg-white/5 p-1 rounded-2xl border border-white/10 backdrop-blur-xl">
+        <button @click="activeTab = 'assets'" :class="activeTab === 'assets' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'text-gray-500 hover:text-white'" class="px-8 py-3 rounded-xl text-[10px] font-[1000] tracking-widest transition-all flex items-center gap-2">
           <ArchiveBoxIcon class="w-4 h-4" /> ASSETS ({{ assetReports.length }})
         </button>
-        <button @click="activeTab = 'accounts'" :class="activeTab === 'accounts' ? 'bg-red-600 text-white shadow-lg shadow-red-600/20' : 'text-gray-500 hover:text-white'" class="px-8 py-3 rounded-xl text-[10px] tracking-widest transition-all flex items-center gap-2">
+        <button @click="activeTab = 'accounts'" :class="activeTab === 'accounts' ? 'bg-red-600 text-white shadow-lg shadow-red-600/20' : 'text-gray-500 hover:text-white'" class="px-8 py-3 rounded-xl text-[10px] font-[1000] tracking-widest transition-all flex items-center gap-2">
           <UsersIcon class="w-4 h-4" /> ACCOUNTS ({{ accountReports.length }})
         </button>
       </div>
     </div>
 
-    <div v-if="!loading" class="bg-white/[0.02] border border-white/5 rounded-[40px] overflow-hidden backdrop-blur-xl">
+    <div v-if="!loading" class="bg-white/[0.02] border border-white/5 rounded-[40px] overflow-hidden backdrop-blur-xl shadow-2xl relative z-10">
       <div class="overflow-x-auto">
-        <table class="w-full text-left">
+        <table class="w-full text-left table-auto min-w-[1000px]">
           <thead>
             <tr class="border-b border-white/5 bg-white/[0.03]">
-              <th class="p-6 text-[10px] text-gray-500 tracking-widest uppercase">{{ activeTab === 'assets' ? 'Reported Asset' : 'Target Account' }}</th>
-              <th class="p-6 text-[10px] text-gray-500 tracking-widest uppercase">Reporter Info</th>
-              <th class="p-6 text-[10px] text-gray-500 tracking-widest uppercase">Case Details</th>
-              <th class="p-6 text-[10px] text-gray-500 tracking-widest uppercase text-right">Enforcement</th>
+              <th class="p-6 text-[10px] text-gray-500 tracking-widest uppercase w-1/3 min-w-[300px]">{{ activeTab === 'assets' ? 'Reported Asset' : 'Target Account' }}</th>
+              <th class="p-6 text-[10px] text-gray-500 tracking-widest uppercase w-1/6 min-w-[180px]">Reporter Info</th>
+              <th class="p-6 text-[10px] text-gray-500 tracking-widest uppercase w-1/3 min-w-[300px]">Case Details</th>
+              <th class="p-6 text-[10px] text-gray-500 tracking-widest uppercase text-right w-1/6 min-w-[150px]">Enforcement</th>
             </tr>
           </thead>
 
           <tbody class="divide-y divide-white/5">
             <template v-if="activeTab === 'assets'">
-              <tr v-for="report in assetReports" :key="report.id" class="group hover:bg-white/[0.01] transition-colors">
+              <tr v-for="report in assetReports" :key="report.id" class="group hover:bg-white/[0.02] transition-colors">
                 <td class="p-6">
                   <div class="flex items-center gap-4">
-                    <img v-if="report.product?.image_url" :src="report.product.image_url" class="w-14 h-14 rounded-2xl object-cover border border-white/10" />
-                    <div><p class="text-sm tracking-tight mb-1">{{ report.product?.name || 'Deleted Asset' }}</p><p class="text-[8px] text-gray-600 font-bold uppercase">REF: #{{ report.product_id }}</p></div>
+                    <div class="w-14 h-14 rounded-2xl overflow-hidden flex-shrink-0 border border-white/10 bg-gray-900 relative">
+                      <img v-if="report.product?.image_url" :src="report.product.image_url" class="w-full h-full object-cover" />
+                      <div class="absolute inset-0 bg-gradient-to-b from-transparent to-black/50 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm tracking-tight mb-1 truncate text-white">{{ report.product?.name || 'Deleted Asset' }}</p>
+                      <p class="text-[8px] text-gray-600 font-bold uppercase truncate">REF: #{{ report.product_id }}</p>
+                    </div>
                   </div>
                 </td>
-                <td class="p-6"><p class="text-[10px] text-yellow-500">@{{ report.reporter?.username }}</p></td>
+                <td class="p-6"><p class="text-[10px] text-yellow-500 font-black italic tracking-widest uppercase truncate">@{{ report.reporter?.username }}</p></td>
                 <td class="p-6">
-                  <p class="text-[9px] text-red-500 mb-1 tracking-widest">{{ report.reason_category }}</p>
+                  <p class="text-[9px] text-red-500 mb-1 tracking-widest uppercase">{{ report.reason_category || "UNSPECIFIED" }}</p>
                   <p class="text-[11px] text-gray-400 normal-case italic font-bold leading-relaxed">{{ report.reason }}</p>
                 </td>
                 <td class="p-6 text-right">
-                  <div v-if="report.status === 'pending'" class="flex items-center justify-end gap-2">
-                    <a :href="`/product/${report.product_id}`" target="_blank" class="p-3 bg-white/5 rounded-xl border border-white/10"><EyeIcon class="w-4 h-4 text-gray-400" /></a>
-                    <button @click="markReviewed(report.id)" class="p-3 bg-green-500/10 rounded-xl border border-green-500/20"><CheckBadgeIcon class="w-4 h-4 text-green-500" /></button>
-                    <button @click="takeDownProduct(report.id, report.product_id, report.product.owner_id)" class="p-3 bg-red-600/10 rounded-xl border border-red-600/20"><TrashIcon class="w-4 h-4 text-red-600" /></button>
+                  <div v-if="report.status === 'pending'" class="flex items-center justify-end gap-2 whitespace-nowrap">
+                    <a :href="`/product/${report.product_id}`" target="_blank" class="p-3 bg-white/5 rounded-xl border border-white/5 active:scale-90 transition-all"><EyeIcon class="w-4 h-4 text-gray-400" /></a>
+                    <button @click="markReviewed(report.id)" class="p-3 bg-green-500/10 rounded-xl border border-green-500/20 active:scale-90 transition-all"><CheckBadgeIcon class="w-4 h-4 text-green-500" /></button>
+                    <button @click="takeDownProduct(report.id, report.product_id, report.product.owner_id)" class="p-3 bg-red-600/10 rounded-xl border border-red-600/20 active:scale-90 transition-all"><TrashIcon class="w-4 h-4 text-red-600" /></button>
                   </div>
-                  <div v-else class="flex items-center justify-end">
-                    <span v-if="report.status === 'action_taken'" class="px-4 py-2 bg-red-600/10 text-red-500 text-[10px] border border-red-600/20 rounded-lg">ASSET BANNED</span>
-                    <span v-else class="px-4 py-2 bg-green-600/10 text-green-500 text-[10px] border border-green-600/20 rounded-lg">AMAN</span>
+                  <div v-else class="flex items-center justify-end whitespace-nowrap">
+                    <span v-if="report.status === 'action_taken'" class="px-4 py-2 bg-red-600 text-white text-[9px] font-[1000] border border-red-700/50 rounded-lg tracking-widest italic uppercase shadow-lg shadow-red-600/20">BANNED</span>
+                    <span v-else class="px-4 py-2 bg-green-600/10 text-green-500 text-[9px] font-[1000] border border-green-600/20 rounded-lg tracking-widest italic uppercase">SAFE</span>
                   </div>
                 </td>
               </tr>
             </template>
 
             <template v-else>
-              <tr v-for="report in accountReports" :key="report.id" class="group hover:bg-white/[0.01] transition-colors">
+              <tr v-for="report in accountReports" :key="report.id" class="group hover:bg-white/[0.02] transition-colors">
                 <td class="p-6">
                   <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-full bg-gray-900 border border-white/10 flex items-center justify-center overflow-hidden">
+                    <div class="w-12 h-12 rounded-full bg-gray-900 border border-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
                       <img v-if="report.target?.avatar_url" :src="report.target.avatar_url" class="w-full h-full object-cover" />
                       <UserCircleIcon v-else class="w-6 h-6 text-gray-700" />
                     </div>
-                    <div><p class="text-sm tracking-tight mb-1">@{{ report.target?.username }}</p><p class="text-[8px] text-gray-600 font-bold uppercase">ID: {{ report.target_user_id?.slice(0, 8) }}...</p></div>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm tracking-tight mb-1 text-white truncate">@{{ report.target?.username }}</p>
+                      <p class="text-[8px] text-gray-600 font-bold uppercase truncate">ID: {{ report.target_user_id?.slice(0, 10) }}...</p>
+                    </div>
                   </div>
                 </td>
-                <td class="p-6"><p class="text-[10px] text-yellow-500">@{{ report.reporter?.username }}</p></td>
+                <td class="p-6"><p class="text-[10px] text-yellow-500 font-black italic tracking-widest uppercase">@{{ report.reporter?.username }}</p></td>
                 <td class="p-6">
-                  <p class="text-[9px] text-red-500 mb-1 tracking-widest">{{ report.reason_category }}</p>
+                  <p class="text-[9px] text-red-500 mb-1 tracking-widest uppercase">{{ report.reason_category || "UNSPECIFIED" }}</p>
                   <p class="text-[11px] text-gray-400 normal-case italic font-bold leading-relaxed">{{ report.reason }}</p>
                 </td>
                 <td class="p-6 text-right">
-                  <div v-if="report.status === 'pending'" class="flex items-center justify-end gap-2">
-                    <button @click="markReviewed(report.id)" class="p-3 bg-green-500/10 rounded-xl border border-green-500/20"><CheckBadgeIcon class="w-4 h-4 text-green-500" /></button>
-                    <button @click="punishUser(report.id, report.target_user_id)" class="p-3 bg-red-600/10 rounded-xl border border-red-600/20"><UserMinusIcon class="w-4 h-4 text-red-600" /></button>
+                  <div v-if="report.status === 'pending'" class="flex items-center justify-end gap-2 whitespace-nowrap">
+                    <button @click="markReviewed(report.id)" class="p-3 bg-green-500/10 rounded-xl border border-green-500/20 active:scale-90 transition-all"><CheckBadgeIcon class="w-4 h-4 text-green-500" /></button>
+                    <button @click="punishUser(report.id, report.target_user_id)" class="p-3 bg-red-600/10 rounded-xl border border-red-600/20 active:scale-90 transition-all"><UserMinusIcon class="w-4 h-4 text-red-600" /></button>
                   </div>
-                  <div v-else class="flex items-center justify-end">
-                    <span v-if="report.status === 'action_taken'" class="px-4 py-2 bg-red-600/10 text-red-500 text-[10px] border border-red-600/20 rounded-lg">-50 REPUTATION</span>
-                    <span v-else class="px-4 py-2 bg-green-600/10 text-green-500 text-[10px] border border-green-600/20 rounded-lg">AMAN</span>
+                  <div v-else class="flex items-center justify-end whitespace-nowrap">
+                    <span v-if="report.status === 'action_taken'" class="px-4 py-2 bg-red-600 text-white text-[9px] font-[1000] border border-red-700/50 rounded-lg tracking-widest italic uppercase shadow-lg shadow-red-600/20">-50 REP</span>
+                    <span v-else class="px-4 py-2 bg-green-600/10 text-green-500 text-[9px] font-[1000] border border-green-600/20 rounded-lg tracking-widest italic uppercase">SAFE</span>
                   </div>
                 </td>
               </tr>
@@ -179,8 +193,36 @@ onMounted(() => { fetchReports(); });
           </tbody>
         </table>
       </div>
+
+      <div v-if="(activeTab === 'assets' && assetReports.length === 0) || (activeTab === 'accounts' && accountReports.length === 0)" class="py-40 text-center">
+        <p class="text-[10px] text-gray-600 tracking-[0.5em] italic uppercase font-blackanimate-pulse">NO HOSTILE TRANSMISSIONS DETECTED IN THIS FREQUENCY</p>
+      </div>
     </div>
 
-    <div v-else class="py-32 flex flex-col items-center"><div class="w-12 h-12 border-2 border-white/10 border-t-red-500 rounded-full animate-spin"></div><p class="text-[8px] text-gray-600 mt-6 tracking-[0.5em] uppercase italic">Decrypting Intelligence...</p></div>
+    <div v-else class="py-40 flex flex-col items-center">
+      <div class="w-12 h-12 border-2 border-white/10 border-t-red-500 rounded-full animate-spin"></div>
+      <p class="text-[8px] text-gray-600 mt-6 tracking-[0.5em] uppercase italic font-black animate-pulse">Decrypting Intelligence...</p>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.text-shadow-red {
+  text-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+}
+
+/* Biar scrollbar-nya ga ngerusak estetika industrial */
+.overflow-x-auto::-webkit-scrollbar {
+  height: 6px;
+}
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+</style>
