@@ -283,7 +283,7 @@ onUnmounted(() => {
   >
     <div v-if="profile" class="relative">
       <div
-        class="sticky top-0 inset-x-0 z-[40] bg-black/80 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between lg:hidden"
+        class="sticky top-[64px] inset-x-0 z-[40] bg-black/80 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between lg:hidden"
       >
         <button
           @click="router.back()"

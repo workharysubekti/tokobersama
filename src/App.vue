@@ -262,14 +262,19 @@ onMounted(async () => {
       </div>
     </transition>
 
-    <div class="min-h-screen grid grid-rows-[auto_1fr] bg-black">
+    <div class="bg-black min-h-screen">
       <Header
         v-if="!$route.meta.requiresAdmin"
         :userProfile="userProfile"
         :authReady="authReady"
-        class="z-[100]"
+        class="fixed top-0 inset-x-0 z-[100]"
       />
-      <main class="relative w-full">
+      <main
+        :class="[
+          'min-h-screen transition-all',
+          !$route.meta.requiresAdmin ? 'pt-[64px]' : 'pt-0',
+        ]"
+      >
         <router-view
           v-if="authReady"
           :userProfile="userProfile"
