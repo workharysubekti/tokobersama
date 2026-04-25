@@ -283,7 +283,7 @@ onUnmounted(() => {
   >
     <div v-if="profile" class="relative">
       <div
-        class="flex items-center justify-between px-6 py-6 border-b border-white/5 bg-black lg:hidden"
+        class="flex items-center justify-between px-6 py-6 border-b border-white/5 bg-black"
       >
         <button
           @click="router.back()"
@@ -291,19 +291,17 @@ onUnmounted(() => {
         >
           <ArrowLeftIcon class="w-5 h-5" />
         </button>
-        <p class="text-[10px] tracking-[0.3em] text-yellow-500">
-          PROFILE TRANSMISSION
+        <p class="text-[10px] tracking-[0.3em] text-yellow-500 uppercase">
+          Profile Transmission
         </p>
         <div class="w-10"></div>
       </div>
 
-      <div
-        class="h-48 bg-gradient-to-b from-yellow-500/10 to-transparent"
-      ></div>
+      <div class="h-48 bg-[#0a0a0a]"></div>
 
       <div class="max-w-2xl mx-auto px-6 -mt-16 flex flex-col items-center">
         <div
-          class="w-32 h-32 rounded-full border-4 border-black overflow-hidden shadow-2xl mb-6 bg-black"
+          class="w-32 h-32 rounded-full border-4 border-black overflow-hidden shadow-2xl mb-6 bg-black relative z-10"
         >
           <img
             :src="profile.avatar_url || 'https://via.placeholder.com/150'"
