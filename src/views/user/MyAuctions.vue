@@ -10,7 +10,7 @@ import {
 } from "@heroicons/vue/24/outline";
 
 const auctions = ref([]);
-const activeTab = ref("active"); // default tab
+const activeTab = ref("active"); 
 const loading = ref(true);
 
 const fetchMyAuctions = async () => {
@@ -35,7 +35,6 @@ const fetchMyAuctions = async () => {
   }
 };
 
-// Filter data berdasarkan tab
 const filteredAuctions = computed(() => {
   return auctions.value.filter((item) => item.status === activeTab.value);
 });
@@ -57,9 +56,9 @@ onMounted(fetchMyAuctions);
         :class="
           activeTab === tab
             ? 'bg-yellow-500 text-black shadow-lg'
-            : 'text-gray-500 hover:text-white'
+            : 'text-gray-500 [@media(hover:hover)]:hover:text-white active:text-white'
         "
-        class="px-6 py-2 rounded-xl text-[10px] font-black uppercase italic transition-all"
+        class="px-6 py-2 rounded-xl text-[10px] font-black uppercase italic transition-all active:scale-95"
       >
         {{ tab }}
       </button>
@@ -73,11 +72,11 @@ onMounted(fetchMyAuctions);
       <div
         v-for="item in filteredAuctions"
         :key="item.id"
-        class="bg-[#0d0d0d] border border-white/5 p-4 rounded-[28px] flex items-center gap-4 group hover:border-yellow-500/30 transition-all"
+        class="bg-[#0d0d0d] border border-white/5 p-4 rounded-[28px] flex items-center gap-4 group transition-all [@media(hover:hover)]:hover:border-yellow-500/30 active:border-yellow-500/20"
       >
         <img
           :src="item.image_url"
-          class="w-20 h-20 rounded-2xl object-cover grayscale group-hover:grayscale-0 transition-all"
+          class="w-20 h-20 rounded-2xl object-cover transition-all [@media(hover:hover)]:grayscale [@media(hover:hover)]:group-hover:grayscale-0"
         />
 
         <div class="flex-1">
@@ -102,7 +101,7 @@ onMounted(fetchMyAuctions);
             >
               {{
                 activeTab === "active"
-                  ? "Ends: " + new Date(item.end_time).toLocaleDateString()
+                  ? "Berakhir: " + new Date(item.end_time).toLocaleDateString()
                   : "Status: " + item.status
               }}
             </span>
@@ -112,7 +111,7 @@ onMounted(fetchMyAuctions);
         <router-link
           v-if="activeTab === 'active'"
           :to="'/product/' + item.id"
-          class="p-3 bg-white/5 rounded-2xl hover:bg-yellow-500 hover:text-black transition-all"
+          class="p-3 bg-white/5 rounded-2xl transition-all [@media(hover:hover)]:hover:bg-yellow-500 [@media(hover:hover)]:hover:text-black active:bg-yellow-500 active:text-black active:scale-90"
         >
           <CheckCircleIcon class="w-5 h-5" />
         </router-link>
@@ -126,7 +125,7 @@ onMounted(fetchMyAuctions);
       <p
         class="text-[10px] font-black text-gray-600 uppercase tracking-[0.5em] italic"
       >
-        No {{ activeTab }} Assets Found
+        Data {{ activeTab }} Tidak Ditemukan
       </p>
     </div>
   </div>
