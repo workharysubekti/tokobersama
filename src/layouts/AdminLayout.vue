@@ -24,17 +24,6 @@ const menuItems = [
   { name: "Income", icon: BanknotesIcon, path: "/admin/income" },
 ];
 
-const { data, error } = await supabase
-  .from("reports")
-  .select(
-    `
-    *,
-    reporter:profiles(username), 
-    product:products(name, image_url)
-  `,
-  )
-  .order("created_at", { ascending: false });
-
 const logout = () => {
   // Masukkan logic clear session Supabase di sini jika perlu
   router.push("/auth");
