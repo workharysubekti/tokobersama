@@ -13,9 +13,11 @@ import {
   FireIcon,
   TrophyIcon,
   ArrowPathIcon,
-  BanknotesIcon, // Icon Baru untuk Saldo
-  UserIcon,      // Icon Baru untuk Profil Publik
-  StarIcon,      // Icon Baru untuk Reputasi
+  BanknotesIcon,
+  UserIcon,
+  StarIcon,
+  WalletIcon,
+  ArrowUpRightIcon
 } from "@heroicons/vue/24/outline";
 
 const props = defineProps({ userProfile: Object });
@@ -27,7 +29,7 @@ const fileInput = ref(null);
 const totalTx = ref(0);
 const followersCount = ref(0);
 const followingCount = ref(0);
-const balance = ref(0); // State Saldo
+const balance = ref(0);
 
 // --- FUNGSI LOGOUT ---
 const handleLogout = async () => {
@@ -58,9 +60,7 @@ const uploadAvatar = async (event) => {
 
     if (uploadError) throw uploadError;
 
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("avatars").getPublicUrl(filePath);
+    const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath);
 
     const { error: updateError } = await supabase
       .from("profiles")
@@ -79,8 +79,6 @@ const uploadAvatar = async (event) => {
 
 const fetchUserStats = async () => {
   if (!props.userProfile?.id) return;
-
-  // Tarik data saldo langsung dari profile
   balance.value = props.userProfile?.balance || 0;
 
   const [txRes, follRes, followingRes] = await Promise.all([
@@ -181,25 +179,16 @@ onMounted(() => {
   fetchUserStats();
   fetchUnreadCount();
   fetchUnreadNotifications();
-
-  messageSubscription = supabase
-    .channel("profile-messages")
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `receiver_id=eq.${props.userProfile.id}` }, fetchUnreadCount)
-    .subscribe();
-});
-
-onUnmounted(() => {
-  if (messageSubscription) supabase.removeChannel(messageSubscription);
 });
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#050505] pt-20 pb-32 px-6 text-white font-sans uppercase italic font-[1000]">
+  <div class="min-h-screen bg-[#050505] pt-12 pb-32 px-6 text-white font-sans uppercase italic font-[1000]">
     <div v-if="userProfile" class="max-w-2xl mx-auto relative">
       
       <button
         @click="handleLogout"
-        class="absolute top-0 right-0 p-2.5 bg-white/5 border border-white/10 rounded-2xl text-red-500 hover:bg-red-600/20 transition-all shadow-xl z-10"
+        class="absolute top-0 right-0 p-2.5 bg-white/5 border border-white/10 rounded-2xl text-red-500 hover:bg-red-600/20 transition-all z-10"
       >
         <ArrowRightOnRectangleIcon class="w-5 h-5" />
       </button>
@@ -216,63 +205,74 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <h1 class="text-3xl tracking-tighter mb-1">{{ userProfile.full_name || "MEMBER" }}</h1>
-        <p class="text-[10px] text-yellow-500/50 tracking-[0.4em] mb-4">@{{ userProfile.username }}</p>
+        <h1 class="text-3xl tracking-tighter mb-1 text-white">{{ userProfile.full_name || "MEMBER" }}</h1>
+        <p class="text-[10px] text-yellow-500/50 tracking-[0.4em] mb-6">@{{ userProfile.username }}</p>
 
-        <div class="flex items-center gap-3 mb-4 text-[10px] tracking-widest text-gray-500">
-          <button @click="router.push(`/user/${userProfile.username}/followers`)" class="flex items-center gap-1.5 hover:text-yellow-500 transition-colors">
-            <span class="text-white">{{ followersCount }}</span> <span>Follower</span>
+        <div class="flex items-center gap-4 mb-6 text-[10px] tracking-widest text-gray-500">
+          <button @click="router.push(`/user/${userProfile.username}/followers`)" class="flex items-center gap-1.5 hover:text-white transition-colors">
+            <span class="text-white">{{ followersCount }}</span> <span>Followers</span>
           </button>
           <span class="text-white/10 text-xs font-light">|</span>
-          <button @click="router.push(`/user/${userProfile.username}/following`)" class="flex items-center gap-1.5 hover:text-yellow-500 transition-colors">
+          <button @click="router.push(`/user/${userProfile.username}/following`)" class="flex items-center gap-1.5 hover:text-white transition-colors">
             <span class="text-white">{{ followingCount }}</span> <span>Following</span>
           </button>
         </div>
 
-        <div class="mb-6 max-w-md text-center">
+        <router-link 
+          to="/reputation-info"
+          class="inline-flex flex-col items-center group mb-8"
+        >
+          <div :class="[userRank.bg, userRank.color]" class="px-8 py-3 rounded-2xl border border-white/10 flex items-center gap-3 shadow-xl group-hover:bg-white/10 group-active:scale-95 transition-all">
+            <component :is="userRank.icon" class="w-4 h-4" />
+            <span class="text-[11px] font-[1000] tracking-widest">{{ userRank.name }}</span>
+            <ChevronRightIcon class="w-3 h-3 opacity-50" />
+          </div>
+          <p class="text-[7px] mt-2 text-gray-700 tracking-[0.4em] font-black uppercase">Click for Reputation Protocol</p>
+        </router-link>
+
+        <div class="mb-4 max-w-md text-center">
           <p class="text-[11px] leading-relaxed text-gray-400 normal-case italic font-bold">
             {{ userProfile.bio || "MEMBER HAS NOT TRANSMITTED A BIO DATA." }}
           </p>
         </div>
-
-        <router-link 
-          to="/reputation-info"
-          class="flex flex-col items-center group cursor-pointer"
-        >
-          <div :class="[userRank.bg, userRank.color]" class="px-5 py-1.5 rounded-full border border-white/10 text-[9px] flex items-center gap-2 shadow-xl mb-2 group-hover:scale-105 transition-all">
-            <component :is="userRank.icon" class="w-3.5 h-3.5" />
-            <span class="leading-none">{{ userRank.name }}</span>
-          </div>
-          <p class="text-[8px] text-gray-600 tracking-widest group-hover:text-yellow-500 transition-colors italic">
-            LIHAT SISTEM REPUTASI & HUKUMAN
-          </p>
-        </router-link>
+        
+        <button @click="isEditing = !isEditing" class="text-yellow-500 text-[9px] tracking-widest font-black italic border border-yellow-500/20 px-4 py-1.5 rounded-full hover:bg-yellow-500/5">
+            {{ isEditing ? "BATAL EDIT" : "MODIFIKASI BIODATA" }}
+        </button>
       </div>
 
-      <div class="bg-white/[0.02] border border-white/5 rounded-[40px] p-8 mb-8 backdrop-blur-3xl shadow-2xl">
-        <div class="flex justify-between items-center mb-8 px-2">
-          <h2 class="text-xs tracking-[0.3em] text-gray-500 italic font-black">OVERVIEW</h2>
-          <button @click="isEditing = !isEditing" class="text-yellow-500 text-[10px] tracking-widest font-black italic">
-            {{ isEditing ? "BATAL" : "EDIT PROFIL" }}
-          </button>
-        </div>
+      <div v-if="isEditing" class="mb-8 bg-white/[0.03] border border-white/5 rounded-[32px] p-6 space-y-4 animate-in fade-in duration-300">
+          <input v-model="editData.full_name" type="text" placeholder="Full Name" class="w-full bg-black border border-white/10 rounded-2xl p-5 text-xs text-white outline-none focus:border-yellow-500" />
+          <textarea v-model="editData.bio" rows="3" placeholder="Bio..." class="w-full bg-black border border-white/10 rounded-2xl p-5 text-xs text-white normal-case italic font-bold resize-none outline-none focus:border-yellow-500"></textarea>
+          <button @click="handleUpdate" class="w-full bg-yellow-500 text-black py-4 rounded-2xl font-black text-[10px] uppercase italic active:scale-95 transition-all">Save Changes</button>
+      </div>
 
-        <div v-if="!isEditing" class="grid grid-cols-2 gap-6 px-2">
-          <div>
-            <label class="text-[8px] text-gray-700 block mb-1 tracking-widest font-black">TRANSAKSI</label>
-            <p class="text-xl text-white font-[1000]">{{ totalTx }} <span class="text-[10px] text-gray-600 ml-1">DEALS</span></p>
+      <div class="grid grid-cols-2 gap-4 mb-8">
+        <router-link to="/wallet" class="bg-white/[0.03] border border-white/5 rounded-[32px] p-6 hover:bg-white/[0.06] transition-all group flex flex-col justify-between aspect-square">
+          <div class="flex justify-between items-start">
+            <div class="p-3 bg-yellow-500/10 rounded-2xl border border-yellow-500/20">
+                <BanknotesIcon class="w-5 h-5 text-yellow-500" />
+            </div>
+            <ArrowUpRightIcon class="w-4 h-4 text-gray-700 group-hover:text-yellow-500 transition-colors" />
           </div>
           <div>
-            <label class="text-[8px] text-gray-700 block mb-1 tracking-widest font-black text-right">SALDO AKTIF</label>
-            <p class="text-xl text-yellow-500 font-[1000] text-right">Rp {{ balance.toLocaleString() }}</p>
+            <p class="text-[8px] text-gray-500 tracking-widest mb-1 font-black">SALDO AKTIF</p>
+            <p class="text-xl font-[1000] text-white">Rp {{ balance.toLocaleString() }}</p>
           </div>
-        </div>
+        </router-link>
 
-        <div v-else class="space-y-5">
-          <input v-model="editData.full_name" type="text" placeholder="Nama Lengkap" class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-xs text-white focus:border-yellow-500 outline-none" />
-          <textarea v-model="editData.bio" rows="3" placeholder="Bio..." class="w-full bg-black/40 border border-white/10 rounded-2xl p-5 text-xs text-white normal-case font-bold italic resize-none"></textarea>
-          <button @click="handleUpdate" class="w-full bg-yellow-500 text-black py-4 rounded-2xl font-black text-[10px] uppercase italic active:scale-95 transition-all">Simpan Perubahan</button>
-        </div>
+        <router-link :to="`/user/${userProfile.username}`" class="bg-white/[0.03] border border-white/5 rounded-[32px] p-6 hover:bg-white/[0.06] transition-all group flex flex-col justify-between aspect-square">
+          <div class="flex justify-between items-start">
+            <div class="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20">
+                <UserIcon class="w-5 h-5 text-blue-500" />
+            </div>
+            <ArrowUpRightIcon class="w-4 h-4 text-gray-700 group-hover:text-blue-500 transition-colors" />
+          </div>
+          <div>
+            <p class="text-[8px] text-gray-500 tracking-widest mb-1 font-black">PUBLIC VIEW</p>
+            <p class="text-xl font-[1000] text-white">SWITCH <span class="text-blue-500">PROFILE</span></p>
+          </div>
+        </router-link>
       </div>
 
       <div class="bg-white/[0.02] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl">
@@ -280,22 +280,20 @@ onUnmounted(() => {
           v-for="(item, index) in [
             { name: 'Notifikasi', path: '/notifications', count: unreadNotif, type: 'notif' },
             { name: 'Pesan', path: '/messages', count: unreadCount, type: 'message' },
-            { name: 'Dompet / Saldo', path: '/wallet', icon: BanknotesIcon },
-            { name: 'Lihat Profil Publik', path: `/user/${userProfile.username}`, icon: UserIcon },
-            { name: 'Status Barang', path: '/my-auctions' },
-            { name: 'Inventory', path: '/vault' },
-            { name: 'Pengaturan', path: '/settings' },
+            { name: 'Transaksi Saya', path: '/my-auctions', count: totalTx, type: 'deal' },
+            { name: 'Inventory Vault', path: '/vault' },
+            { name: 'Account Settings', path: '/settings' },
           ]"
           :key="item.path"
           :to="item.path"
           class="flex items-center justify-between p-7 hover:bg-white/[0.04] transition-all border-white/5 border-b"
         >
           <div class="flex items-center gap-4">
-            <component v-if="item.icon" :is="item.icon" class="w-4 h-4 text-yellow-500" />
             <span class="text-xs font-[1000] uppercase italic tracking-widest text-gray-200">{{ item.name }}</span>
 
-            <div v-if="item.type === 'notif' && item.count > 0" class="w-2 h-2 bg-red-600 rounded-full animate-ping"></div>
-            <div v-if="item.type === 'message' && item.count > 0" class="bg-red-600 text-white text-[9px] px-2 py-0.5 rounded-full font-black">{{ item.count }}</div>
+            <div v-if="item.type === 'notif' && item.count > 0" class="w-2 h-2 bg-red-600 rounded-full animate-ping shadow-[0_0_8px_red]"></div>
+            <div v-if="item.type === 'message' && item.count > 0" class="bg-red-600 text-white text-[9px] px-2 py-0.5 rounded-full font-black animate-pulse">{{ item.count }}</div>
+            <div v-if="item.type === 'deal' && item.count > 0" class="text-[10px] text-yellow-500/40 italic font-black">{{ item.count }} DEALS</div>
           </div>
           <ChevronRightIcon class="w-4 h-4 text-gray-800" />
         </router-link>
