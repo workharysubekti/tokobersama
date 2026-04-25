@@ -297,7 +297,7 @@ onUnmounted(() => {
         <div class="w-10"></div>
       </div>
 
-      <div class="h-48 bg-[#0a0a0a]"></div>
+      <div class="h-48 bg-black"></div>
 
       <div class="max-w-2xl mx-auto px-6 -mt-16 flex flex-col items-center">
         <div
