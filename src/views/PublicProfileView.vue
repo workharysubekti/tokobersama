@@ -183,6 +183,7 @@ const userRank = computed(() => {
   };
 });
 
+// --- FIX LOGIKA REPORT DISINI ---
 const submitReport = async () => {
   if (!currentUser.value) return router.push("/login");
   if (reportForm.value.details.length < 5) return notify.error("Need details");
@@ -190,6 +191,7 @@ const submitReport = async () => {
   try {
     const { error } = await supabase.from("reports").insert({
       reporter_id: currentUser.value.id,
+      target_user_id: profile.value.id, // INI YANG TADI KETINGGALAN!
       reason_category: reportForm.value.category,
       reason: reportForm.value.details,
       status: "pending",
@@ -197,6 +199,7 @@ const submitReport = async () => {
     if (error) throw error;
     notify.success("Report Transmission Sent");
     showReportModal.value = false;
+    reportForm.value.details = ""; // Reset biar bersih
   } catch (e) {
     notify.error("Report failed");
   } finally {
