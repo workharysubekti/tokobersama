@@ -268,7 +268,7 @@ onMounted(async () => {
       :authReady="authReady"
     />
 
-    <main class="min-h-screen bg-black">
+    <main class="min-h-screen bg-black pt-16">
       <router-view
         v-if="authReady"
         :userProfile="userProfile"

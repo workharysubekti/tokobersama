@@ -19,7 +19,7 @@ import {
   FireIcon,
   TrophyIcon,
   XMarkIcon,
-  ExclamationTriangleIcon, // Import icon report
+  ExclamationTriangleIcon,
 } from "@heroicons/vue/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
 
@@ -51,10 +51,8 @@ const reportForm = ref({ category: "Lainnya", details: "" });
 const higherBids = ref([]);
 let bidSubscription = null;
 
-// FUNGSI FETCH DATA (FIX FOLLOWERS & REPUTASI)
 const fetchData = async () => {
   if (!profile.value) loading.value = true;
-
   try {
     const {
       data: { session },
@@ -76,7 +74,7 @@ const fetchData = async () => {
           .from("products")
           .select("*")
           .eq("owner_id", profileData.id)
-          .neq("status", "banned") // Sembunyikan yang dibanned
+          .neq("status", "banned")
           .order("created_at", { ascending: false }),
         supabase
           .from("reviews")
@@ -107,7 +105,6 @@ const fetchData = async () => {
         .select("product_id, amount")
         .in("product_id", ProductsIds)
         .order("amount", { ascending: false });
-
       listings.value = productsData.map((p) => {
         const highestBid = allBids?.find((b) => b.product_id === p.id);
         return {
@@ -137,20 +134,15 @@ const fetchData = async () => {
   }
 };
 
-// --- LOGIKA REPUTASI & RATING ---
 const averageRating = computed(() => {
   if (!reviews.value || reviews.value.length === 0) return "5.0";
   const sum = reviews.value.reduce((acc, curr) => acc + curr.rating, 0);
   let base = (sum / reviews.value.length).toFixed(1);
-
-  // Penalti Visual: Jika poin reputasi di database drop, rating ikut turun
   if (profile.value?.reputation < 50) base = (Number(base) - 0.5).toFixed(1);
   if (profile.value?.reputation < 0) base = "1.0";
-
   return base;
 });
 
-// --- LOGIKA RANK BADGE (KODE SUCI - UPDATED WITH REPUTATION) ---
 const OWNER_ID = "68f80a52-d38c-4ac4-b483-8386026f436c";
 const userRank = computed(() => {
   if (profile.value?.id === OWNER_ID)
@@ -160,11 +152,8 @@ const userRank = computed(() => {
       bg: "bg-red-600/10",
       icon: ShieldCheckIcon,
     };
-
   const rep = profile.value?.reputation || 0;
   const followers = followersCount.value;
-
-  // Rank Sekarang dihitung dari Reputasi & Followers
   if (rep >= 500 || followers >= 100)
     return {
       name: "LEGEND",
@@ -186,7 +175,6 @@ const userRank = computed(() => {
       bg: "bg-purple-500/10",
       icon: BoltIcon,
     };
-
   return {
     name: "NEWBIE",
     color: "text-blue-500",
@@ -205,7 +193,6 @@ const submitReport = async () => {
       reason_category: reportForm.value.category,
       reason: reportForm.value.details,
       status: "pending",
-      // Di sini kita tidak kirim product_id karena ini report profil (Opsional)
     });
     if (error) throw error;
     notify.success("Report Transmission Sent");
@@ -228,10 +215,12 @@ const toggleFollow = async () => {
         .eq("following_id", profile.value.id);
       followersCount.value--;
     } else {
-      await supabase.from("follows").insert({
-        follower_id: currentUser.value.id,
-        following_id: profile.value.id,
-      });
+      await supabase
+        .from("follows")
+        .insert({
+          follower_id: currentUser.value.id,
+          following_id: profile.value.id,
+        });
       followersCount.value++;
     }
     isFollowing.value = !isFollowing.value;
@@ -245,12 +234,14 @@ const submitReview = async () => {
     return notify.error("Log entry required");
   submittingReview.value = true;
   try {
-    const { error } = await supabase.from("reviews").insert({
-      target_user_id: profile.value.id,
-      reviewer_id: currentUser.value.id,
-      rating: newReview.value.rating,
-      comment: newReview.value.comment,
-    });
+    const { error } = await supabase
+      .from("reviews")
+      .insert({
+        target_user_id: profile.value.id,
+        reviewer_id: currentUser.value.id,
+        rating: newReview.value.rating,
+        comment: newReview.value.comment,
+      });
     if (error) throw error;
     notify.success("Transmission logged");
     showReviewModal.value = false;
@@ -272,7 +263,7 @@ watch(
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "bids" },
-          async (payload) => {
+          async () => {
             await fetchData();
           },
         )
@@ -285,7 +276,6 @@ watch(
 onMounted(() => {
   fetchData();
 });
-
 onUnmounted(() => {
   if (bidSubscription) supabase.removeChannel(bidSubscription);
 });
@@ -293,27 +283,28 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="min-h-screen bg-black text-white font-sans uppercase italic font-[1000] pt-25 pb-26"
+    class="min-h-screen bg-black text-white font-sans uppercase italic font-[1000] pb-26"
   >
     <div v-if="profile" class="relative">
-      <button
-        @click="router.back()"
-        class="absolute top-6 left-6 z-50 p-2 bg-black/50 rounded-full border border-white/10"
+      <div
+        class="fixed top-0 inset-x-0 z-[60] bg-black/80 backdrop-blur-md border-b border-white/5 px-6 py-4 flex items-center justify-between lg:hidden"
       >
-        <ArrowLeftIcon class="w-5 h-5" />
-      </button>
-
-      <button
-        v-if="currentUser && currentUser.id !== profile.id"
-        @click="showReportModal = true"
-        class="absolute top-6 right-6 z-50 p-2 bg-red-500/10 rounded-full border border-red-500/20 text-red-500"
-      >
-        <ExclamationTriangleIcon class="w-5 h-5" />
-      </button>
+        <button
+          @click="router.back()"
+          class="p-2 bg-white/5 rounded-xl border border-white/10"
+        >
+          <ArrowLeftIcon class="w-5 h-5" />
+        </button>
+        <p class="text-[10px] tracking-[0.3em] text-yellow-500">
+          PROFILE TRANSMISSION
+        </p>
+        <div class="w-10"></div>
+      </div>
 
       <div
         class="h-48 bg-gradient-to-b from-yellow-500/10 to-transparent"
       ></div>
+
       <div class="max-w-2xl mx-auto px-6 -mt-24 flex flex-col items-center">
         <div
           class="w-32 h-32 rounded-full border-4 border-black overflow-hidden shadow-2xl mb-6 bg-black"
@@ -323,6 +314,7 @@ onUnmounted(() => {
             class="w-full h-full object-cover"
           />
         </div>
+
         <h1 class="text-3xl tracking-tighter mb-1">{{ profile.full_name }}</h1>
         <p class="text-[10px] text-yellow-500/50 tracking-[0.4em] mb-6">
           @{{ profile.username }}
@@ -349,7 +341,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div class="flex gap-3 w-full max-w-xs mb-10">
+        <div class="flex items-center gap-3 w-full max-w-sm mb-10">
           <button
             @click="toggleFollow"
             :class="
@@ -357,37 +349,47 @@ onUnmounted(() => {
                 ? 'bg-white/5 text-white border-white/10'
                 : 'bg-yellow-500 text-black'
             "
-            class="flex-1 py-4 rounded-2xl text-[10px] tracking-widest border transition-all active:scale-95 font-[1000]"
+            class="flex-[3] py-4 rounded-2xl text-[10px] tracking-widest border transition-all active:scale-95"
           >
             {{ isFollowing ? "UNFOLLOW" : "FOLLOW" }}
           </button>
+
           <button
             @click="router.push(`/messages/${profile.id}`)"
-            class="p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all"
+            class="flex-1 p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center hover:bg-white/10 transition-all"
           >
             <ChatBubbleLeftEllipsisIcon class="w-5 h-5 text-yellow-500" />
+          </button>
+
+          <button
+            v-if="currentUser && currentUser.id !== profile.id"
+            @click="showReportModal = true"
+            class="flex-1 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center hover:bg-red-500/20 transition-all text-red-500"
+          >
+            <ExclamationTriangleIcon class="w-5 h-5" />
           </button>
         </div>
 
         <p
-          class="text-center text-[11px] leading-relaxed text-gray-400 max-w-sm mb-8 normal-case"
+          class="text-center text-[11px] leading-relaxed text-gray-400 max-w-sm mb-8 normal-case italic"
         >
           {{ profile.bio || "NO BIOGRAPHICAL DATA TRANSMITTED." }}
         </p>
 
-        <div
-          :class="[userRank.bg, userRank.color]"
-          class="px-6 py-2 rounded-full border border-white/5 text-[10px] flex items-center gap-2 mb-3"
-        >
-          <component :is="userRank.icon" class="w-4 h-4" />
-          <span>{{ userRank.name }}</span>
-        </div>
-
-        <div class="flex items-center gap-1.5 text-yellow-500/80">
-          <StarIconSolid class="w-3.5 h-3.5" />
-          <span class="text-[11px] font-[1000] tracking-widest italic"
-            >{{ averageRating }}/5.0</span
+        <div class="flex items-center gap-4 mb-3">
+          <div
+            :class="[userRank.bg, userRank.color]"
+            class="px-6 py-2 rounded-full border border-white/5 text-[10px] flex items-center gap-2"
           >
+            <component :is="userRank.icon" class="w-4 h-4" />
+            <span>{{ userRank.name }}</span>
+          </div>
+          <div class="flex items-center gap-1.5 text-yellow-500/80">
+            <StarIconSolid class="w-3.5 h-3.5" />
+            <span class="text-[11px] font-[1000] tracking-widest italic"
+              >{{ averageRating }}/5.0</span
+            >
+          </div>
         </div>
       </div>
     </div>
@@ -403,7 +405,7 @@ onUnmounted(() => {
               ? 'text-yellow-500 border-b-2 border-yellow-500'
               : 'text-gray-600'
           "
-          class="flex-1 py-4 text-[10px] tracking-[0.3em] font-black uppercase transition-all"
+          class="flex-1 py-4 text-[10px] tracking-[0.3em] font-black uppercase"
         >
           {{ tab }}
         </button>
@@ -462,7 +464,7 @@ onUnmounted(() => {
             }}</span>
           </div>
           <p
-            class="text-[11px] leading-relaxed text-gray-400 normal-case italic"
+            class="text-[11px] leading-relaxed text-gray-400 normal-case italic font-bold"
           >
             {{ review.comment }}
           </p>
@@ -470,7 +472,7 @@ onUnmounted(() => {
         <button
           v-if="currentUser && currentUser.id !== profile.id"
           @click="showReviewModal = true"
-          class="w-full py-4 bg-white/5 border border-dashed border-white/10 rounded-2xl text-[10px] tracking-widest text-gray-500 hover:text-yellow-500 transition-all mb-6"
+          class="w-full py-4 bg-white/5 border border-dashed border-white/10 rounded-2xl text-[10px] tracking-widest text-gray-500 hover:text-yellow-500 mb-10"
         >
           + LOG NEW OBSERVATION
         </button>
@@ -482,34 +484,47 @@ onUnmounted(() => {
       class="fixed inset-0 z-[200] flex items-center justify-center px-6"
     >
       <div
-        class="absolute inset-0 bg-black/90 backdrop-blur-md"
+        class="absolute inset-0 bg-black/95 backdrop-blur-lg"
         @click="showReportModal = false"
       ></div>
       <div
         class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-10 shadow-2xl overflow-hidden"
       >
         <div class="text-center mb-8">
-          <ExclamationTriangleIcon class="w-8 h-8 text-red-500 mx-auto mb-4" />
-          <h3 class="text-xl font-[1000] italic uppercase text-white">
+          <div
+            class="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-red-500/20"
+          >
+            <ExclamationTriangleIcon class="w-8 h-8 text-red-500" />
+          </div>
+          <h3 class="text-xl font-black italic uppercase text-white">
             Report Profil
           </h3>
+          <p class="text-[9px] text-gray-500 tracking-[0.3em] uppercase mt-1">
+            Maintenance Security
+          </p>
         </div>
         <div class="space-y-6">
           <textarea
             v-model="reportForm.details"
             rows="4"
-            placeholder="Kenapa profil ini bermasalah?"
-            class="w-full bg-white/5 border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-red-500 resize-none italic"
+            placeholder="Alasan pelaporan..."
+            class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-red-500 resize-none italic"
           ></textarea>
-          <button
-            @click="submitReport"
-            :disabled="isSubmittingReport"
-            class="w-full bg-red-600 text-white py-5 rounded-[24px] font-[1000] italic uppercase text-[10px]"
-          >
-            {{
-              isSubmittingReport ? "TRANSMITTING..." : "SUBMIT INVESTIGATION"
-            }}
-          </button>
+          <div class="flex gap-3">
+            <button
+              @click="showReportModal = false"
+              class="flex-1 py-5 bg-white/5 rounded-3xl text-[10px] font-black"
+            >
+              CANCEL
+            </button>
+            <button
+              @click="submitReport"
+              :disabled="isSubmittingReport"
+              class="flex-[2] bg-red-600 text-white py-5 rounded-3xl font-black text-[10px] italic"
+            >
+              {{ isSubmittingReport ? "TRANSMITTING..." : "CONFIRM REPORT" }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
