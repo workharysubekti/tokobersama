@@ -278,9 +278,9 @@ onMounted(() => {
           v-for="(item, index) in [
             { name: 'Notifikasi', path: '/notifications', count: unreadNotif, type: 'notif' },
             { name: 'Pesan Masuk', path: '/messages', count: unreadCount, type: 'message' },
-            { name: 'Rekam Transaksi', path: '/my-auctions', count: totalTx, type: 'deal' },
+            { name: 'Status Barang', path: '/my-auctions', count: totalTx, type: 'deal' },
             { name: 'Gudang Barang', path: '/vault' },
-            { name: 'Pengaturan Sistem', path: '/settings' },
+            { name: 'Pengaturan Akun', path: '/settings' },
           ]"
           :key="item.path"
           :to="item.path"
