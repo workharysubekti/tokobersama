@@ -44,7 +44,7 @@ onMounted(fetchMyAuctions);
 </script>
 
 <template>
-  <div class="p-6 space-y-6 pb-26">
+  <div class="p-6 space-y-6 pt-28 pb-28">
     <h2 class="text-2xl font-[1000] italic uppercase tracking-tighter">
       My <span class="text-yellow-500">Auctions</span>
     </h2>
