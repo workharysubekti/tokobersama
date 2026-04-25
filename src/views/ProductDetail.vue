@@ -13,7 +13,7 @@ import {
   ArrowPathIcon,
   UserCircleIcon,
   TagIcon,
-  ExclamationTriangleIcon, // Icon untuk Report
+  ExclamationTriangleIcon,
 } from "@heroicons/vue/24/outline";
 
 const props = defineProps({ userProfile: Object });
@@ -27,13 +27,36 @@ const bidAmount = ref(0);
 const isSubmitting = ref(false);
 const timeLeft = ref("");
 
-// --- LOGIKA MULTI-IMAGE STACK ---
+// --- LOGIKA MULTI-IMAGE STACK (FIXED) ---
 const activeImgIndex = ref(0);
 const allImages = computed(() => {
   if (!product.value) return [];
-  // Gabungkan foto utama dengan array foto tambahan
-  const extra = product.value.additional_images || [];
-  return [product.value.image_url, ...extra].filter((url) => url);
+  const images = [];
+
+  // 1. Masukkan foto utama
+  if (product.value.image_url) images.push(product.value.image_url);
+
+  // 2. Parsing additional_images (Handle jika tipe data text/string JSON)
+  const extra = product.value.additional_images;
+  if (extra) {
+    if (Array.isArray(extra)) {
+      images.push(...extra);
+    } else if (typeof extra === "string") {
+      try {
+        // Cek apakah string ini format JSON array
+        const parsed = JSON.parse(extra);
+        if (Array.isArray(parsed)) {
+          images.push(...parsed);
+        } else {
+          images.push(extra);
+        }
+      } catch (e) {
+        // Jika bukan JSON, anggap sebagai satu string URL
+        images.push(extra);
+      }
+    }
+  }
+  return images.filter((url) => url && url.trim() !== "");
 });
 
 const nextImage = () => {
@@ -250,7 +273,7 @@ onUnmounted(() => {
 <template>
   <div class="bg-black min-h-screen text-white pb-32">
     <div
-      class="fixed top-0 inset-x-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between"
+      class="fixed top-0 inset-x-0 z-[60] bg-black/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between"
     >
       <button
         @click="router.back()"
@@ -279,26 +302,22 @@ onUnmounted(() => {
     <div v-if="!loading && product" class="pt-24 px-5 max-w-7xl mx-auto">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
         <div class="lg:col-span-7 space-y-10">
-          <div
-            class="relative w-full aspect-square md:aspect-video overflow-hidden mt-4"
-          >
+          <div class="relative w-full aspect-square md:aspect-video mt-4">
             <div class="relative w-full h-full" @click="nextImage">
               <div
                 v-for="(img, index) in allImages"
                 :key="index"
-                :class="[
-                  index < activeImgIndex ? '-translate-x-full opacity-0' : '',
-                  index === activeImgIndex ? 'z-30 scale-100 opacity-100' : '',
-                  index > activeImgIndex ? 'z-20 opacity-100' : '',
-                ]"
+                class="absolute inset-0 w-full h-full transition-all duration-500 ease-in-out cursor-pointer"
                 :style="{
+                  zIndex: index === activeImgIndex ? 40 : 30 - index,
+                  opacity: index < activeImgIndex ? 0 : 1,
                   transform:
                     index > activeImgIndex
                       ? `translateX(${(index - activeImgIndex) * 15}px) scale(${1 - (index - activeImgIndex) * 0.05})`
-                      : '',
-                  zIndex: allImages.length - index,
+                      : index < activeImgIndex
+                        ? 'translateX(-100%)'
+                        : 'translateX(0) scale(1)',
                 }"
-                class="absolute inset-0 w-full h-full transition-all duration-500 ease-in-out cursor-pointer"
               >
                 <div
                   class="w-full h-full rounded-[40px] border border-white/10 overflow-hidden shadow-2xl bg-[#080808]"
@@ -306,7 +325,7 @@ onUnmounted(() => {
                   <img
                     :src="img"
                     class="w-full h-full object-cover"
-                    :class="{ 'opacity-40': index !== activeImgIndex }"
+                    :class="{ 'opacity-30': index > activeImgIndex }"
                   />
                   <div
                     class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60"
@@ -315,7 +334,7 @@ onUnmounted(() => {
               </div>
 
               <div
-                class="absolute bottom-6 left-6 z-[40] bg-black/60 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-3"
+                class="absolute bottom-6 left-6 z-[50] bg-black/60 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-3"
               >
                 <ClockIcon class="w-4 h-4 text-yellow-500 animate-pulse" />
                 <span
@@ -326,7 +345,7 @@ onUnmounted(() => {
 
               <div
                 v-if="allImages.length > 1"
-                class="absolute bottom-6 right-6 z-[40] bg-yellow-500 text-black px-4 py-1 rounded-full text-[10px] font-[1000] italic"
+                class="absolute bottom-6 right-6 z-[50] bg-yellow-500 text-black px-4 py-1 rounded-full text-[10px] font-[1000] italic shadow-xl"
               >
                 {{ activeImgIndex + 1 }} / {{ allImages.length }}
               </div>
