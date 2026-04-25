@@ -11,12 +11,13 @@ import {
   UserMinusIcon,
   ChatBubbleLeftEllipsisIcon,
   ArchiveBoxIcon,
-  UsersIcon
+  UsersIcon,
+  ShieldCheckIcon
 } from "@heroicons/vue/24/outline";
 
 const allReports = ref([]);
 const loading = ref(true);
-const activeTab = ref("assets"); // State untuk pindah kiri-kanan
+const activeTab = ref("assets");
 
 // --- PEMISAH DATA (COMPUTED) ---
 const assetReports = computed(() => allReports.value.filter(r => r.product_id));
@@ -27,15 +28,15 @@ const fetchReports = async () => {
   loading.value = true;
   try {
     const { data, error } = await supabase
-  .from("reports")
-  .select(`
-    *,
-    reporter:profiles!reporter_id(username, full_name, avatar_url),
-    target:profiles!target_user_id(username, full_name, avatar_url),
-    product:products(id, name, image_url, status, owner_id)
-  `)
-  .order("created_at", { ascending: false });
-    
+      .from("reports")
+      .select(`
+        *,
+        reporter:profiles!reporter_id(username, full_name, avatar_url),
+        target:profiles!target_user_id(username, full_name, avatar_url),
+        product:products(id, name, image_url, status, owner_id)
+      `)
+      .order("created_at", { ascending: false });
+
     if (error) throw error;
     allReports.value = data;
   } catch (err) {
@@ -148,17 +149,21 @@ onMounted(() => { fetchReports(); });
                 </td>
                 <td class="p-6">
                   <p class="text-[10px] text-yellow-500">@{{ report.reporter?.username }}</p>
-                  <p class="text-[8px] text-gray-600">{{ new Date(report.created_at).toLocaleDateString() }}</p>
                 </td>
                 <td class="p-6">
                   <p class="text-[9px] text-red-500 mb-1 tracking-widest">{{ report.reason_category }}</p>
                   <p class="text-[11px] text-gray-400 normal-case italic font-bold leading-relaxed">{{ report.reason }}</p>
                 </td>
+
                 <td class="p-6 text-right">
-                  <div class="flex items-center justify-end gap-2">
+                  <div v-if="report.status === 'pending'" class="flex items-center justify-end gap-2">
                     <a :href="`/product/${report.product_id}`" target="_blank" class="p-3 bg-white/5 rounded-xl border border-white/10"><EyeIcon class="w-4 h-4 text-gray-400" /></a>
-                    <button v-if="report.status === 'pending'" @click="markReviewed(report.id)" class="p-3 bg-green-500/10 rounded-xl border border-green-500/20 shadow-lg shadow-green-500/5"><CheckBadgeIcon class="w-4 h-4 text-green-500" /></button>
-                    <button v-if="report.product?.status !== 'banned'" @click="takeDownProduct(report.id, report.product_id, report.product.owner_id)" class="p-3 bg-red-600/10 rounded-xl border border-red-600/20"><TrashIcon class="w-4 h-4 text-red-600" /></button>
+                    <button @click="markReviewed(report.id)" class="p-3 bg-green-500/10 rounded-xl border border-green-500/20"><CheckBadgeIcon class="w-4 h-4 text-green-500" /></button>
+                    <button @click="takeDownProduct(report.id, report.product_id, report.product.owner_id)" class="p-3 bg-red-600/10 rounded-xl border border-red-600/20"><TrashIcon class="w-4 h-4 text-red-600" /></button>
+                  </div>
+                  <div v-else class="flex items-center justify-end">
+                    <span v-if="report.status === 'action_taken'" class="px-4 py-2 bg-red-600/10 text-red-500 text-[10px] border border-red-600/20 rounded-lg">BANNED</span>
+                    <span v-else class="px-4 py-2 bg-green-600/10 text-green-500 text-[10px] border border-green-600/20 rounded-lg">AMAN</span>
                   </div>
                 </td>
               </tr>
@@ -185,20 +190,21 @@ onMounted(() => { fetchReports(); });
                   <p class="text-[9px] text-red-500 mb-1 tracking-widest">{{ report.reason_category }}</p>
                   <p class="text-[11px] text-gray-400 normal-case italic font-bold leading-relaxed">{{ report.reason }}</p>
                 </td>
+
                 <td class="p-6 text-right">
-                  <div class="flex items-center justify-end gap-2">
-                    <button v-if="report.status === 'pending'" @click="markReviewed(report.id)" class="p-3 bg-green-500/10 rounded-xl border border-green-500/20"><CheckBadgeIcon class="w-4 h-4 text-green-500" /></button>
-                    <button v-if="report.status === 'pending'" @click="punishUser(report.id, report.target_user_id)" class="p-3 bg-red-600/10 rounded-xl border border-red-600/20 shadow-lg shadow-red-600/5"><UserMinusIcon class="w-4 h-4 text-red-600" /></button>
+                  <div v-if="report.status === 'pending'" class="flex items-center justify-end gap-2">
+                    <button @click="markReviewed(report.id)" class="p-3 bg-green-500/10 rounded-xl border border-green-500/20"><CheckBadgeIcon class="w-4 h-4 text-green-500" /></button>
+                    <button @click="punishUser(report.id, report.target_user_id)" class="p-3 bg-red-600/10 rounded-xl border border-red-600/20"><UserMinusIcon class="w-4 h-4 text-red-600" /></button>
+                  </div>
+                  <div v-else class="flex items-center justify-end">
+                    <span v-if="report.status === 'action_taken'" class="px-4 py-2 bg-red-600/10 text-red-500 text-[10px] border border-red-600/20 rounded-lg">BANNED</span>
+                    <span v-else class="px-4 py-2 bg-green-600/10 text-green-500 text-[10px] border border-green-600/20 rounded-lg">AMAN</span>
                   </div>
                 </td>
               </tr>
             </template>
           </tbody>
         </table>
-      </div>
-
-      <div v-if="(activeTab === 'assets' && assetReports.length === 0) || (activeTab === 'accounts' && accountReports.length === 0)" class="py-32 text-center">
-        <p class="text-[10px] text-gray-600 tracking-[0.5em] italic">NO HOSTILE TRANSMISSIONS DETECTED IN THIS FREQUENCY</p>
       </div>
     </div>
 
