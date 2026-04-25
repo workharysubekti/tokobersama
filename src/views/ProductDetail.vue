@@ -88,7 +88,8 @@ const submitReport = async () => {
     const { error } = await supabase.from("reports").insert({
       product_id: product.value.id,
       reporter_id: props.userProfile.id,
-      reason: reason,
+      reason_category: reportForm.value.category,
+      reason: reportForm.value.details,
     });
     if (error) throw error;
     notify.success("Laporan Terkirim", "Admin akan segera meninjau aset ini.");
