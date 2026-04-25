@@ -53,7 +53,7 @@ const routes = [
       {
         path: "tickets",
         name: "AdminTickets",
-        component: () => import("../src/views/admin/Tickets.vue"),
+        component: () => import("../src/views/admin/AdminInvestigation.vue"),
       },
       {
         path: "stats",
