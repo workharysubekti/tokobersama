@@ -83,33 +83,46 @@ const cropImage = async () => {
     uploading.value = true;
     showCropper.value = false;
 
-    // Convert canvas ke blob
     const blob = await new Promise((resolve) =>
       canvas.toBlob(resolve, "image/jpeg", 0.9),
     );
-    const fileName = `item_${Date.now()}_${currentSlotIndex.value}.jpg`;
+    // Kita buat nama file unik tiap kali upload biar gak tabrakan di cache
+    const fileName = `item_${Date.now()}_${Math.floor(Math.random() * 1000)}.jpg`;
 
-    const { error: uploadError } = await supabase.storage
+    // JURUS ANTI-GAGAL: Kita bungkus dalam try-catch yang lebih rapi
+    const { data, error: uploadError } = await supabase.storage
       .from("auction_items")
-      .upload(fileName, blob);
+      .upload(fileName, blob, {
+        cacheControl: "3600",
+        upsert: false, // Jangan nimpa file lama biar gak konflik
+      });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      console.error("Storage Error:", uploadError);
+      throw new Error("Koneksi ke storage terputus, coba sekali lagi.");
+    }
 
-    const { data } = supabase.storage
+    // Ambil URL-nya
+    const { data: urlData } = supabase.storage
       .from("auction_items")
       .getPublicUrl(fileName);
 
-    // Update preview di slot yang dipilih
-    imageSlots.value[currentSlotIndex.value].url = data.publicUrl;
+    // Pastikan URL-nya ada
+    if (!urlData.publicUrl) throw new Error("Gagal generate link foto.");
 
-    // Jika slot utama (0), masukkan juga ke form.image_url
+    imageSlots.value[currentSlotIndex.value].url = urlData.publicUrl;
+
     if (currentSlotIndex.value === 0) {
-      form.value.image_url = data.publicUrl;
+      form.value.image_url = urlData.publicUrl;
     }
 
     notify.success("Asset Encoded", "Foto berhasil dikalibrasi.");
   } catch (error) {
-    notify.error("Upload Failed", error.message);
+    // Tampilkan error yang lebih spesifik biar Mas tau rusaknya dimana
+    notify.error(
+      "Upload Failed",
+      error.message || "Gangguan koneksi, silakan coba lagi.",
+    );
   } finally {
     uploading.value = false;
     cropperImg.value = null;
