@@ -62,7 +62,7 @@ const categories = [
 
 <template>
   <nav
-    class="fixed top-0 inset-x-0 z-[100] bg-black/90 backdrop-blur-xl border-b border-white/5"
+    class="sticky top-0 w-full z-[100] bg-black/80 backdrop-blur-md border-b border-white/5"
   >
     <div class="max-w-[1440px] mx-auto px-3 sm:px-8">
       <div

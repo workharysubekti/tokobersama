@@ -267,9 +267,9 @@ onMounted(async () => {
         v-if="!$route.meta.requiresAdmin"
         :userProfile="userProfile"
         :authReady="authReady"
-        class="sticky top-0 z-[100]"
+        class="z-[100]"
       />
-      <main class="relative">
+      <main class="relative w-full">
         <router-view
           v-if="authReady"
           :userProfile="userProfile"
