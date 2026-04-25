@@ -52,11 +52,12 @@ const scrollToElite = () => {
 };
 
 const categories = [
-  "Trading Card Game(TCG)",
+  "TCG & Kartu",
   "Action Figure",
-  "Diecast",
+  "Diecast & Miniatur",
   "Virtual Item",
-  "Eksklusif",
+  "Fashion & Thrift",
+  "Hobi & Kolektibel",
 ];
 </script>
 
