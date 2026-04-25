@@ -38,11 +38,11 @@ const fetchAllAuctions = async () => {
 
 // --- FITUR BARU: TOGGLE ELITE SECTION ---
 const toggleElite = async (product) => {
-  const newStatus = !product.is_premium;
+  const newStatus = !product.is_priority;
   try {
     const { error } = await supabase
       .from("products")
-      .update({ is_premium: newStatus })
+      .update({ is_priority: newStatus })
       .eq("id", product.id);
 
     if (error) throw error;
