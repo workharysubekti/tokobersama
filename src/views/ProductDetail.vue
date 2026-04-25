@@ -82,7 +82,7 @@ const handleSwipe = () => {
 const showReportModal = ref(false);
 const isSubmittingReport = ref(false);
 const reportForm = ref({
-  category: Palsu / Kw,
+  category: "Palsu / Kw",
   details: "",
 });
 
