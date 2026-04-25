@@ -3,6 +3,10 @@ import { ref } from "vue";
 import { supabase } from "../lib/supabase.js";
 import { useRouter } from "vue-router";
 import { notify } from "../utils/notify";
+// Tambahkan Cropper Component
+import { Cropper } from "vue-advanced-cropper";
+import "vue-advanced-cropper/dist/style.css";
+
 import {
   PhotoIcon,
   TagIcon,
@@ -12,65 +16,110 @@ import {
   Squares2X2Icon,
   XMarkIcon,
   CheckIcon,
+  PlusIcon,
 } from "@heroicons/vue/24/outline";
 
 const router = useRouter();
 const loading = ref(false);
 const uploading = ref(false);
-const duration = ref("3"); // Default durasi lelang 3 hari
+const duration = ref("3");
 
+// Kategori sesuai list terbaru Mas Hary
 const categories = [
-  "TCG",
-  "FIGURE",
-  "DIECAST",
-  "THRIFT",
-  "VIRTUAL ITEM",
-  "EKSKLUSIF",
+  "TCG & Kartu",
+  "Action Figure",
+  "Diecast & Miniatur",
+  "Virtual Item",
+  "Fashion & Thrift",
+  "Hobi & Kolektibel",
 ];
 
+// --- LOGIKA MULTI SLOT & CROPPER ---
+const imageSlots = ref([
+  { url: "", storagePath: "" }, // Slot 1 (Utama)
+  { url: "", storagePath: "" }, // Slot 2
+  { url: null, storagePath: "" }, // Slot 3
+  { url: null, storagePath: "" }, // Slot 4
+]);
+
+const showCropper = ref(false);
+const currentSlotIndex = ref(null);
+const cropperImg = ref(null);
+const cropperRef = ref(null);
+
 const form = ref({
-  name: "", // Menggunakan 'name' agar sinkron dengan database
-  category: "TCG",
+  name: "",
+  category: "TCG & Kartu",
   description: "",
   starting_bid: "",
-  image_url: "",
+  image_url: "", // Untuk foto utama
 });
 
-// --- FUNGSI UPLOAD ---
-const handleImageUpload = async (event) => {
+// Trigger input file
+const triggerUpload = (index) => {
+  currentSlotIndex.value = index;
+  document.getElementById("fileInput").click();
+};
+
+// Ambil file dan masukkan ke Cropper
+const onFileChange = (event) => {
   const file = event.target.files[0];
-  if (!file) return;
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      cropperImg.value = e.target.result;
+      showCropper.value = true;
+    };
+    reader.readAsDataURL(file);
+  }
+};
+
+// Fungsi Crop & Upload ke Storage
+const cropImage = async () => {
+  const { canvas } = cropperRef.value.getResult();
+  if (!canvas) return;
 
   try {
     uploading.value = true;
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${Date.now()}.${fileExt}`;
-    const filePath = `${fileName}`;
+    showCropper.value = false;
+
+    // Convert canvas ke blob
+    const blob = await new Promise((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.9),
+    );
+    const fileName = `item_${Date.now()}_${currentSlotIndex.value}.jpg`;
 
     const { error: uploadError } = await supabase.storage
       .from("auction_items")
-      .upload(filePath, file);
+      .upload(fileName, blob);
 
     if (uploadError) throw uploadError;
 
     const { data } = supabase.storage
       .from("auction_items")
-      .getPublicUrl(filePath);
-    form.value.image_url = data.publicUrl;
+      .getPublicUrl(fileName);
 
-    notify.success("Asset Captured", "Foto berhasil masuk ke system.");
+    // Update preview di slot yang dipilih
+    imageSlots.value[currentSlotIndex.value].url = data.publicUrl;
+
+    // Jika slot utama (0), masukkan juga ke form.image_url
+    if (currentSlotIndex.value === 0) {
+      form.value.image_url = data.publicUrl;
+    }
+
+    notify.success("Asset Encoded", "Foto berhasil dikalibrasi.");
   } catch (error) {
     notify.error("Upload Failed", error.message);
   } finally {
     uploading.value = false;
+    cropperImg.value = null;
   }
 };
 
-// --- FUNGSI SUBMIT KE TABEL PRODUCTS ---
+// --- FUNGSI SUBMIT ---
 const createListing = async () => {
-  // Validasi: end_time manual dihapus karena sekarang otomatis via sistem duration
   if (!form.value.name || !form.value.starting_bid || !form.value.image_url) {
-    notify.error("Data Incomplete", "Semua kolom wajib diisi!");
+    notify.error("Data Incomplete", "Foto utama & data wajib diisi!");
     return;
   }
 
@@ -80,28 +129,33 @@ const createListing = async () => {
       data: { session },
     } = await supabase.auth.getSession();
 
-    // --- LOGIKA SISTEM WAKTU OTOMATIS ---
-    // Menghitung Tanggal Berakhir: Waktu Sekarang + Jumlah Hari yang dipilih user
     const calculatedEndTime = new Date();
     calculatedEndTime.setDate(
       calculatedEndTime.getDate() + parseInt(duration.value),
     );
 
+    // Kumpulkan foto tambahan (slot 1, 2, 3) ke dalam array
+    const additionalImages = imageSlots.value
+      .slice(1)
+      .filter((slot) => slot.url)
+      .map((slot) => slot.url);
+
     const { error } = await supabase.from("products").insert({
       name: form.value.name,
       category: form.value.category,
       description: form.value.description,
-      image_url: form.value.image_url,
+      image_url: form.value.image_url, // Foto Utama (Slot 0)
+      additional_images: additionalImages, // Foto 2,3,4 (Array)
       starting_bid: parseInt(form.value.starting_bid.replace(/[^0-9]/g, "")),
       owner_id: session?.user.id,
-      status: "pending", // Review admin..
-      end_time: calculatedEndTime.toISOString(), // Mengirim hasil kalkulasi sistem
+      status: "pending",
+      end_time: calculatedEndTime.toISOString(),
       is_priority: false,
     });
 
     if (error) throw error;
 
-    notify.success("Gacor!", "Barang muncul di Home & Vault!");
+    notify.success("Gacor!", "Lelang dikirim ke sistem approval!");
     router.push("/vault");
   } catch (error) {
     notify.error("System Error", error.message);
@@ -138,43 +192,56 @@ const formatCurrencyInput = (event) => {
       <div
         class="bg-white/[0.02] border border-white/5 p-6 rounded-[35px] backdrop-blur-xl"
       >
-        <div class="mb-6">
-          <label class="text-[10px] text-yellow-500 tracking-[0.2em] block mb-2"
-            >Item Visualization</label
+        <div class="mb-8">
+          <label class="text-[10px] text-yellow-500 tracking-[0.2em] block mb-4"
+            >Item Visualization (Max 4)</label
           >
-          <div class="relative group">
-            <label
-              class="h-56 bg-black/50 border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center overflow-hidden cursor-pointer hover:border-yellow-500/50 transition-all active:scale-[0.98]"
+
+          <div class="grid grid-cols-2 gap-3">
+            <div
+              v-for="(slot, index) in imageSlots"
+              :key="index"
+              class="relative group"
             >
-              <input
-                type="file"
-                @change="handleImageUpload"
-                class="hidden"
-                accept="image/*"
-              />
-              <img
-                v-if="form.image_url"
-                :src="form.image_url"
-                class="absolute inset-0 w-full h-full object-cover z-0"
-              />
-              <div class="relative z-10 flex flex-col items-center">
-                <PhotoIcon
-                  class="w-10 h-10 text-gray-700 group-hover:text-yellow-500 mb-2 transition-colors"
+              <div
+                @click="triggerUpload(index)"
+                :class="[
+                  slot.url ? 'border-yellow-500/50' : 'border-white/10',
+                  index === 0 ? 'h-40' : 'h-28',
+                ]"
+                class="bg-black/40 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center overflow-hidden cursor-pointer hover:bg-white/[0.03] transition-all relative"
+              >
+                <img
+                  v-if="slot.url"
+                  :src="slot.url"
+                  class="absolute inset-0 w-full h-full object-cover"
                 />
-                <span
-                  class="text-[10px] text-gray-600 group-hover:text-yellow-500 tracking-[0.2em]"
+                <div
+                  v-else
+                  class="flex flex-col items-center opacity-30 group-hover:opacity-100 transition-opacity"
                 >
-                  {{
-                    uploading
-                      ? "UPLOADING..."
-                      : form.image_url
-                        ? "CHANGE PHOTO"
-                        : "ATTACH PHOTO"
-                  }}
-                </span>
+                  <PlusIcon class="w-6 h-6 text-yellow-500 mb-1" />
+                  <span class="text-[8px]">{{
+                    index === 0 ? "MAIN FOTO" : "SLOT " + (index + 1)
+                  }}</span>
+                </div>
+
+                <div
+                  v-if="index === 0"
+                  class="absolute top-2 left-2 bg-yellow-500 text-black text-[7px] px-2 py-0.5 rounded-full font-black"
+                >
+                  PRIMARY
+                </div>
               </div>
-            </label>
+            </div>
           </div>
+          <input
+            type="file"
+            id="fileInput"
+            class="hidden"
+            @change="onFileChange"
+            accept="image/*"
+          />
         </div>
 
         <div class="space-y-5">
@@ -224,7 +291,7 @@ const formatCurrencyInput = (event) => {
               >
               <select
                 v-model="duration"
-                class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white font-bold uppercase italic text-xs outline-none focus:border-yellow-500 transition-all"
+                class="w-full bg-black/40 border border-white/10 p-4 rounded-2xl text-white font-bold uppercase italic text-xs outline-none focus:border-yellow-500 transition-all"
               >
                 <option value="1">1 Hari (Kilat)</option>
                 <option value="3">3 Hari (Standar)</option>
@@ -276,5 +343,53 @@ const formatCurrencyInput = (event) => {
         </button>
       </div>
     </div>
+
+    <div
+      v-if="showCropper"
+      class="fixed inset-0 z-[300] flex items-center justify-center p-4"
+    >
+      <div
+        class="absolute inset-0 bg-black/95 backdrop-blur-md"
+        @click="showCropper = false"
+      ></div>
+      <div
+        class="relative w-full max-w-lg bg-[#0d0d0d] border border-white/10 rounded-[40px] overflow-hidden p-8 shadow-2xl"
+      >
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-sm tracking-[0.3em] text-yellow-500">
+            CALIBRATE IMAGE
+          </h2>
+          <button @click="showCropper = false">
+            <XMarkIcon class="w-6 h-6 text-gray-500" />
+          </button>
+        </div>
+
+        <div class="h-80 w-full bg-black rounded-3xl overflow-hidden mb-8">
+          <Cropper
+            ref="cropperRef"
+            class="h-full"
+            :src="cropperImg"
+            :stencil-props="{ aspectRatio: 1 / 1 }"
+          />
+        </div>
+
+        <button
+          @click="cropImage"
+          class="w-full bg-white text-black py-5 rounded-[24px] font-black text-xs tracking-widest active:scale-95 transition-all"
+        >
+          APPLY & CAPTURE
+        </button>
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+/* Untuk menyembunyikan scrollbar select di mobile */
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='激19l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 1em;
+}
+</style>

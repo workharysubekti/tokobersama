@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, onUnmounted, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../lib/supabase.js";
 import { notify } from "../utils/notify";
@@ -41,24 +41,125 @@ const showReviewModal = ref(false);
 const submittingReview = ref(false);
 const newReview = ref({ rating: 5, comment: "" });
 
-// --- TAMBAHAN LOGIKA REPUTASI REAL TIME ---
+// Real-time currency bid
+const higherBids = ref([]);
+let bidSubscription = null;
+
+// FUNGSI FETCH DATA (FIX FOLLOWERS & REPUTASI)
+const fetchData = async () => {
+  if (!profile.value) loading.value = true;
+
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    currentUser.value = session?.user;
+
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("username", username)
+      .single();
+
+    if (profileError) throw profileError;
+    profile.value = profileData;
+
+    // Ambil semua data pendukung secara Paralel (Followers, Following, Reviews, Products)
+    const [productsRes, reviewsRes, followersRes, followingRes] =
+      await Promise.all([
+        supabase
+          .from("products")
+          .select("*")
+          .eq("owner_id", profileData.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("reviews")
+          .select(
+            "*, reviewer:profiles!reviews_reviewer_id_fkey(username, avatar_url)",
+          )
+          .eq("target_user_id", profileData.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("follows")
+          .select("id", { count: "exact", head: true })
+          .eq("following_id", profileData.id),
+        supabase
+          .from("follows")
+          .select("id", { count: "exact", head: true })
+          .eq("follower_id", profileData.id),
+      ]);
+
+    // Set Data Reputasi & Social (Agar tidak 0/NaN)
+    reviews.value = reviewsRes.data || [];
+    followersCount.value = followersRes.count || 0;
+    followingCount.value = followingRes.count || 0;
+
+    // Logika Real-time Bid untuk Listings
+    const productsData = productsRes.data || [];
+    if (productsData.length > 0) {
+      const ProductsIds = productsData.map((p) => p.id);
+      const { data: allBids } = await supabase
+        .from("bids")
+        .select("product_id, amount")
+        .in("product_id", ProductsIds)
+        .order("amount", { ascending: false });
+
+      listings.value = productsData.map((p) => {
+        const highestBid = allBids?.find((b) => b.product_id === p.id);
+        return {
+          ...p,
+          display_price: highestBid
+            ? highestBid.amount
+            : p.current_bid || p.starting_price || 0,
+        };
+      });
+    } else {
+      listings.value = [];
+    }
+
+    if (currentUser.value) {
+      const { data: followData } = await supabase
+        .from("follows")
+        .select("id")
+        .eq("follower_id", currentUser.value.id)
+        .eq("following_id", profileData.id)
+        .single();
+      isFollowing.value = !!followData;
+    }
+  } catch (error) {
+    console.error("Error fetching profile:", error.message);
+  } finally {
+    loading.value = false;
+  }
+};
+
+const fetchHigherBids = async () => {
+  if (!profile.value?.id) return;
+  const { data, error } = await supabase
+    .from("bids")
+    .select("*, products(name, end_time)")
+    .eq("user_id", profile.value.id)
+    .order("created_at", { ascending: false });
+  if (!error) higherBids.value = data;
+};
+
+// --- LOGIKA REPUTASI ---
 const averageRating = computed(() => {
   if (!reviews.value || reviews.value.length === 0) return "5.0";
   const sum = reviews.value.reduce((acc, curr) => acc + curr.rating, 0);
   return (sum / reviews.value.length).toFixed(1);
 });
 
-// --- LOGIKA RANK BADGE + OWNER (KODE SUCI) ---
+// --- LOGIKA RANK BADGE (KODE SUCI) ---
 const OWNER_ID = "68f80a52-d38c-4ac4-b483-8386026f436c";
 const userRank = computed(() => {
-  if (profile.value?.id === OWNER_ID) {
+  if (profile.value?.id === OWNER_ID)
     return {
       name: "OWNER",
       color: "text-red-600",
       bg: "bg-red-600/10",
       icon: ShieldCheckIcon,
     };
-  }
   const count = followersCount.value;
   if (count >= 100)
     return {
@@ -89,69 +190,6 @@ const userRank = computed(() => {
   };
 });
 
-const fetchData = async () => {
-  loading.value = true;
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    currentUser.value = session?.user;
-
-    const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("username", username)
-      .single();
-
-    if (profileError) throw profileError;
-    profile.value = profileData;
-
-    const [listingsRes, reviewsRes, followersRes, followingRes] =
-      await Promise.all([
-        supabase
-          .from("products")
-          .select("*")
-          .eq("owner_id", profileData.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("reviews")
-          .select(
-            "*, reviewer:profiles!reviews_reviewer_id_fkey(username, avatar_url)",
-          )
-          .eq("target_user_id", profileData.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("follows")
-          .select("id", { count: "exact", head: true })
-          .eq("following_id", profileData.id),
-        supabase
-          .from("follows")
-          .select("id", { count: "exact", head: true })
-          .eq("follower_id", profileData.id),
-      ]);
-
-    listings.value = listingsRes.data || [];
-    reviews.value = reviewsRes.data || [];
-    followersCount.value = followersRes.count || 0;
-    followingCount.value = followingRes.count || 0;
-
-    if (currentUser.value) {
-      const { data: followData } = await supabase
-        .from("follows")
-        .select("id")
-        .eq("follower_id", currentUser.value.id)
-        .eq("following_id", profileData.id)
-        .single();
-      isFollowing.value = !!followData;
-    }
-  } catch (error) {
-    console.error("Error fetching profile:", error.message);
-    notify.error("Member data not found");
-  } finally {
-    loading.value = false;
-  }
-};
-
 const toggleFollow = async () => {
   if (!currentUser.value) return router.push("/login");
   try {
@@ -163,12 +201,10 @@ const toggleFollow = async () => {
         .eq("following_id", profile.value.id);
       followersCount.value--;
     } else {
-      await supabase
-        .from("follows")
-        .insert({
-          follower_id: currentUser.value.id,
-          following_id: profile.value.id,
-        });
+      await supabase.from("follows").insert({
+        follower_id: currentUser.value.id,
+        following_id: profile.value.id,
+      });
       followersCount.value++;
     }
     isFollowing.value = !isFollowing.value;
@@ -200,12 +236,40 @@ const submitReview = async () => {
   }
 };
 
-onMounted(fetchData);
+// --- REAL-TIME MONITORING ---
+watch(
+  () => profile.value,
+  (newVal) => {
+    if (newVal && !bidSubscription) {
+      bidSubscription = supabase
+        .channel("public-profile-live")
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "bids" },
+          async (payload) => {
+            console.log("New Bid Detected, Refreshing Listings...");
+            await fetchData();
+            await fetchHigherBids();
+          },
+        )
+        .subscribe();
+    }
+  },
+  { immediate: true },
+);
+
+onMounted(() => {
+  fetchData();
+});
+
+onUnmounted(() => {
+  if (bidSubscription) supabase.removeChannel(bidSubscription);
+});
 </script>
 
 <template>
   <div
-    class="min-h-screen bg-black text-white font-sans uppercase italic font-[1000] pb-24"
+    class="min-h-screen bg-black text-white font-sans uppercase italic font-[1000] pb-26"
   >
     <div v-if="profile" class="relative">
       <div
@@ -220,7 +284,6 @@ onMounted(fetchData);
             class="w-full h-full object-cover"
           />
         </div>
-
         <h1 class="text-3xl tracking-tighter mb-1">{{ profile.full_name }}</h1>
         <p class="text-[10px] text-yellow-500/50 tracking-[0.4em] mb-6">
           @{{ profile.username }}
@@ -314,21 +377,13 @@ onMounted(fetchData);
           <div class="absolute bottom-4 left-4 right-4">
             <p class="text-[10px] truncate mb-1">{{ item.name }}</p>
             <p class="text-yellow-500 text-xs">
-              IDR {{ item.current_bid.toLocaleString() }}
+              IDR {{ item.display_price?.toLocaleString() }}
             </p>
           </div>
         </div>
       </div>
 
       <div v-if="activeTab === 'observations'" class="space-y-4">
-        <button
-          v-if="currentUser && currentUser.id !== profile.id"
-          @click="showReviewModal = true"
-          class="w-full py-4 bg-white/5 border border-dashed border-white/10 rounded-2xl text-[10px] tracking-widest text-gray-500 hover:text-yellow-500 transition-all mb-6"
-        >
-          + LOG NEW OBSERVATION
-        </button>
-
         <div
           v-for="review in reviews"
           :key="review.id"
@@ -337,12 +392,12 @@ onMounted(fetchData);
           <div class="flex justify-between items-start mb-4">
             <div class="flex items-center gap-3">
               <img
-                :src="review.reviewer.avatar_url"
+                :src="review.reviewer?.avatar_url"
                 class="w-8 h-8 rounded-full border border-white/10"
               />
               <div>
                 <p class="text-[10px] text-white">
-                  @{{ review.reviewer.username }}
+                  @{{ review.reviewer?.username }}
                 </p>
                 <div class="flex gap-0.5 mt-1">
                   <StarIconSolid
@@ -366,58 +421,12 @@ onMounted(fetchData);
             {{ review.comment }}
           </p>
         </div>
-      </div>
-    </div>
-
-    <div
-      v-if="showReviewModal"
-      class="fixed inset-0 z-[200] flex items-center justify-center px-6"
-    >
-      <div
-        class="absolute inset-0 bg-black/90 backdrop-blur-sm"
-        @click="showReviewModal = false"
-      ></div>
-      <div
-        class="bg-[#0a0a0a] border border-white/10 w-full max-w-md rounded-[40px] p-10 relative z-10 shadow-2xl"
-      >
-        <div class="text-center mb-10">
-          <h3 class="text-xl tracking-tighter mb-2">LOG OBSERVATION</h3>
-          <p class="text-[9px] text-gray-600 tracking-[0.3em]">
-            MEMBER REPUTASI SYNC
-          </p>
-        </div>
-
-        <div class="flex justify-center gap-3 mb-12">
-          <button
-            v-for="i in 5"
-            :key="i"
-            @click="newReview.rating = i"
-            class="transition-all active:scale-90 p-1"
-          >
-            <StarIconSolid
-              class="w-10 h-10"
-              :class="
-                i <= newReview.rating
-                  ? 'text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.4)]'
-                  : 'text-gray-900'
-              "
-            />
-          </button>
-        </div>
-
-        <textarea
-          v-model="newReview.comment"
-          placeholder="Log your observations here..."
-          class="w-full bg-black border border-white/5 rounded-3xl p-6 text-xs outline-none focus:border-yellow-500/50 italic font-bold normal-case text-white mb-10 resize-none"
-          rows="4"
-        ></textarea>
-
         <button
-          @click="submitReview"
-          :disabled="submittingReview"
-          class="w-full py-6 bg-yellow-500 text-black rounded-[28px] text-[11px] tracking-[0.3em] font-[1000] uppercase italic active:scale-95 transition-all"
+          v-if="currentUser && currentUser.id !== profile.id"
+          @click="showReviewModal = true"
+          class="w-full py-4 bg-white/5 border border-dashed border-white/10 rounded-2xl text-[10px] tracking-widest text-gray-500 hover:text-yellow-500 transition-all mb-6"
         >
-          {{ submittingReview ? "SYNCING..." : "CONFIRM LOG" }}
+          + LOG NEW OBSERVATION
         </button>
       </div>
     </div>

@@ -7,6 +7,7 @@ import {
   MagnifyingGlassIcon,
   UserCircleIcon,
   TagIcon,
+  ChevronRightIcon,
 } from "@heroicons/vue/24/outline";
 
 const route = useRoute();
@@ -87,24 +88,9 @@ watch(
 
 <template>
   <div
-    class="min-h-screen bg-[#0a0a0a] pt-24 pb-32 px-4 sm:px-6 font-sans uppercase italic font-[1000]"
+    class="min-h-screen bg-[#0a0a0a] pt-20 pb-32 px-4 sm:px-6 font-sans uppercase italic font-[1000]"
   >
-    <div class="md:hidden mb-10 sticky top-20 z-[60]">
-      <div class="relative group">
-        <div
-          class="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none"
-        >
-          <MagnifyingGlassIcon class="h-5 w-5 text-yellow-500" />
-        </div>
-        <input
-          v-model="searchStore.searchQuery"
-          @keyup.enter="fetchSearch"
-          type="text"
-          placeholder="Cari user @ atau barang..."
-          class="w-full bg-white/[0.03] border border-white/10 rounded-[24px] py-5 pl-14 pr-4 text-white placeholder-gray-700 focus:outline-none focus:border-yellow-500/50 transition-all shadow-2xl"
-        />
-      </div>
-    </div>
+    <div class="relative group"></div>
 
     <div class="mb-12">
       <h2 class="text-4xl tracking-tighter text-white">

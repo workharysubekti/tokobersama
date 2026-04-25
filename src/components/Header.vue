@@ -36,14 +36,16 @@ const handleLogout = async () => {
 
 // Fungsi Smooth Scroll ke Elite Section
 const scrollToElite = () => {
-  const element = document.getElementById('elite-section');
+  const element = document.getElementById("elite-section");
   if (element) {
-    element.scrollIntoView({ behavior: 'smooth' });
+    element.scrollIntoView({ behavior: "smooth" });
   } else {
     // Kalau user lagi di halaman lain, balik ke home dulu baru scroll
-    router.push('/').then(() => {
+    router.push("/").then(() => {
       setTimeout(() => {
-        document.getElementById('elite-section')?.scrollIntoView({ behavior: 'smooth' });
+        document
+          .getElementById("elite-section")
+          ?.scrollIntoView({ behavior: "smooth" });
       }, 100);
     });
   }
@@ -54,7 +56,7 @@ const categories = [
   "Action Figure",
   "Diecast",
   "Virtual Item",
-  "Eksklusif"
+  "Eksklusif",
 ];
 </script>
 
@@ -75,7 +77,9 @@ const categories = [
               <div
                 class="w-8 h-8 md:w-9 md:h-9 bg-yellow-500 rounded-lg md:rounded-xl flex items-center justify-center transform group-hover:rotate-12 transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)]"
               >
-                <span class="text-black font-black text-lg md:text-xl italic">T</span>
+                <span class="text-black font-black text-lg md:text-xl italic"
+                  >T</span
+                >
               </div>
               <span
                 class="hidden lg:block text-sm md:text-xl font-[1000] italic tracking-tighter uppercase text-white"
@@ -87,22 +91,32 @@ const categories = [
 
           <div class="hidden md:flex items-center gap-4 lg:gap-6">
             <div class="relative group">
-              <button 
+              <button
                 @click="isCategoryOpen = !isCategoryOpen"
                 class="flex items-center space-x-1 text-[10px] font-black uppercase tracking-widest italic text-gray-400 hover:text-yellow-500 transition-colors"
               >
                 <span>Kategori</span>
-                <ChevronDownIcon class="w-3 h-3 transition-transform group-hover:rotate-180" />
+                <ChevronDownIcon
+                  class="w-3 h-3 transition-transform group-hover:rotate-180"
+                />
               </button>
-              
-              <div v-if="isCategoryOpen" class="absolute top-full mt-4 w-48 bg-[#0a0a0a] border border-white/10 rounded-2xl py-2 shadow-2xl z-[120]">
-                <a v-for="cat in categories" :key="cat" href="#" class="block px-4 py-3 text-[9px] font-black uppercase tracking-widest italic text-gray-400 hover:bg-white/5 hover:text-yellow-500 border-b border-white/5 last:border-0">
+
+              <div
+                v-if="isCategoryOpen"
+                class="absolute top-full mt-4 w-48 bg-[#0a0a0a] border border-white/10 rounded-2xl py-2 shadow-2xl z-[120]"
+              >
+                <a
+                  v-for="cat in categories"
+                  :key="cat"
+                  href="#"
+                  class="block px-4 py-3 text-[9px] font-black uppercase tracking-widest italic text-gray-400 hover:bg-white/5 hover:text-yellow-500 border-b border-white/5 last:border-0"
+                >
                   {{ cat }}
                 </a>
               </div>
             </div>
 
-            <button 
+            <button
               @click="scrollToElite"
               class="flex items-center space-x-1.5 text-[10px] font-black uppercase tracking-widest italic text-yellow-500 hover:text-white transition-colors"
             >
@@ -126,12 +140,22 @@ const categories = [
         </div>
 
         <div class="flex-shrink-0 flex items-center">
-          <div v-if="authReady" class="flex items-center gap-3 md:gap-4 lg:gap-6">
-            
-            <div v-if="userProfile" class="hidden sm:flex flex-col items-end px-3 py-1.5 border-r border-white/10">
-              <span class="text-[8px] font-black uppercase tracking-[0.2em] text-gray-500 italic">Dompet Saya</span>
+          <div
+            v-if="authReady"
+            class="flex items-center gap-3 md:gap-4 lg:gap-6"
+          >
+            <div
+              v-if="userProfile"
+              class="hidden sm:flex flex-col items-end px-3 py-1.5 border-r border-white/10"
+            >
+              <span
+                class="text-[8px] font-black uppercase tracking-[0.2em] text-gray-500 italic"
+                >Dompet Saya</span
+              >
               <div class="flex items-center gap-1.5 font-black italic">
-                <span class="text-[11px] text-white tracking-wider">Rp 500.000</span>
+                <span class="text-[11px] text-white tracking-wider"
+                  >Rp 500.000</span
+                >
                 <WalletIcon class="w-3.5 h-3.5 text-yellow-500" />
               </div>
             </div>
@@ -162,46 +186,62 @@ const categories = [
                 </button>
 
                 <transition
-  enter-active-class="transition duration-100"
-  enter-from-class="opacity-0 scale-95"
-  enter-to-class="opacity-100 scale-100"
->
-  <div
-    v-if="isProfileOpen"
-    class="absolute right-0 mt-3 w-56 bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl py-2 z-[110]"
-  >
-    <div class="sm:hidden px-4 py-3 border-b border-white/5 bg-white/5 mb-1">
-       <span class="text-[8px] font-black uppercase tracking-widest text-gray-500 italic">Saldo</span>
-       <p class="text-xs font-black text-yellow-500 italic">Rp 500.000</p>
-    </div>
+                  enter-active-class="transition duration-100"
+                  enter-from-class="opacity-0 scale-95"
+                  enter-to-class="opacity-100 scale-100"
+                >
+                  <div
+                    v-if="isProfileOpen"
+                    class="absolute right-0 mt-3 w-56 bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl py-2 z-[110]"
+                  >
+                    <div
+                      class="sm:hidden px-4 py-3 border-b border-white/5 bg-white/5 mb-1"
+                    >
+                      <span
+                        class="text-[8px] font-black uppercase tracking-widest text-gray-500 italic"
+                        >Saldo</span
+                      >
+                      <p class="text-xs font-black text-yellow-500 italic">
+                        Rp 500.000
+                      </p>
+                    </div>
 
-    <router-link
-      to="/profile"
-      @click="isProfileOpen = false"
-      class="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
-    >
-      <UserCircleIcon class="w-5 h-5 text-yellow-500" />
-      <span class="text-[9px] font-black uppercase tracking-widest italic">Pengaturan Profil</span>
-    </router-link>
+                    <router-link
+                      to="/profile"
+                      @click="isProfileOpen = false"
+                      class="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+                    >
+                      <UserCircleIcon class="w-5 h-5 text-yellow-500" />
+                      <span
+                        class="text-[9px] font-black uppercase tracking-widest italic"
+                        >Pengaturan Profil</span
+                      >
+                    </router-link>
 
-    <router-link
-      to="/my-bids"
-      @click="isProfileOpen = false"
-      class="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
-    >
-      <TrophyIcon class="w-5 h-5 text-yellow-500" />
-      <span class="text-[9px] font-black uppercase tracking-widest italic">Riwayat Penawaran</span>
-    </router-link>
+                    <router-link
+                      to="/my-bids"
+                      @click="isProfileOpen = false"
+                      class="flex items-center space-x-3 px-4 py-3 hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+                    >
+                      <TrophyIcon class="w-5 h-5 text-yellow-500" />
+                      <span
+                        class="text-[9px] font-black uppercase tracking-widest italic"
+                        >Riwayat Penawaran</span
+                      >
+                    </router-link>
 
-    <button
-      @click="handleLogout"
-      class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-red-500/10 text-gray-500 hover:text-red-500 transition-colors border-t border-white/5 mt-1"
-    >
-      <ArrowRightOnRectangleIcon class="w-5 h-5" />
-      <span class="text-[9px] font-black uppercase tracking-widest italic">Keluar Akun</span>
-    </button>
-  </div>
-</transition>
+                    <button
+                      @click="handleLogout"
+                      class="w-full flex items-center space-x-3 px-4 py-3 hover:bg-red-500/10 text-gray-500 hover:text-red-500 transition-colors border-t border-white/5 mt-1"
+                    >
+                      <ArrowRightOnRectangleIcon class="w-5 h-5" />
+                      <span
+                        class="text-[9px] font-black uppercase tracking-widest italic"
+                        >Keluar Akun</span
+                      >
+                    </button>
+                  </div>
+                </transition>
               </div>
             </div>
 
@@ -210,7 +250,7 @@ const categories = [
               to="/login"
               class="whitespace-nowrap bg-yellow-500 text-black px-4 md:px-6 py-2 md:py-2.5 rounded-lg md:rounded-xl font-black text-[9px] md:text-[11px] uppercase italic tracking-tighter md:tracking-widest hover:bg-white transition-all shadow-lg active:scale-95"
             >
-              Login Member
+              Login/Daftar
             </router-link>
           </div>
         </div>
