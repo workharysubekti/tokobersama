@@ -37,38 +37,38 @@ const routes = [
   },
   {
     path: "/admin",
-    component: () => import("../src/layouts/AdminLayout.vue"),
+    component: () => import("./layouts/AdminLayout.vue"),
     meta: { requiresAdmin: true },
     children: [
       {
         path: "",
         name: "AdminDashboard",
-        component: () => import("../src/views/admin/Dashboard.vue"),
+        component: () => import("./views/admin/Dashboard.vue"),
       },
       {
         path: "users",
         name: "AdminUsers",
-        component: () => import("../src/views/admin/Users.vue"),
+        component: () => import("./views/admin/Users.vue"),
       },
       {
         path: "tickets",
         name: "AdminTickets",
-        component: () => import("../src/views/admin/AdminInvestigation.vue"),
+        component: () => import("./views/admin/AdminInvestigation.vue"),
       },
       {
         path: "stats",
         name: "AdminStats",
-        component: () => import("../src/views/admin/Stats.vue"),
+        component: () => import("./views/admin/Stats.vue"),
       },
       {
         path: "income",
         name: "AdminIncome",
-        component: () => import("../src/views/admin/Income.vue"),
+        component: () => import("./views/admin/Income.vue"),
       },
       {
         path: "auctions",
         name: "AdminAuctions",
-        component: () => import("../src/views/admin/Auctions.vue"),
+        component: () => import("./views/admin/Auctions.vue"),
       },
     ],
   },
