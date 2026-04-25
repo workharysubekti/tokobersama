@@ -439,7 +439,7 @@ onUnmounted(() => {
                 >
               </div>
               <button
-                @click="submitReport"
+                @click="showReportModal = true"
                 class="flex items-center gap-2 bg-red-500/10 px-3 py-1.5 rounded-full border border-red-500/20 active:scale-95 transition-all"
               >
                 <ExclamationTriangleIcon class="w-3.5 h-3.5 text-red-500" />
@@ -669,14 +669,12 @@ onUnmounted(() => {
 
           <div class="flex gap-3">
             <button
-              @click="showReportModal = true"
-              class="flex items-center gap-2 bg-red-500/10 px-3 py-1.5 rounded-full border border-red-500/20 active:scale-95 transition-all"
+              @click="showReportModal = false"
+              class="flex-1 bg-white/5 text-gray-500 py-5 rounded-[24px] font-[1000] italic uppercase text-[10px] active:scale-95 transition-all"
             >
-              <ExclamationTriangleIcon class="w-3.5 h-3.5 text-red-500" />
-              <span class="text-[8px] font-black text-red-500 uppercase italic"
-                >Report</span
-              >
+              Cancel
             </button>
+
             <button
               @click="submitReport"
               :disabled="isSubmittingReport"
