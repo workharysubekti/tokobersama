@@ -22,13 +22,15 @@ const fetchMyBids = async () => {
     // 1. AMBIL HISTORY + JOIN PROFILE (Biar nggak Anonymous)
     const { data: userBids } = await supabase
       .from("bids")
-      .select(`
+      .select(
+        `
         product_id, 
         products (
           *, 
           profiles!owner_id(username, full_name, avatar_url)
         )
-      `)
+      `,
+      )
       .eq("user_id", props.userProfile.id)
       .order("created_at", { ascending: false });
 
@@ -122,7 +124,7 @@ const filteredBids = computed(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#050505] pt-28 pb-32 px-5 text-white">
+  <div class="min-h-screen bg-[#050505] pt-12 pb-32 px-5 text-white">
     <div class="max-w-2xl mx-auto">
       <div class="flex flex-col mb-10">
         <h2 class="text-3xl font-[1000] italic uppercase tracking-tighter mb-6">

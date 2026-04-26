@@ -97,7 +97,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="p-6 space-y-6 pt-24 pb-32">
+  <div class="p-6 space-y-6 pt-12 pb-32">
     <div class="flex items-center justify-between">
       <h2
         class="text-2xl font-[1000] italic uppercase tracking-tighter text-white"

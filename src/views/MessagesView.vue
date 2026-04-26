@@ -110,7 +110,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-black text-white pt-24 pb-32 px-6">
+  <div class="min-h-screen bg-black text-white pt-12 pb-32 px-6">
     <div class="max-w-2xl mx-auto">
       <h2
         class="text-4xl font-[1000] italic uppercase tracking-tighter mb-10 text-white"
