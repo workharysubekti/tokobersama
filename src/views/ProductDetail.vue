@@ -417,6 +417,27 @@ const placeBid = async () => {
   }
 };
 
+// Outbid Notif
+const isOutbid = ref(false);
+
+// Satpam pemantau posisi bid (Watcher)
+watch(recentBids, (newVal, oldVal) => {
+  if (oldVal && oldVal.length > 0 && newVal.length > 0 && props.userProfile) {
+    const wasTop = oldVal[0].user_id === props.userProfile.id;
+    const isNowOutbid = newVal[0].user_id !== props.userProfile.id;
+
+    // Jika tadinya #1 sekarang jadi bukan #1, nyalakan alarm merah
+    if (wasTop && isNowOutbid && timeLeft.value !== "ENDED") {
+      isOutbid.value = true;
+    }
+  }
+
+  // Jika user ngebid lagi dan sukses balik ke #1, matikan alarm
+  if (newVal.length > 0 && newVal[0].user_id === props.userProfile?.id) {
+    isOutbid.value = false;
+  }
+});
+
 onMounted(() => {
   fetchProductDetail();
   timerInterval = setInterval(() => {
@@ -917,7 +938,12 @@ onUnmounted(() => {
                 <button
                   @click="placeBid"
                   :disabled="isSubmitting"
-                  class="w-full bg-yellow-500 text-black py-7 rounded-3xl font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all shadow-[0_15px_40px_rgba(234,179,8,0.2)]"
+                  :class="[
+                    isOutbid
+                      ? 'bg-red-600 shadow-[0_15px_40px_rgba(220,38,38,0.4)] scale-[1.02] animate-pulse'
+                      : 'bg-yellow-500 shadow-[0_15px_40px_rgba(234,179,8,0.2)]',
+                    'w-full text-black py-7 rounded-3xl font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all',
+                  ]"
                 >
                   <div class="flex items-center gap-3">
                     <ArrowPathIcon
@@ -925,13 +951,20 @@ onUnmounted(() => {
                       class="w-7 h-7 animate-spin"
                     />
                     <BanknotesIcon v-else class="w-7 h-7 stroke-[2.5px]" />
-                    <span class="text-lg">Execute Bid</span>
+                    <span class="text-lg">
+                      {{ isOutbid ? "AMBIL ALIH BID!" : "Place Bid" }}
+                    </span>
                   </div>
                   <span
                     v-if="isIntense"
                     class="text-[8px] font-black tracking-[0.2em] animate-pulse"
-                    >!! FINAL CALL - ANTI SNIPER ACTIVE !!</span
                   >
+                    {{
+                      isOutbid
+                        ? "!! BIDMU TERLEWATI !!"
+                        : "!! FINAL CALL - ANTI SNIPER ACTIVE !!"
+                    }}
+                  </span>
                 </button>
               </div>
 
