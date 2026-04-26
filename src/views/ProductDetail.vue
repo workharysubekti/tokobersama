@@ -60,7 +60,7 @@ const userRank = computed(() => {
         "text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.8)] font-black",
     };
   }
-  const rep = props.userProfile?.reputation_score || 0;
+  const rep = props.userProfile?.reputation || 0;
   if (rep >= 600)
     return { name: "LEGEND", limit: Infinity, color: "text-purple-500" };
   if (rep >= 400)
@@ -173,7 +173,7 @@ const fetchBids = async () => {
   if (!route.params.id) return;
   const { data } = await supabase
     .from("bids")
-    .select("*, profiles(username, full_name, avatar_url, reputation_score)")
+    .select("*, profiles(username, full_name, avatar_url, reputation)")
     .eq("product_id", route.params.id)
     .order("amount", { ascending: false })
     .limit(10); // Ambil 10 bid terakhir
@@ -193,7 +193,7 @@ const fetchProductDetail = async () => {
     const { data, error } = await supabase
       .from("products")
       .select(
-        "*, profiles!owner_id(username, full_name, avatar_url, reputation_score)",
+        "*, profiles!owner_id(username, full_name, avatar_url, reputation)",
       )
       .eq("id", route.params.id)
       .maybeSingle();
@@ -267,7 +267,7 @@ const placeBid = async () => {
   }
 
   // 3. REPUTASI & RANK GUARD (SUCI)
-  const rep = props.userProfile?.reputation_score || 0;
+  const rep = props.userProfile?.reputation || 0;
   if (rep < 50 && props.userProfile?.is_admin !== true) {
     return notify.error("Reputasi Rendah", "Minimal 50 poin buat ngebid, Mas.");
   }
@@ -626,7 +626,7 @@ onUnmounted(() => {
                       <p
                         class="text-[8px] text-gray-600 font-bold uppercase tracking-widest mt-0.5"
                       >
-                        {{ bid.profiles?.reputation_score || 0 }} REP PTS
+                        {{ bid.profiles?.reputation || 0 }} REP PTS
                       </p>
                     </div>
                   </div>
@@ -731,7 +731,7 @@ onUnmounted(() => {
                   </p>
                   <span
                     class="text-[7px] font-black px-2 py-0.5 bg-yellow-500/10 text-yellow-500 rounded-full border border-yellow-500/20 italic"
-                    >REP: {{ product.profiles?.reputation_score }}</span
+                    >REP: {{ product.profiles?.reputation }}</span
                   >
                 </div>
                 <p

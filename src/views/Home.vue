@@ -44,9 +44,7 @@ const fetchProducts = async () => {
   try {
     const { data: prodData } = await supabase
       .from("products")
-      .select(
-        `*, profiles!owner_id (username, full_name, avatar_url, reputation_score)`,
-      )
+      .select(`*, profiles!owner_id (username, full_name, avatar_url, )`)
       .eq("status", "active")
       .order("created_at", { ascending: false });
 

@@ -33,7 +33,7 @@ const fetchCategoryProducts = async () => {
     const { data, count, error } = await supabase
       .from("products")
       .select(
-        `*, profiles!owner_id (username, full_name, avatar_url, reputation_score)`,
+        `*, profiles!owner_id (username, full_name, avatar_url, reputation)`,
         { count: "exact" },
       )
       .eq("status", "active")
