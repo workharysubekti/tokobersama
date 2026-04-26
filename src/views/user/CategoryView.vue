@@ -1,8 +1,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch, computed } from "vue";
 import { useRoute, useRouter } from "vue-router"; // Tambah useRouter
-import { supabase } from "../lib/supabase.js";
-import AuctionCard from "../components/AuctionCard.vue";
+import { supabase } from "../../lib/supabase.js";
+import AuctionCard from "../../components/AuctionCard.vue";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
