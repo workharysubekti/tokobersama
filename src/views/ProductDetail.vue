@@ -176,15 +176,8 @@ const prevImage = () => {
   activeImgIndex.value = (activeImgIndex.value - 1 + allImages.value.length) % allImages.value.length;
 };
 
-const handleTouchStart = (e) => { 
-  touchStartX.value = e.screenX || e.touches[0].clientX; 
-};
-
-const handleTouchEnd = (e) => { 
-  touchEndX.value = e.screenX || e.changedTouches[0].clientX; 
-  handleSwipe(); 
-};
-
+const handleTouchStart = (e) => { touchStartX.value = e.screenX || e.touches[0].clientX; };
+const handleTouchEnd = (e) => { touchEndX.value = e.screenX || e.changedTouches[0].clientX; handleSwipe(); };
 const handleSwipe = () => {
   const swipeDistance = touchStartX.value - touchEndX.value;
   if (swipeDistance > 50) nextImage();
@@ -195,14 +188,7 @@ const handleSwipe = () => {
 const showReportModal = ref(false);
 const isSubmittingReport = ref(false);
 const reportForm = ref({ category: "Palsu / Kw", details: "" });
-const reportCategories = [
-  "Palsu / KW",
-  "Penipuan Harga",
-  "Foto Tidak Sesuai",
-  "Kategori Salah",
-  "Mengandung Unsur SARA/Pornografi",
-  "Lainnya",
-];
+const reportCategories = ["Palsu / KW", "Penipuan Harga", "Foto Tidak Sesuai", "Kategori Salah", "Mengandung Unsur SARA/Pornografi", "Lainnya"];
 
 const submitReport = async () => {
   if (!props.userProfile) return notify.error("Auth Required", "Login dulu!");
@@ -303,7 +289,7 @@ const fetchProductDetail = async () => {
   }
 };
 
-// --- LOGIKA TIMER (SINKRONISASI & GRACE PERIOD) ---
+// --- LOGIKA TIMER (SINKRONISASI SERVER-SIDE + LAG SHIELD) ---
 const updateTimer = () => {
   if (!product.value?.end_time) return;
   
@@ -311,20 +297,19 @@ const updateTimer = () => {
   const now = new Date().getTime(); 
   const diff = end - now;
 
-  // --- ANTI GLITCH ENDED ---
-  // Jika hitungan lokal <= 0 tapi status di state belum 'closed' (atau bid baru sedang masuk),
-  // kita beri toleransi 1 detik sebelum benar-benar menunjukkan ENDED.
-  if (diff <= -1000) {
+  // --- LAG SHIELD: BERI NAPAS 3 DETIK SEBELUM NYATAKAN ENDED ---
+  // Ini untuk mencegah glitch saat database sedang update jam
+  if (diff <= -3000) {
     timeLeft.value = "ENDED";
     isIntense.value = false;
     return;
   }
 
-  // Notif Zona Perang (Hanya Muncul Sekali)
+  // Jika waktu kritis di mata device
   if (diff > 0 && diff <= 120000) {
     isIntense.value = true;
     if (!hasNotifiedIntense.value) {
-      notify.error("WAR ZONE!", "Lelang sisa 2 menit lagi!");
+      notify.error("WAR ZONE!", "Sisa waktu di bawah 2 menit!");
       hasNotifiedIntense.value = true;
     }
   } else {
@@ -342,7 +327,11 @@ const updateTimer = () => {
   if (d > 0) {
     timeLeft.value = `${d}d ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   } else {
-    timeLeft.value = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    // Tampilkan 00:00 jika dalam masa tenggang Lag Shield (3 detik tadi)
+    const displayH = h < 0 ? 0 : h;
+    const displayM = m < 0 ? 0 : m;
+    const displayS = s < 0 ? 0 : s;
+    timeLeft.value = `${displayH.toString().padStart(2, "0")}:${displayM.toString().padStart(2, "0")}:${displayS.toString().padStart(2, "0")}`;
   }
 };
 
@@ -368,7 +357,6 @@ const placeBid = async () => {
   try {
     isSubmitting.value = true;
 
-    // PANGGIL RPC (KEBENARAN SERVER)
     const { data, error } = await supabase.rpc('execute_bid_v1', {
       p_product_id: product.value.id,
       p_user_id: props.userProfile.id,
@@ -381,14 +369,12 @@ const placeBid = async () => {
       return;
     }
 
-    // PAKSA UPDATE LOKAL SECEPAT KILAT AGAR TIDAK TERLIHAT ENDED
+    // UPDATE LOKAL INSTAN BIAR GAK KELIHATAN ENDED
     product.value.end_time = data.new_end_time;
     product.value.current_bid = data.new_bid;
     bidAmount.value = Number(data.new_bid) + 10000;
     
-    nextTick(() => {
-      updateTimer();
-    });
+    nextTick(() => { updateTimer(); });
 
     notify.success("GACOR!", "Tawaran diterima server.");
     
@@ -402,57 +388,39 @@ const placeBid = async () => {
   }
 };
 
-// --- REAL-TIME LISTENERS ---
 onMounted(() => {
   fetchProductDetail();
-  
   timerInterval = setInterval(() => {
     updateTimer();
-    if (timeLeft.value === "ENDED" && !transaction.value) {
-      fetchTransaction();
-    }
+    if (timeLeft.value === "ENDED" && !transaction.value) fetchTransaction();
   }, 1000);
 
   if (route.params.id) {
     bidSubscription = supabase
       .channel(`live-auction-${route.params.id}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "bids", filter: `product_id=eq.${route.params.id}` },
-        (payload) => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "bids", filter: `product_id=eq.${route.params.id}` }, (payload) => {
           fetchBids(); 
           const minNext = Number(payload.new.amount) + 10000;
           if (bidAmount.value < minNext) bidAmount.value = minNext;
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "products", filter: `id=eq.${route.params.id}` },
-        (payload) => {
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "products", filter: `id=eq.${route.params.id}` }, (payload) => {
           if (payload.new.status === "banned") { showBannedModal.value = true; return; }
-          
           if (product.value) {
             product.value.status = payload.new.status;
             product.value.winner_id = payload.new.winner_id;
             product.value.current_bid = payload.new.current_bid;
-            
-            // PAKSA SINKRON WAKTU DARI INDUK
-            const oldT = new Date(product.value.end_time).getTime();
-            const newT = new Date(payload.new.end_time).getTime();
             product.value.end_time = payload.new.end_time;
             
-            // PAKSA RE-KALKULASI TIMER DETIK INI JUGA (MENCEGAH ENDED PALSU)
-            nextTick(() => { 
-              updateTimer(); 
-            });
+            nextTick(() => { updateTimer(); });
 
+            const oldT = new Date(payload.old.end_time).getTime();
+            const newT = new Date(payload.new.end_time).getTime();
             if (newT > oldT + 2000) {
               notify.success("TIME EXTENDED!", "Waktu lelang bertambah!");
               hasNotifiedIntense.value = false; 
             }
           }
-        },
-      )
+      })
       .subscribe();
   }
 });
@@ -513,20 +481,14 @@ onUnmounted(() => {
           </div>
 
           <div class="hidden lg:block space-y-6">
-            <div class="px-2">
-              <div class="flex items-center gap-3 mb-5">
-                <div class="w-2 h-2 bg-yellow-500 rounded-full animate-ping"></div>
-                <h2 class="text-sm font-[1000] italic uppercase tracking-[0.3em] text-white">Live <span class="text-yellow-500">Feed</span> Transmission</h2>
-              </div>
-              <div class="flex p-1.5 bg-white/5 border border-white/10 rounded-2xl w-full max-w-xs mb-6">
-                <button @click="activeBidTab = 'ranking'" :class="activeBidTab === 'ranking' ? 'bg-yellow-500 text-black shadow-lg' : 'text-gray-500 hover:text-white'" class="flex-1 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300">Ranking</button>
-                <button @click="activeBidTab = 'history'" :class="activeBidTab === 'history' ? 'bg-white text-black shadow-lg' : 'text-gray-500 hover:text-white'" class="flex-1 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300">History</button>
-              </div>
+            <div class="flex p-1.5 bg-white/5 border border-white/10 rounded-2xl w-full max-w-xs mb-6">
+              <button @click="activeBidTab = 'ranking'" :class="activeBidTab === 'ranking' ? 'bg-yellow-500 text-black shadow-lg' : 'text-gray-500 hover:text-white'" class="flex-1 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all">Ranking</button>
+              <button @click="activeBidTab = 'history'" :class="activeBidTab === 'history' ? 'bg-white text-black shadow-lg' : 'text-gray-500 hover:text-white'" class="flex-1 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all">History</button>
             </div>
 
             <div class="min-h-[400px]">
               <div v-if="activeBidTab === 'ranking'" class="space-y-4">
-                <div v-for="(bid, index) in rankedBids" :key="'rank-' + bid.id" @click="router.push(`/user/${bid.profiles?.username}`)" class="flex items-center justify-between p-5 rounded-[28px] border border-white/5 bg-white/[0.02] group cursor-pointer hover:border-yellow-500/30 transition-all" :class="index === 0 ? 'border-yellow-500/30 bg-yellow-500/5 ring-1 ring-yellow-500/20 shadow-2xl' : ''">
+                <div v-for="(bid, index) in rankedBids" :key="'rank-' + bid.id" @click="router.push(`/user/${bid.profiles?.username}`)" class="flex items-center justify-between p-5 rounded-[28px] border border-white/5 bg-white/[0.02] group cursor-pointer hover:border-yellow-500/30 transition-all" :class="index === 0 ? 'border-yellow-500/30 bg-yellow-500/5 shadow-2xl' : ''">
                   <div class="flex items-center gap-5">
                     <div class="w-8 text-center font-[1000] italic text-xl" :class="index < 3 ? 'text-yellow-500' : 'text-gray-700'">#{{ index + 1 }}</div>
                     
@@ -538,7 +500,7 @@ onUnmounted(() => {
                     </div>
 
                     <div>
-                      <p class="text-sm font-black italic uppercase group-hover:text-yellow-500 transition-colors">@{{ bid.profiles?.username }}</p>
+                      <p class="text-sm font-black italic uppercase group-hover:text-yellow-500">@{{ bid.profiles?.username }}</p>
                       <p class="text-[8px] text-gray-600 font-bold uppercase tracking-widest">{{ bid.profiles?.reputation || 0 }} REP PTS</p>
                     </div>
                   </div>
@@ -625,12 +587,12 @@ onUnmounted(() => {
                 <div class="relative group">
                   <span class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-sm italic tracking-tighter">IDR</span>
                   <div class="flex gap-3 mb-4 overflow-x-auto no-scrollbar pb-2">
-                    <button v-for="plus in [10000, 50000, 100000, 500000]" :key="plus" @click="bidAmount = (product.current_bid || product.starting_bid) + plus" class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 hover:bg-yellow-500 hover:text-black transition-all active:scale-90">+{{ plus / 1000 }}K</button>
+                    <button v-for="plus in [10000, 50000, 100000, 500000]" :key="plus" @click="bidAmount = (product.current_bid || product.starting_bid) + plus" class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 active:scale-90">+{{ plus / 1000 }}K</button>
                   </div>
                   <input v-model.number="bidAmount" type="number" class="w-full bg-black border-2 border-white/10 rounded-3xl py-7 pl-20 pr-6 text-3xl font-[1000] italic focus:border-yellow-500 text-white outline-none" />
                 </div>
 
-                <button @click="placeBid" :disabled="isSubmitting || isCooldown" :class="isOutbid ? 'bg-red-600 shadow-red-500/40 animate-pulse scale-[1.02]' : 'bg-yellow-500 shadow-yellow-500/20'" class="w-full text-black py-7 rounded-[35px] font-[1000] italic uppercase active:scale-95 flex flex-col items-center justify-center gap-1 transition-all shadow-2xl">
+                <button @click="placeBid" :disabled="isSubmitting || isCooldown" :class="isOutbid ? 'bg-red-600 shadow-red-500/40 animate-pulse scale-[1.02]' : 'bg-yellow-500 shadow-yellow-500/20'" class="w-full text-black py-7 rounded-3xl font-[1000] italic uppercase active:scale-95 flex flex-col items-center justify-center gap-1 transition-all shadow-2xl">
                   <div class="flex items-center gap-3">
                     <ArrowPathIcon v-if="isSubmitting" class="w-7 h-7 animate-spin" />
                     <BanknotesIcon v-else class="w-7 h-7 stroke-[2.5px]" />
@@ -645,7 +607,7 @@ onUnmounted(() => {
                   <div class="absolute -right-4 -top-4 opacity-10 rotate-12"><TrophyIcon class="w-40 h-40 text-green-500" /></div>
                   <h2 class="text-2xl font-[1000] italic uppercase text-white mb-6">You Won This Asset!</h2>
                   <div class="bg-black/40 p-6 rounded-3xl border border-white/5 mb-6 flex justify-between items-center"><span class="text-[10px] font-bold uppercase italic text-gray-500">Total Settlement</span><span class="text-white font-black italic">{{ formatPrice(totalToPay) }}</span></div>
-                  <button v-if="!transaction || transaction.status === 'pending_payment'" @click="showPaymentModal = true" class="w-full bg-green-500 text-black py-5 rounded-[25px] font-black italic uppercase text-xs flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg"><ShieldCheckIcon class="w-5 h-5" /> Pay to Escrow</button>
+                  <button v-if="!transaction || transaction.status === 'pending_payment'" @click="showPaymentModal = true" class="w-full bg-green-500 text-black py-5 rounded-[25px] font-black italic uppercase text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"><ShieldCheckIcon class="w-5 h-5" /> Pay to Escrow</button>
                   <button @click="router.push(`/chat/${product.id}`)" class="w-full mt-4 bg-white/5 border border-white/10 text-white py-4 rounded-2xl font-black italic uppercase text-[10px] flex items-center justify-center gap-3">
                     <ChatBubbleLeftRightIcon class="w-5 h-5" /> Live Chat with Seller
                   </button>
@@ -689,7 +651,7 @@ onUnmounted(() => {
                     <div class="w-10 h-10 rounded-xl overflow-hidden border border-white/10 flex-shrink-0">
                       <img v-if="bid.profiles?.avatar_url && bid.profiles.avatar_url.trim() !== ''" :src="bid.profiles.avatar_url" class="w-full h-full object-cover" />
                       <div v-else class="w-full h-full bg-gray-800 flex items-center justify-center">
-                        <UserIcon class="w-6 h-6 text-gray-500" />
+                        <UserIcon class="w-6 h-6 text-gray-500 p-2" />
                       </div>
                     </div>
                     <p class="text-xs font-black italic uppercase">@{{ bid.profiles?.username }}</p>
