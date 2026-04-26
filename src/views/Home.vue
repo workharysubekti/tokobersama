@@ -83,6 +83,7 @@ const fetchProducts = async () => {
   }
 };
 
+// FUNGSI SCROLL NAVIGASI
 const scroll = (containerRef, direction) => {
   if (containerRef) {
     const cardWidth =
@@ -100,24 +101,19 @@ onMounted(async () => {
 
   productSubscription = supabase
     .channel("home-live")
-    // --- 1. LISTENER PRODUK (Untuk Basmi Hantu Banned) ---
     .on(
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "products" },
       (payload) => {
         if (payload.new.status === "banned") {
-          // Kalau status berubah jadi banned, hapus instan dari layar user
           products.value = products.value.filter(
             (p) => p.id !== payload.new.id,
           );
         } else {
-          // Kalau update biasa (misal admin ganti deskripsi atau ganti status ke closed)
-          // Kita panggil fetchProducts biar datanya paling update
           fetchProducts();
         }
       },
     )
-    // --- 2. LISTENER BID (Hanya Untuk Update Harga) ---
     .on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "bids" },
@@ -125,8 +121,6 @@ onMounted(async () => {
         const pIndex = products.value.findIndex(
           (p) => p.id === payload.new.product_id,
         );
-
-        // Update harga kalau bid baru lebih tinggi dari yang ada di layar
         if (
           pIndex !== -1 &&
           payload.new.amount > (products.value[pIndex].current_bid || 0)
@@ -137,6 +131,7 @@ onMounted(async () => {
     )
     .subscribe();
 });
+
 onUnmounted(() => {
   if (productSubscription) supabase.removeChannel(productSubscription);
   if (bannerInterval) clearInterval(bannerInterval);
@@ -158,7 +153,6 @@ const regularProducts = computed(() => {
   let list = filteredByTime.value.filter((p) => !p.is_priority);
   if (selectedCategory.value !== "Semua") {
     list = list.filter((p) => {
-      // FIX: Case insensitive & Trim spasi hantu
       const prodCat = p.category?.toLowerCase().trim();
       const selectedCat = selectedCategory.value.toLowerCase().trim();
       return prodCat === selectedCat;
@@ -255,7 +249,7 @@ const isSlotAvailable = computed(
               :class="
                 selectedCategory === 'Semua' ? 'text-white' : 'text-gray-500'
               "
-              class="text-[8px] font-black uppercase italic text-center leading-tight transition-colors"
+              class="text-[8px] font-black uppercase italic text-center leading-tight"
               >Semua</span
             >
           </button>
@@ -283,7 +277,7 @@ const isSlotAvailable = computed(
             </div>
             <span
               :class="selectedCategory === cat ? 'text-white' : 'text-gray-500'"
-              class="text-[8px] font-black uppercase italic text-center leading-tight transition-colors"
+              class="text-[8px] font-black uppercase italic text-center leading-tight"
               >{{ cat }}</span
             >
           </button>
@@ -303,7 +297,22 @@ const isSlotAvailable = computed(
               Elite <span class="text-yellow-500">Selection</span>
             </h2>
           </div>
+          <div class="hidden md:flex items-center space-x-2">
+            <button
+              @click="scroll(priorityContainer, 'left')"
+              class="p-2 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-all active:scale-90"
+            >
+              <ChevronLeftIcon class="w-4 h-4 text-white" />
+            </button>
+            <button
+              @click="scroll(priorityContainer, 'right')"
+              class="p-2 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-all active:scale-90"
+            >
+              <ChevronRightIcon class="w-4 h-4 text-white" />
+            </button>
+          </div>
         </div>
+
         <div ref="priorityContainer" class="carousel-wrapper no-scrollbar">
           <div
             v-for="product in priorityProducts"
@@ -338,7 +347,22 @@ const isSlotAvailable = computed(
               Live <span class="text-gray-500">Auctions</span>
             </h2>
           </div>
+          <div class="hidden md:flex items-center space-x-2">
+            <button
+              @click="scroll(scrollContainer, 'left')"
+              class="p-2 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-all active:scale-90"
+            >
+              <ChevronLeftIcon class="w-4 h-4 text-white" />
+            </button>
+            <button
+              @click="scroll(scrollContainer, 'right')"
+              class="p-2 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-all active:scale-90"
+            >
+              <ChevronRightIcon class="w-4 h-4 text-white" />
+            </button>
+          </div>
         </div>
+
         <div ref="scrollContainer" class="carousel-wrapper no-scrollbar">
           <div
             v-for="product in regularProducts"

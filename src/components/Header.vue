@@ -34,13 +34,20 @@ const handleLogout = async () => {
   router.push("/").then(() => window.location.reload());
 };
 
+// Fungsi navigasi kategori yang aman untuk karakter &
+const navigateToCategory = (cat) => {
+  isCategoryOpen.value = false;
+  // Kita arahkan ke halaman Search dengan query category
+  // Vue Router otomatis melakukan encodeURIComponent untuk karakter '&'
+  router.push({ name: "Search", query: { category: cat } });
+};
+
 // Fungsi Smooth Scroll ke Elite Section
 const scrollToElite = () => {
   const element = document.getElementById("elite-section");
   if (element) {
     element.scrollIntoView({ behavior: "smooth" });
   } else {
-    // Kalau user lagi di halaman lain, balik ke home dulu baru scroll
     router.push("/").then(() => {
       setTimeout(() => {
         document
@@ -51,13 +58,14 @@ const scrollToElite = () => {
   }
 };
 
+// Pastikan list ini SAMA PERSIS dengan yang ada di HomeView
 const categories = [
   "TCG & Kartu",
   "Action Figure",
   "Diecast & Miniatur",
   "Virtual Item",
   "Fashion & Thrift",
-  "Hobi & Kolektibel",
+  "Hobi & kolektibel",
 ];
 </script>
 
@@ -98,7 +106,8 @@ const categories = [
               >
                 <span>Kategori</span>
                 <ChevronDownIcon
-                  class="w-3 h-3 transition-transform group-hover:rotate-180"
+                  class="w-3 h-3 transition-transform"
+                  :class="isCategoryOpen ? 'rotate-180' : ''"
                 />
               </button>
 
@@ -106,14 +115,14 @@ const categories = [
                 v-if="isCategoryOpen"
                 class="absolute top-full mt-4 w-48 bg-[#0a0a0a] border border-white/10 rounded-2xl py-2 shadow-2xl z-[120]"
               >
-                <a
+                <button
                   v-for="cat in categories"
                   :key="cat"
-                  href="#"
-                  class="block px-4 py-3 text-[9px] font-black uppercase tracking-widest italic text-gray-400 hover:bg-white/5 hover:text-yellow-500 border-b border-white/5 last:border-0"
+                  @click="navigateToCategory(cat)"
+                  class="w-full text-left block px-4 py-3 text-[9px] font-black uppercase tracking-widest italic text-gray-400 hover:bg-white/5 hover:text-yellow-500 border-b border-white/5 last:border-0 transition-colors"
                 >
                   {{ cat }}
-                </a>
+                </button>
               </div>
             </div>
 
@@ -155,7 +164,7 @@ const categories = [
               >
               <div class="flex items-center gap-1.5 font-black italic">
                 <span class="text-[11px] text-white tracking-wider"
-                  >Rp 500.000</span
+                  >Rp {{ userProfile.balance?.toLocaleString() || 0 }}</span
                 >
                 <WalletIcon class="w-3.5 h-3.5 text-yellow-500" />
               </div>
@@ -203,7 +212,7 @@ const categories = [
                         >Saldo</span
                       >
                       <p class="text-xs font-black text-yellow-500 italic">
-                        Rp 500.000
+                        Rp {{ userProfile.balance?.toLocaleString() || 0 }}
                       </p>
                     </div>
 
