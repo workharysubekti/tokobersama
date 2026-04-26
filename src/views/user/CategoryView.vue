@@ -1,13 +1,9 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch, computed } from "vue";
-import { useRoute, useRouter } from "vue-router"; // Tambah useRouter
+import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../../lib/supabase.js";
 import AuctionCard from "../../components/AuctionCard.vue";
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  TagIcon,
-} from "@heroicons/vue/24/outline";
+import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/vue/24/outline";
 
 const route = useRoute();
 const router = useRouter();
@@ -18,7 +14,7 @@ const currentPage = ref(1);
 const itemsPerPage = 12;
 let productSubscription = null;
 
-// DAFTAR KATEGORI UNTUK NAVIGASI MOBILE
+// DAFTAR KATEGORI SAMA DENGAN NAVBAR & HOME
 const categories = [
   "TCG & Kartu",
   "Action Figure",
@@ -42,13 +38,13 @@ const fetchCategoryProducts = async () => {
       )
       .eq("status", "active")
       .neq("status", "banned")
-      .eq("category", route.params.name)
+      // FIX: Gunakan .ilike supaya filter tidak sensitif terhadap huruf kapital (Case Insensitive)
+      .ilike("category", route.params.name)
       .range(from, to)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
-    // Fetch latest bids logic tetap sama (Kode Suci)
     if (data && data.length > 0) {
       const productIds = data.map((p) => p.id);
       const { data: latestBidsData } = await supabase
@@ -77,6 +73,8 @@ const fetchCategoryProducts = async () => {
 
 const setupRealtime = () => {
   if (productSubscription) supabase.removeChannel(productSubscription);
+
+  // Vue Router otomatis handle decode URL, jadi route.params.name sudah bersih dari %20 dsb.
   productSubscription = supabase
     .channel(`category-${route.params.name}`)
     .on(
@@ -141,7 +139,7 @@ const totalPages = computed(() => Math.ceil(totalCount.value / itemsPerPage));
             @click="router.push('/category/' + cat)"
             :class="
               route.params.name === cat
-                ? 'bg-yellow-500 text-black border-yellow-500'
+                ? 'bg-yellow-500 text-black border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.3)]'
                 : 'bg-white/5 text-gray-500 border-white/10'
             "
             class="flex-shrink-0 px-4 py-2 rounded-xl border text-[9px] font-black uppercase italic transition-all active:scale-95"
@@ -167,7 +165,10 @@ const totalPages = computed(() => Math.ceil(totalCount.value / itemsPerPage));
         </h1>
       </div>
 
-      <div v-if="loading" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div
+        v-if="loading"
+        class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6"
+      >
         <div
           v-for="i in 8"
           :key="i"
@@ -182,6 +183,61 @@ const totalPages = computed(() => Math.ceil(totalCount.value / itemsPerPage));
         <div v-for="product in products" :key="product.id">
           <AuctionCard :product="product" />
         </div>
+      </div>
+
+      <div
+        v-else
+        class="py-32 text-center border-2 border-dashed border-white/5 rounded-[40px]"
+      >
+        <p
+          class="text-[10px] font-black text-gray-700 uppercase tracking-[0.5em] italic"
+        >
+          No Signal Detected in this Category.
+        </p>
+      </div>
+
+      <div
+        v-if="totalPages > 1"
+        class="mt-20 flex justify-center items-center gap-4"
+      >
+        <button
+          @click="
+            currentPage--;
+            fetchCategoryProducts();
+          "
+          :disabled="currentPage === 1"
+          class="p-4 rounded-2xl bg-white/5 border border-white/10 disabled:opacity-10 active:scale-90"
+        >
+          <ChevronLeftIcon class="w-5 h-5 text-white" />
+        </button>
+        <div class="flex gap-2">
+          <button
+            v-for="page in totalPages"
+            :key="page"
+            @click="
+              currentPage = page;
+              fetchCategoryProducts();
+            "
+            :class="
+              currentPage === page
+                ? 'bg-yellow-500 text-black'
+                : 'bg-white/5 text-gray-500'
+            "
+            class="w-12 h-12 rounded-xl font-black text-[10px] italic transition-all"
+          >
+            {{ page }}
+          </button>
+        </div>
+        <button
+          @click="
+            currentPage++;
+            fetchCategoryProducts();
+          "
+          :disabled="currentPage === totalPages"
+          class="p-4 rounded-2xl bg-white/5 border border-white/10 disabled:opacity-10 active:scale-90"
+        >
+          <ChevronRightIcon class="w-5 h-5 text-white" />
+        </button>
       </div>
     </div>
   </div>

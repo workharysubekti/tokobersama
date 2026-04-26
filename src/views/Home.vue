@@ -1,12 +1,11 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from "vue";
 import { supabase } from "../lib/supabase.js";
-import { useRouter } from "vue-router"; // Tambah ini Mas
+import { useRouter } from "vue-router";
 import AuctionCard from "../components/AuctionCard.vue";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
-  StarIcon,
   PlusIcon,
   Squares2X2Icon,
   TagIcon,
@@ -17,7 +16,7 @@ const props = defineProps({
   authReady: Boolean,
 });
 
-const router = useRouter(); // Tambah ini Mas
+const router = useRouter();
 const products = ref([]);
 const loading = ref(true);
 const scrollContainer = ref(null);
@@ -33,7 +32,6 @@ const banners = ref([
 ]);
 let bannerInterval = null;
 
-// LOGIKA KATEGORI (Hanya untuk filter 'Semua' di Home)
 const selectedCategory = ref("Semua");
 
 const startBannerAutoplay = () => {
@@ -142,7 +140,7 @@ const priorityProducts = computed(() => {
 });
 
 const regularProducts = computed(() => {
-  // Di Home Mobile, filter sekarang cuma buat "Semua"
+  // KODE SUCI: List lelang utama tetap normal
   return filteredByTime.value.filter((p) => !p.is_priority);
 });
 
@@ -198,7 +196,7 @@ const isSlotAvailable = computed(
             <div
               class="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"
             ></div>
-            Menu Utama
+            Navigasi
           </h2>
         </div>
 
@@ -224,9 +222,9 @@ const isSlotAvailable = computed(
                 Semua
               </p>
               <p
-                class="text-[7px] font-bold text-gray-500 uppercase tracking-widest mt-1"
+                class="text-[7px] font-bold text-gray-500 uppercase mt-1 italic"
               >
-                Lihat Feed
+                Feed Utama
               </p>
             </div>
           </button>
@@ -247,9 +245,9 @@ const isSlotAvailable = computed(
                 Kategori
               </p>
               <p
-                class="text-[7px] font-bold text-gray-500 uppercase tracking-widest mt-1"
+                class="text-[7px] font-bold text-gray-500 uppercase mt-1 italic"
               >
-                Layar Penuh
+                Cek Lainnya
               </p>
             </div>
           </button>
@@ -348,7 +346,7 @@ const isSlotAvailable = computed(
             class="w-full py-24 text-center border-2 border-dashed border-white/5 rounded-[40px]"
           >
             <p
-              class="text-[10px] font-black uppercase tracking-[0.4em] text-gray-700 italic"
+              class="text-[10px] font-black uppercase tracking-[0.4em] text-gray-700 italic text-white"
             >
               Belum ada lelang aktif saat ini.
             </p>
@@ -358,3 +356,30 @@ const isSlotAvailable = computed(
     </div>
   </div>
 </template>
+
+<style scoped>
+.carousel-wrapper {
+  display: flex !important;
+  overflow-x: auto !important;
+  scroll-behavior: smooth !important;
+  gap: 12px !important;
+  padding: 10px 0;
+  -webkit-overflow-scrolling: touch;
+}
+.card-container {
+  flex: 0 0 auto !important;
+  width: 45% !important;
+}
+@media (min-width: 1024px) {
+  .card-container {
+    width: 23.5% !important;
+  }
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+</style>
