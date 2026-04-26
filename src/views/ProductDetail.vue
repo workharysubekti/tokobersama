@@ -35,6 +35,80 @@ const isIntense = ref(false); // Mode 2 menit terakhir
 const hasNotifiedIntense = ref(false);
 const showBannedModal = ref(false);
 
+// -- STATE TRANSAKSI ---
+const transaction = ref(null);
+const showPaymentModal = ref(false);
+const showProofModal = ref(false);
+const adminFee = 5000;
+const isSubmittingAction = ref(false);
+
+// 1. Cek Apakah User adalah Pemenang
+const isWinner = computed(() => {
+  return (
+    timeLeft.value === "ENDED" &&
+    recentBids.value.length > 0 &&
+    props.userProfile?.id === recentBids.value[0].user_id
+  );
+});
+
+// 2. Cek Apakah User adalah Penjual
+const isSeller = computed(() => {
+  return props.userProfile?.id === product.value?.owner_id;
+});
+
+// 3. Hitung Total yang Harus Dibayar Buyer
+const totalToPay = computed(() => {
+  const winningBid = recentBids.value[0]?.amount || 0;
+  return winningBid + adminFee;
+});
+
+// 4. Fungsi Ambil Data Transaksi (Panggil di onMounted)
+const fetchTransaction = async () => {
+  if (timeLeft.value !== "ENDED") return;
+  const { data } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("product_id", route.params.id)
+    .maybeSingle();
+
+  if (data) {
+    transaction.value = data;
+  } else if (isWinner.value) {
+    // Jika lelang selesai, winner login, tapi record transaksi belum ada, BUAT OTOMATIS
+    const { data: newTx } = await supabase
+      .from("transactions")
+      .insert({
+        product_id: product.value.id,
+        buyer_id: props.userProfile.id,
+        seller_id: product.value.owner_id,
+        amount_bid: recentBids.value[0].amount,
+        total_amount: totalToPay.value,
+      })
+      .select()
+      .single();
+    transaction.value = newTx;
+  }
+};
+
+// 5. Fungsi Konfirmasi Pembayaran (Winner)
+const confirmPayment = async (method) => {
+  isSubmittingAction.value = true;
+  const { error } = await supabase
+    .from("transactions")
+    .update({
+      status: "escrow_holding",
+      payment_method: method,
+    })
+    .eq("id", transaction.value.id);
+
+  if (!error) {
+    transaction.value.status = "escrow_holding";
+    notify.success("Pembayaran Berhasil", "Dana ditahan di Escrow TokBer.");
+    showPaymentModal.value = false;
+  }
+  isSubmittingAction.value = false;
+};
+
 // --- REFORMASI LOGIKA RANKING (UNIQUE BIDDERS) ---
 const rankedBids = computed(() => {
   if (!recentBids.value || recentBids.value.length === 0) return [];
@@ -346,7 +420,10 @@ const placeBid = async () => {
 
 onMounted(() => {
   fetchProductDetail();
-  timerInterval = setInterval(updateTimer, 1000);
+  timerInterval = setInterval(() => {
+    updateTimer();
+    if (timeLfet.value === "ENDED" && !transaction.value) fetchTransaction();
+  }, 1000);
 
   const checkBannedElement = setInterval(() => {
     if (showBannedModal.value) {
@@ -840,30 +917,176 @@ onUnmounted(() => {
                   class="w-full bg-black border-2 border-white/10 rounded-3xl py-7 pl-20 pr-6 text-3xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none"
                 />
               </div>
-              <button
-                @click="placeBid"
-                :disabled="isSubmitting || timeLeft === 'ENDED'"
-                class="w-full bg-yellow-500 text-black py-7 rounded-3xl font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all shadow-[0_15px_40px_rgba(234,179,8,0.2)]"
+              <div
+                v-if="timeLeft === 'ENDED' && (isWinner || isSeller)"
+                class="mt-10 space-y-6"
               >
-                <div class="flex items-center gap-3">
-                  <ArrowPathIcon
-                    v-if="isSubmitting"
-                    class="w-7 h-7 animate-spin"
-                  /><BanknotesIcon v-else class="w-7 h-7 stroke-[2.5px]" /><span
-                    class="text-lg"
-                    >{{
-                      timeLeft === "ENDED"
-                        ? "TRANSMISSION CLOSED"
-                        : "Execute Bid"
-                    }}</span
-                  >
-                </div>
-                <span
-                  v-if="isIntense"
-                  class="text-[8px] font-black tracking-[0.2em] animate-pulse"
-                  >!! FINAL CALL - ANTI SNIPER ACTIVE !!</span
+                <div
+                  class="bg-[#0a0a0a] border-2 border-yellow-500/20 rounded-[45px] p-8 lg:p-10 shadow-2xl relative overflow-hidden"
                 >
-              </button>
+                  <div class="flex items-center justify-between mb-8">
+                    <div>
+                      <p
+                        class="text-[9px] font-black text-yellow-500 uppercase italic tracking-[0.4em] mb-1"
+                      >
+                        Escrow Protocol
+                      </p>
+                      <h2
+                        class="text-2xl font-[1000] italic uppercase text-white"
+                      >
+                        {{ isWinner ? "Secure Payment" : "Order Tracking" }}
+                      </h2>
+                    </div>
+                    <div
+                      class="px-5 py-2 bg-yellow-500 text-black rounded-2xl font-black italic text-[10px] uppercase"
+                    >
+                      Status: {{ transaction?.status.replace("_", " ") }}
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                    <div
+                      class="p-6 bg-white/5 rounded-3xl border border-white/5"
+                    >
+                      <p
+                        class="text-[8px] font-black text-gray-500 uppercase mb-2 italic"
+                      >
+                        Aset Price
+                      </p>
+                      <p class="text-xl font-[1000] italic text-white">
+                        {{ formatPrice(recentBids[0].amount) }}
+                      </p>
+                    </div>
+                    <div
+                      class="p-6 bg-white/5 rounded-3xl border border-white/5"
+                    >
+                      <p
+                        class="text-[8px] font-black text-yellow-500 uppercase mb-2 italic"
+                      >
+                        Admin Fee (Escrow)
+                      </p>
+                      <p class="text-xl font-[1000] italic text-yellow-500">
+                        {{ formatPrice(adminFee) }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="isWinner && transaction?.status === 'pending_payment'"
+                    class="space-y-4"
+                  >
+                    <div
+                      class="p-6 bg-yellow-500/10 border border-yellow-500/20 rounded-3xl mb-6"
+                    >
+                      <p
+                        class="text-[10px] font-bold text-yellow-500 italic leading-relaxed"
+                      >
+                        Silakan transfer sebesar
+                        <span class="font-black underline">{{
+                          formatPrice(totalToPay)
+                        }}</span>
+                        ke Rekening Escrow TokBer untuk mengamankan aset ini.
+                      </p>
+                    </div>
+                    <button
+                      @click="showPaymentModal = true"
+                      class="w-full bg-yellow-500 text-black py-6 rounded-[25px] font-black italic uppercase tracking-widest hover:scale-[1.02] transition-all"
+                    >
+                      Pilih Metode Pembayaran
+                    </button>
+                  </div>
+
+                  <div
+                    v-if="transaction?.status === 'escrow_holding'"
+                    class="text-center py-6"
+                  >
+                    <div
+                      class="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/40"
+                    >
+                      <ShieldCheckIcon class="w-8 h-8 text-blue-500" />
+                    </div>
+                    <h4 class="text-white font-black italic uppercase">
+                      Dana Diamankan TokBer
+                    </h4>
+                    <p class="text-[10px] text-gray-500 uppercase italic mt-2">
+                      {{
+                        isSeller
+                          ? "Segera kirim barang dan input resi."
+                          : "Menunggu penjual mengirimkan barang."
+                      }}
+                    </p>
+                    <div v-if="isSeller" class="mt-6 flex gap-3">
+                      <input
+                        type="text"
+                        placeholder="Masukkan Nomor Resi"
+                        class="flex-1 bg-black border border-white/10 rounded-2xl px-5 text-xs italic font-bold outline-none focus:border-blue-500"
+                      />
+                      <button
+                        class="bg-blue-600 px-6 py-4 rounded-2xl font-black italic text-[10px] uppercase"
+                      >
+                        Update
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    @click="router.push(`/chat/${product.id}`)"
+                    class="w-full mt-6 bg-white/5 border border-white/10 text-white py-5 rounded-[25px] font-black italic uppercase text-[10px] flex items-center justify-center gap-3 hover:bg-white/10 transition-all"
+                  >
+                    <ChatBubbleLeftRightIcon class="w-5 h-5" />
+                    Live Discussion (Seller & Winner)
+                  </button>
+                </div>
+              </div>
+
+              <div
+                v-if="showPaymentModal"
+                class="fixed inset-0 z-[400] flex items-center justify-center px-6"
+              >
+                <div
+                  class="absolute inset-0 bg-black/95 backdrop-blur-xl"
+                  @click="showPaymentModal = false"
+                ></div>
+                <div
+                  class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[45px] p-10"
+                >
+                  <h3
+                    class="text-xl font-[1000] italic uppercase text-white mb-8 text-center"
+                  >
+                    Payment <span class="text-yellow-500">Escrow</span>
+                  </h3>
+
+                  <div class="space-y-4">
+                    <button
+                      @click="confirmPayment('QRIS')"
+                      class="w-full flex items-center justify-between p-6 bg-white/5 rounded-3xl border border-white/5 hover:border-yellow-500/50 transition-all"
+                    >
+                      <span
+                        class="text-xs font-black italic text-white uppercase"
+                        >QRIS / ALL E-WALLET</span
+                      >
+                      <QrCodeIcon class="w-6 h-6 text-yellow-500" />
+                    </button>
+                    <button
+                      @click="confirmPayment('BANK_TRANSFER')"
+                      class="w-full flex items-center justify-between p-6 bg-white/5 rounded-3xl border border-white/5 hover:border-blue-500/50 transition-all"
+                    >
+                      <span
+                        class="text-xs font-black italic text-white uppercase"
+                        >MANUAL BANK TRANSFER</span
+                      >
+                      <BanknotesIcon class="w-6 h-6 text-blue-500" />
+                    </button>
+                  </div>
+
+                  <p
+                    class="text-[8px] text-gray-600 font-bold uppercase italic text-center mt-10"
+                  >
+                    Dengan membayar, dana Anda akan ditahan oleh TokBer sampai
+                    barang diterima.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
