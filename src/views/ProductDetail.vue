@@ -15,7 +15,7 @@ import {
   TagIcon,
   ExclamationTriangleIcon,
   UserIcon,
-  // --- ICON TAMBAHAN UNTUK ESCROW ---
+  // --- ICON TAMBAHAN UNTUK ESCROW & CLOSED ---
   ChatBubbleLeftRightIcon,
   QrCodeIcon,
   LockClosedIcon,
@@ -263,7 +263,7 @@ const confirmPayment = async (method) => {
     .eq("id", transaction.value.id);
   if (!error) {
     transaction.value.status = "escrow_holding";
-    notify.success("Pembayaran Berhasil", "Dana ditahan di Escrow.");
+    notify.success("Pembayaran Berhasil", "Dana ditahan di Escrow TokBer.");
     showPaymentModal.value = false;
   }
   isSubmittingAction.value = false;
@@ -339,7 +339,7 @@ const placeBid = async () => {
 
   const rep = props.userProfile?.reputation || 0;
   if (rep < 50 && props.userProfile?.is_admin !== true)
-    return notify.error("Reputasi Rendah", "Minimal 50 poin!");
+    return notify.error("Reputasi Rendah", "Minimal 50 poin buat ngebid, Mas.");
 
   if (bidAmount.value > userRank.value.limit) {
     return notify.error(
@@ -371,7 +371,7 @@ const placeBid = async () => {
     isSubmitting.value = true;
     let newEndTime = product.value.end_time;
 
-    // --- FIX LOGIKA ANTI-SNIPER 60 DETIK ---
+    // --- FIX LOGIKA ANTI-SNIPER DETIK 60 KEBAWAH ---
     if (diff <= 60000 && diff > 0) {
       newEndTime = new Date(now + 120000).toISOString();
       notify.success("ANTI-SNIPER!", "Waktu di-reset ke 2 menit lagi!");
@@ -396,7 +396,7 @@ const placeBid = async () => {
     product.value.end_time = newEndTime;
     product.value.current_bid = bidAmount.value;
     bidAmount.value = Number(bidAmount.value) + 10000;
-    notify.success("GACOR!", "Tawaran berhasil dikirim.");
+    notify.success("GACOR!", "Tawaran transmisi berhasil dikirim.");
   } catch (err) {
     notify.error("System Error", err.message);
   } finally {
@@ -467,7 +467,7 @@ onMounted(() => {
             ) {
               notify.success(
                 "TIME EXTENDED!",
-                "Seseorang ngebid, waktu bertambah!",
+                "Seseorang ngebid di menit terakhir, waktu ditambah!",
               );
               hasNotifiedIntense.value = false;
             }
@@ -807,24 +807,24 @@ onUnmounted(() => {
           <div
             class="bg-[#0a0a0a] border border-white/10 rounded-[45px] p-8 shadow-2xl relative overflow-hidden"
           >
-            <div class="lg:hidden sticky top-[72px] z-[80] -mx-5 mb-6">
+            <div class="lg:hidden sticky top-[68px] z-[80] -mx-5 mb-4">
               <div
                 :class="
                   isIntense
                     ? 'bg-red-600 border-red-500'
                     : 'bg-yellow-500 border-yellow-400'
                 "
-                class="mx-5 py-3 px-6 rounded-2xl border-2 shadow-xl flex items-center justify-between transition-all duration-500"
+                class="mx-5 py-2.5 px-6 rounded-xl border-2 shadow-xl flex items-center justify-between transition-all duration-500"
               >
                 <div class="flex items-center gap-2">
-                  <ClockIcon class="w-5 h-5 text-black animate-pulse" />
+                  <ClockIcon class="w-4 h-4 text-black animate-pulse" />
                   <span
-                    class="text-[10px] font-black uppercase italic text-black"
-                    >Time Remaining</span
+                    class="text-[9px] font-black uppercase italic text-black"
+                    >Ends In</span
                   >
                 </div>
                 <span
-                  class="text-xl font-[1000] italic text-black tracking-tighter"
+                  class="text-lg font-[1000] italic text-black tracking-tighter"
                   >{{ timeLeft }}</span
                 >
               </div>
@@ -870,6 +870,41 @@ onUnmounted(() => {
                     {{ formatPrice(userRank.limit) }})</span
                   >
                 </div>
+
+                <transition
+                  enter-active-class="animate-bounce"
+                  v-if="recentBids.length > 0"
+                >
+                  <div
+                    class="mt-4 p-4 bg-yellow-500 rounded-2xl flex items-center justify-between shadow-[0_0_30px_rgba(234,179,8,0.4)]"
+                  >
+                    <div class="flex items-center gap-3">
+                      <TrophyIcon class="w-6 h-6 text-black" />
+                      <div>
+                        <p
+                          class="text-[8px] font-black text-black/60 uppercase leading-none"
+                        >
+                          Current position #1
+                        </p>
+                        <p
+                          class="text-xs font-[1000] text-black uppercase italic"
+                        >
+                          @{{ recentBids[0].profiles?.username }}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <p
+                        class="text-[8px] font-black text-black/60 uppercase leading-none"
+                      >
+                        Hammer Price
+                      </p>
+                      <p class="text-sm font-[1000] text-black italic">
+                        {{ formatPrice(recentBids[0].amount) }}
+                      </p>
+                    </div>
+                  </div>
+                </transition>
 
                 <div class="relative group">
                   <span
@@ -968,7 +1003,7 @@ onUnmounted(() => {
                     v-else
                     class="bg-green-500/20 text-green-500 p-4 rounded-2xl text-center text-[10px] font-black uppercase italic"
                   >
-                    Menunggu Pengiriman
+                    Dana Berada di Escrow TokBer
                   </div>
                   <button
                     @click="router.push(`/chat/${product.id}`)"
@@ -983,21 +1018,24 @@ onUnmounted(() => {
                   v-else-if="isSeller"
                   class="bg-blue-600/10 border-2 border-blue-500/30 rounded-[45px] p-8 shadow-2xl"
                 >
-                  <h2 class="text-2xl font-[1000] italic uppercase mb-6">
+                  <h2
+                    class="text-2xl font-[1000] italic uppercase text-white mb-6"
+                  >
                     Asset Sold
                   </h2>
                   <div
                     class="p-6 bg-blue-500/10 border border-blue-500/20 rounded-3xl mb-6"
                   >
                     <p
-                      class="text-[10px] font-bold text-blue-400 italic text-center"
+                      class="text-[10px] font-bold text-blue-400 italic text-center leading-relaxed"
                     >
-                      Dana aman di TokBer sampai pengiriman dikonfirmasi.
+                      Dana akan diamankan TokBer sampai pengiriman dikonfirmasi
+                      oleh pembeli.
                     </p>
                   </div>
                   <button
                     @click="router.push(`/chat/${product.id}`)"
-                    class="w-full bg-white/5 border border-white/10 text-white py-5 rounded-[25px] font-black italic uppercase text-[10px] flex items-center justify-center gap-3"
+                    class="w-full bg-white/5 border border-white/10 text-white py-5 rounded-[25px] font-black italic uppercase text-[10px] flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
                   >
                     <ChatBubbleLeftRightIcon class="w-5 h-5 text-blue-500" />
                     Chat with Winner
@@ -1006,20 +1044,25 @@ onUnmounted(() => {
 
                 <div
                   v-else
-                  class="bg-white/5 border border-white/10 p-10 rounded-[45px] text-center relative overflow-hidden"
+                  class="bg-white/5 border border-white/10 p-10 rounded-[45px] text-center relative overflow-hidden group"
                 >
-                  <LockClosedIcon
-                    class="absolute -right-4 -top-4 w-32 h-32 opacity-5"
-                  />
+                  <div class="absolute -right-4 -top-4 opacity-5 -rotate-12">
+                    <LockClosedIcon class="w-32 h-32 text-white" />
+                  </div>
                   <h4
-                    class="text-xl font-[1000] italic text-gray-500 uppercase"
+                    class="text-xl font-[1000] italic text-gray-500 uppercase tracking-tighter"
                   >
                     Transmission Closed
                   </h4>
                   <p
-                    class="text-[9px] font-black text-gray-700 uppercase italic mt-1"
+                    class="text-[9px] font-black text-gray-700 uppercase italic mt-2"
                   >
-                    Winning Bid: {{ formatPrice(recentBids[0]?.amount) }}
+                    Sold Price: {{ formatPrice(recentBids[0]?.amount) }}
+                  </p>
+                  <p
+                    class="text-[8px] text-gray-800 font-bold uppercase italic mt-4"
+                  >
+                    @{{ recentBids[0]?.profiles?.username }} is the new owner
                   </p>
                 </div>
               </div>
