@@ -225,21 +225,27 @@ const updateTimer = () => {
       hasNotifiedIntense.value = true;
     }
   } else {
-    isIntense.value = false;
+    if (diff > 121000) {
+      isIntense.value = false;
+      hasNotifiedIntense.value = false;
+    }
   }
 
   if (diff <= 0) {
     timeLeft.value = "ENDED";
+    isIntense.value = false;
     return;
   }
   const d = Math.floor(diff / (1000 * 60 * 60 * 24));
   const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   const s = Math.floor((diff % (1000 * 60)) / 1000);
-  timeLeft.value =
-    d > 0
-      ? `${d}D ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
-      : `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  if (d > 0) {
+    timeLeft.value = `${d}D ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  } else {
+    // Jika di bawah 24 jam, tampilkan Jam:Menit:Detik
+    timeLeft.value = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  }
 };
 
 const placeBid = async () => {
@@ -767,6 +773,40 @@ onUnmounted(() => {
                   {{ formatPrice(userRank.limit) }})</span
                 >
               </div>
+              <transition
+                enter-active-class="animate-bounce"
+                v-if="timeLeft === 'ENDED' && recentBids.length > 0"
+              >
+                <div
+                  class="mt-4 p-4 bg-yellow-500 rounded-2xl flex items-center justify-between shadow-[0_0_30px_rgba(234,179,8,0.4)]"
+                >
+                  <div class="flex items-center gap-3">
+                    <TrophyIcon class="w-6 h-6 text-black" />
+                    <div>
+                      <p
+                        class="text-[8px] font-black text-black/60 uppercase leading-none"
+                      >
+                        Final Winner
+                      </p>
+                      <p
+                        class="text-xs font-[1000] text-black uppercase italic"
+                      >
+                        @{{ recentBids[0].profiles?.username }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p
+                      class="text-[8px] font-black text-black/60 uppercase leading-none"
+                    >
+                      Hammer Price
+                    </p>
+                    <p class="text-sm font-[1000] text-black italic">
+                      {{ formatPrice(recentBids[0].amount) }}
+                    </p>
+                  </div>
+                </div>
+              </transition>
               <div class="relative group">
                 <span
                   class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-sm italic tracking-tighter"
@@ -809,40 +849,6 @@ onUnmounted(() => {
                     }}</span
                   >
                 </div>
-                <transition
-                  enter-active-class="animate-bounce"
-                  v-if="timeLeft === 'ENDED' && recentBids.length > 0"
-                >
-                  <div
-                    class="mt-4 p-4 bg-yellow-500 rounded-2xl flex items-center justify-between shadow-[0_0_30px_rgba(234,179,8,0.4)]"
-                  >
-                    <div class="flex items-center gap-3">
-                      <TrophyIcon class="w-6 h-6 text-black" />
-                      <div>
-                        <p
-                          class="text-[8px] font-black text-black/60 uppercase leading-none"
-                        >
-                          Final Winner
-                        </p>
-                        <p
-                          class="text-xs font-[1000] text-black uppercase italic"
-                        >
-                          @{{ recentBids[0].profiles?.username }}
-                        </p>
-                      </div>
-                    </div>
-                    <div class="text-right">
-                      <p
-                        class="text-[8px] font-black text-black/60 uppercase leading-none"
-                      >
-                        Hammer Price
-                      </p>
-                      <p class="text-sm font-[1000] text-black italic">
-                        {{ formatPrice(recentBids[0].amount) }}
-                      </p>
-                    </div>
-                  </div>
-                </transition>
                 <span
                   v-if="isIntense"
                   class="text-[8px] font-black tracking-[0.2em] animate-pulse"
