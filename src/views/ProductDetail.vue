@@ -252,7 +252,6 @@ const updateTimer = () => {
   const diff = end - now;
 
   if (diff <= 0) {
-    // SECURITY: Jika waktu habis tapi status masih active di DB, tahan di VALIDATING
     if (product.value.status === 'active') {
       timeLeft.value = "VALIDATING...";
     } else {
@@ -285,7 +284,6 @@ const updateTimer = () => {
 const placeBid = async () => {
   if (!props.userProfile || isCooldown.value) return;
 
-  // SECURITY: Blokir Bid jika status bukan active ATAU sedang Validating (00:00:00)
   if (product.value.status !== 'active' || timeLeft.value === "VALIDATING...") {
     return notify.error("Lelang Berakhir", "Pintu transmisi sudah ditutup.");
   }
@@ -296,7 +294,7 @@ const placeBid = async () => {
   }
 
   const rep = props.userProfile?.reputation || 0;
-  if (rep < 50 && props.userProfile?.is_admin !== true) return notify.error("Reputasi Rendah", "Minimal 50 poin.");
+  if (rep < 50 && props.userProfile?.is_admin !== true) return notify.error("Reputasi Rendah", "Minimal 50 poin buat ngebid.");
 
   if (bidAmount.value > userRank.value.limit) {
     return notify.error("Limit Rank", `Maksimal bid ${formatPrice(userRank.value.limit)}`);
@@ -318,6 +316,7 @@ const placeBid = async () => {
 
     product.value.end_time = data.new_end_time;
     product.value.current_bid = data.new_bid;
+    // Update input bid lokal setelah submit sukses
     bidAmount.value = Number(data.new_bid) + 10000;
     
     nextTick(() => updateTimer());
@@ -349,6 +348,14 @@ onMounted(() => {
             product.value.winner_id = payload.new.winner_id;
             product.value.current_bid = payload.new.current_bid;
             product.value.end_time = payload.new.end_time;
+
+            // --- REAL-TIME INPUT SYNC ---
+            // Otomatis menaikkan angka di kotak input bid saat user lain ngebid
+            const nextMinBid = Number(payload.new.current_bid) + 10000;
+            if (bidAmount.value < nextMinBid) {
+                bidAmount.value = nextMinBid;
+            }
+
             nextTick(() => updateTimer());
             if (new Date(payload.new.end_time) > new Date(payload.old.end_time)) {
               notify.success("TIME EXTENDED!", "Waktu bertambah!");
@@ -472,7 +479,7 @@ onUnmounted(() => {
                 <ExclamationTriangleIcon class="w-3.5 h-3.5 text-red-500" /><span class="text-[8px] font-black text-red-500 uppercase italic">Report</span>
               </button>
             </div>
-            <h2 class="text-4xl lg:text-7xl font-[1000] italic uppercase tracking-tighter leading-[0.8]">{{ product.name }}</h2>
+            <h2 class="text-4xl lg:text-5xl font-[1000] italic uppercase tracking-tighter leading-tight">{{ product.name }}</h2>
             <div @click="router.push(`/user/${product.profiles?.username}`)" class="flex items-center gap-4 p-5 bg-white/[0.03] border border-white/10 rounded-[30px] cursor-pointer w-fit group">
               <div class="w-12 h-12 rounded-2xl overflow-hidden border border-white/10 flex-shrink-0">
                 <img v-if="product.profiles?.avatar_url && product.profiles.avatar_url.trim() !== ''" :src="product.profiles.avatar_url" class="w-full h-full object-cover" />
@@ -482,10 +489,10 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div class="bg-[#0a0a0a] border border-white/10 rounded-[45px] p-8 shadow-2xl relative overflow-hidden">
+          <div class="bg-[#0a0a0a] border border-white/10 rounded-[45px] p-8 shadow-2xl relative">
             <p class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 italic">Transmission Bid Price</p>
             
-            <h3 class="text-3xl sm:text-5xl lg:text-6xl font-[1000] italic text-yellow-500 tracking-tighter mb-10 drop-shadow-[0_0_30px_rgba(234,179,8,0.3)] break-all leading-tight">
+            <h3 class="text-3xl sm:text-5xl lg:text-5xl font-[1000] italic text-yellow-500 tracking-tighter mb-10 drop-shadow-[0_0_30px_rgba(234,179,8,0.3)] break-all leading-none py-2">
               {{ formatPrice(product.current_bid || product.starting_bid) }}
             </h3>
             
@@ -547,7 +554,7 @@ onUnmounted(() => {
                 <div v-else class="bg-white/5 border border-white/10 p-10 rounded-[45px] text-center relative overflow-hidden group shadow-2xl">
                   <div class="absolute -right-4 -top-4 opacity-5 -rotate-12"><LockClosedIcon class="w-32 h-32 text-white" /></div>
                   <h4 class="text-xl font-[1000] italic text-gray-500 uppercase tracking-tighter">Transmission Closed</h4>
-                  <p class="text-[9px] font-black text-gray-700 uppercase italic mt-2">Sold at: {{ formatPrice(recentBids[0]?.amount) }}</p>
+                  <p class="text-[9px] font-black text-gray-700 uppercase italic mt-2">Sold Price: {{ formatPrice(recentBids[0]?.amount) }}</p>
                 </div>
               </div>
             </div>
