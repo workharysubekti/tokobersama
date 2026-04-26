@@ -33,6 +33,21 @@ const isIntense = ref(false); // Mode 2 menit terakhir
 const hasNotifiedIntense = ref(false);
 const showBannedModal = ref(false);
 
+// --- REFORMASI LOGIKA RANKING (UNIQUE BIDDERS) ---
+const rankedBids = computed(() => {
+  const seenUsers = new Set();
+  const uniqueBidders = [];
+
+  for (const bid of recentBids.value) {
+    if (!seenUsers.has(bid.user_id)) {
+      seenUsers.add(bid.user_id);
+      uniqueBidders.push(bid);
+    }
+  }
+  // Ambil Top 5 atau 8 Rival teratas saja
+  return uniqueBidders.slice(0, 8);
+});
+
 // --- LOGIKA RANK & LIMIT (REFORMASI) ---
 const userRank = computed(() => {
   const rep = props.userProfile?.reputation_score || 0;
@@ -488,7 +503,7 @@ onUnmounted(() => {
             </div>
             <div class="space-y-4">
               <div
-                v-for="(bid, index) in recentBids"
+                v-for="(bid, index) in rankedBids"
                 :key="bid.id"
                 class="flex items-center justify-between p-5 rounded-[28px] border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-all group"
                 :class="
