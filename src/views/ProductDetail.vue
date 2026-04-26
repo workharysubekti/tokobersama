@@ -280,6 +280,17 @@ onMounted(() => {
           filter: `id=eq.${route.params.id}`,
         },
         (payload) => {
+          //Barikade Banned
+          if (payload.new.status === "banned") {
+            //1. Inform User
+            alert(
+              "Maaf, barang ini telah di-banned karena melanggar aturan TokBer",
+            );
+            //2. Redirect ke home
+            router.push("/");
+            return;
+          }
+
           if (product.value) {
             product.value.status = payload.new.status;
             product.value.winner_id = payload.new.winner_id;

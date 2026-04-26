@@ -56,6 +56,8 @@ const fetchSearch = async () => {
           .from("products")
           .select("*")
           .ilike("name", `%${searchQuery}%`)
+          .eq("status", "active")
+          .neq("status", "banned")
           .order("created_at", { ascending: false }),
         supabase
           .from("profiles")
