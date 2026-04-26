@@ -37,9 +37,7 @@ const handleLogout = async () => {
 // Fungsi navigasi kategori yang aman untuk karakter &
 const navigateToCategory = (cat) => {
   isCategoryOpen.value = false;
-  // Kita arahkan ke halaman Search dengan query category
-  // Vue Router otomatis melakukan encodeURIComponent untuk karakter '&'
-  router.push({ name: "Search", query: { category: cat } });
+  router.push({ name: "CategoryView", params: { name: cat } });
 };
 
 // Fungsi Smooth Scroll ke Elite Section

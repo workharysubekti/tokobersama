@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from "vue";
 import { supabase } from "../lib/supabase.js";
+import { useRouter } from "vue-router"; // Tambah ini Mas
 import AuctionCard from "../components/AuctionCard.vue";
 import {
   ChevronLeftIcon,
@@ -16,6 +17,7 @@ const props = defineProps({
   authReady: Boolean,
 });
 
+const router = useRouter(); // Tambah ini Mas
 const products = ref([]);
 const loading = ref(true);
 const scrollContainer = ref(null);
@@ -31,16 +33,8 @@ const banners = ref([
 ]);
 let bannerInterval = null;
 
-// LOGIKA KATEGORI
+// LOGIKA KATEGORI (Hanya untuk filter 'Semua' di Home)
 const selectedCategory = ref("Semua");
-const categories = ref([
-  "TCG & Kartu",
-  "Action Figure",
-  "Diecast & Miniatur",
-  "Virtual Item",
-  "Fashion & Thrift",
-  "Hobi & kolektibel",
-]);
 
 const startBannerAutoplay = () => {
   bannerInterval = setInterval(() => {
@@ -83,7 +77,6 @@ const fetchProducts = async () => {
   }
 };
 
-// FUNGSI SCROLL NAVIGASI
 const scroll = (containerRef, direction) => {
   if (containerRef) {
     const cardWidth =
@@ -137,7 +130,6 @@ onUnmounted(() => {
   if (bannerInterval) clearInterval(bannerInterval);
 });
 
-// LOGIKA FILTER
 const filteredByTime = computed(() => {
   const now = new Date().getTime();
   return products.value.filter((p) => new Date(p.end_time).getTime() > now);
@@ -150,15 +142,8 @@ const priorityProducts = computed(() => {
 });
 
 const regularProducts = computed(() => {
-  let list = filteredByTime.value.filter((p) => !p.is_priority);
-  if (selectedCategory.value !== "Semua") {
-    list = list.filter((p) => {
-      const prodCat = p.category?.toLowerCase().trim();
-      const selectedCat = selectedCategory.value.toLowerCase().trim();
-      return prodCat === selectedCat;
-    });
-  }
-  return list;
+  // Di Home Mobile, filter sekarang cuma buat "Semua"
+  return filteredByTime.value.filter((p) => !p.is_priority);
 });
 
 const isSlotAvailable = computed(
@@ -213,73 +198,60 @@ const isSlotAvailable = computed(
             <div
               class="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"
             ></div>
-            Kategori
+            Menu Utama
           </h2>
-          <span
-            class="text-[8px] font-bold text-gray-600 uppercase tracking-widest italic"
-            >Geser >></span
-          >
         </div>
 
-        <div
-          class="flex items-start gap-5 overflow-x-auto px-5 pb-4 no-scrollbar scroll-smooth"
-        >
+        <div class="flex items-start gap-4 px-5 pb-4">
           <button
             @click="selectedCategory = 'Semua'"
-            class="flex-shrink-0 w-16 flex flex-col items-center gap-2.5"
+            class="flex-1 flex items-center gap-3 bg-white/5 border border-white/10 p-3 rounded-2xl active:scale-95 transition-all"
           >
             <div
               :class="
                 selectedCategory === 'Semua'
-                  ? 'bg-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]'
-                  : 'bg-white/5 border border-white/10'
+                  ? 'bg-yellow-500 text-black'
+                  : 'bg-white/10 text-yellow-500'
               "
-              class="w-16 h-16 rounded-[22px] flex items-center justify-center transition-all duration-300 active:scale-90"
+              class="w-10 h-10 rounded-xl flex items-center justify-center transition-colors"
             >
-              <Squares2X2Icon
-                :class="
-                  selectedCategory === 'Semua'
-                    ? 'text-black'
-                    : 'text-yellow-500/80'
-                "
-                class="w-7 h-7 stroke-[2.5px]"
-              />
+              <Squares2X2Icon class="w-5 h-5 stroke-[2.5px]" />
             </div>
-            <span
-              :class="
-                selectedCategory === 'Semua' ? 'text-white' : 'text-gray-500'
-              "
-              class="text-[8px] font-black uppercase italic text-center leading-tight"
-              >Semua</span
-            >
+            <div class="text-left">
+              <p
+                class="text-[10px] font-black text-white uppercase italic leading-none"
+              >
+                Semua
+              </p>
+              <p
+                class="text-[7px] font-bold text-gray-500 uppercase tracking-widest mt-1"
+              >
+                Lihat Feed
+              </p>
+            </div>
           </button>
 
           <button
-            v-for="cat in categories"
-            :key="cat"
-            @click="selectedCategory = cat"
-            class="flex-shrink-0 w-16 flex flex-col items-center gap-2.5 group"
+            @click="router.push('/category/TCG & Kartu')"
+            class="flex-1 flex items-center gap-3 bg-white/5 border border-white/10 p-3 rounded-2xl active:scale-95 transition-all"
           >
             <div
-              :class="
-                selectedCategory === cat
-                  ? 'bg-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.3)]'
-                  : 'bg-white/5 border border-white/10'
-              "
-              class="w-16 h-16 rounded-[22px] flex items-center justify-center transition-all duration-300 active:scale-90"
+              class="w-10 h-10 rounded-xl bg-white/10 text-yellow-500 flex items-center justify-center"
             >
-              <TagIcon
-                :class="
-                  selectedCategory === cat ? 'text-black' : 'text-yellow-500/80'
-                "
-                class="w-6 h-6"
-              />
+              <TagIcon class="w-5 h-5 stroke-[2.5px]" />
             </div>
-            <span
-              :class="selectedCategory === cat ? 'text-white' : 'text-gray-500'"
-              class="text-[8px] font-black uppercase italic text-center leading-tight"
-              >{{ cat }}</span
-            >
+            <div class="text-left">
+              <p
+                class="text-[10px] font-black text-white uppercase italic leading-none"
+              >
+                Kategori
+              </p>
+              <p
+                class="text-[7px] font-bold text-gray-500 uppercase tracking-widest mt-1"
+              >
+                Layar Penuh
+              </p>
+            </div>
           </button>
         </div>
       </section>
@@ -378,8 +350,7 @@ const isSlotAvailable = computed(
             <p
               class="text-[10px] font-black uppercase tracking-[0.4em] text-gray-700 italic"
             >
-              Belum ada lelang di kategori ini, nih. <br />
-              Cek kategori lain dulu yuk!
+              Belum ada lelang aktif saat ini.
             </p>
           </div>
         </div>
@@ -387,30 +358,3 @@ const isSlotAvailable = computed(
     </div>
   </div>
 </template>
-
-<style scoped>
-.carousel-wrapper {
-  display: flex !important;
-  overflow-x: auto !important;
-  scroll-behavior: smooth !important;
-  gap: 12px !important;
-  padding: 10px 0;
-  -webkit-overflow-scrolling: touch;
-}
-.card-container {
-  flex: 0 0 auto !important;
-  width: 45% !important;
-}
-@media (min-width: 1024px) {
-  .card-container {
-    width: 23.5% !important;
-  }
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-</style>

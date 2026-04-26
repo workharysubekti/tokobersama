@@ -110,6 +110,13 @@ const routes = [
     component: () => import("../src/views/user/Notifications.vue"),
     meta: { showBottomNav: true },
   },
+  {
+    path: "/category/:name",
+    name: "CategoryView",
+    component: () => import("../src/views/user/CategoryView.vue"),
+    props: true,
+    meta: { showBottomNav: true },
+  },
 ];
 
 const router = createRouter({
