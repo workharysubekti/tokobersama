@@ -15,6 +15,7 @@ import {
   TagIcon,
   ExclamationTriangleIcon,
   UserIcon,
+  // --- ICON TAMBAHAN ---
   ChatBubbleLeftRightIcon,
   QrCodeIcon,
   LockClosedIcon,
@@ -42,11 +43,10 @@ const showBannedModal = ref(false);
 const isOutbid = ref(false);
 const transaction = ref(null);
 const showPaymentModal = ref(false);
-const showProofModal = ref(false);
 const adminFee = 5000;
 const isSubmittingAction = ref(false);
 
-// --- JEDA BID (COOLDOWN) ---
+// --- STATE COOLDOWN (ANTI MAMPET) ---
 const isCooldown = ref(false);
 
 // --- REFORMASI LOGIKA RANKING (UNIQUE BIDDERS) ---
@@ -64,7 +64,7 @@ const rankedBids = computed(() => {
   return uniqueBidders.slice(0, 8);
 });
 
-// --- LOGIKA SETTLEMENT (PEMENANG & PENJUAL) ---
+// --- LOGIKA SETTLEMENT ---
 const isWinner = computed(() => {
   return (
     timeLeft.value === "ENDED" &&
@@ -339,12 +339,13 @@ const updateTimer = () => {
   }
 };
 
+// --- FUNGSI RECLAIM BID VIA RPC (SERVER-SIDE TRUTH) ---
 const placeBid = async () => {
   if (!props.userProfile)
     return notify.error("Auth Required", "Login dulu bosku!");
 
   if (isCooldown.value)
-    return notify.error("Sabar Mas", "Jeda sinkronisasi sedang berjalan...");
+    return notify.error("Sabar Mas", "Jeda sinkronisasi server...");
 
   if (props.userProfile?.is_admin !== true) {
     const isCurrentWinner =
@@ -370,66 +371,38 @@ const placeBid = async () => {
   try {
     isSubmitting.value = true;
 
-    // --- REVOLUSI: TANYA DATABASE SEBELUM BID (SERVER-SIDE TRUTH) ---
-    const { data: dbProduct } = await supabase
-      .from("products")
-      .select("end_time, current_bid, starting_bid")
-      .eq("id", product.value.id)
-      .single();
+    // PANGGIL FUNGSI RPC KE DATABASE (KEBENARAN TUNGGAL)
+    const { data, error } = await supabase.rpc("execute_bid_v1", {
+      p_product_id: product.value.id,
+      p_user_id: props.userProfile.id,
+      p_bid_amount: bidAmount.value,
+    });
 
-    const latestTopPrice = dbProduct.current_bid || dbProduct.starting_bid || 0;
-
-    if (bidAmount.value <= latestTopPrice) {
-      notify.error(
-        "Harga Berubah!",
-        `Seseorang baru saja ngebid ${formatPrice(latestTopPrice)}`,
-      );
-      product.value.current_bid = latestTopPrice;
-      bidAmount.value = Number(latestTopPrice) + 10000;
-      isSubmitting.value = false;
+    if (error) {
+      // Jika error (telat atau harga rendah), tarik data terbaru
+      notify.error("Gagal", error.message);
+      await fetchBids();
+      const { data: freshProd } = await supabase
+        .from("products")
+        .select("current_bid, end_time")
+        .eq("id", product.value.id)
+        .single();
+      if (freshProd) {
+        product.value.current_bid = freshProd.current_bid;
+        product.value.end_time = freshProd.end_time;
+        bidAmount.value = Number(freshProd.current_bid) + 10000;
+      }
       return;
     }
 
-    // INSERT BID & AMBIL JAM SERVER
-    const { data: bidData, error: bidErr } = await supabase
-      .from("bids")
-      .insert({
-        product_id: product.value.id,
-        user_id: props.userProfile.id,
-        amount: bidAmount.value,
-      })
-      .select("created_at")
-      .single();
+    // UPDATE LOKAL INSTAN (Data dari Server)
+    product.value.end_time = data.new_end_time;
+    product.value.current_bid = data.new_bid;
+    bidAmount.value = Number(data.new_bid) + 10000;
 
-    if (bidErr) throw bidErr;
+    notify.success("GACOR!", "Tawaran transmisi diterima server.");
 
-    // HITUNG ANTI-SNIPER BERDASARKAN JAM SERVER (CREATED_AT)
-    const serverNow = new Date(bidData.created_at).getTime();
-    const dbEndTime = new Date(dbProduct.end_time).getTime();
-    const realDiff = dbEndTime - serverNow;
-
-    let newEndTime = dbProduct.end_time;
-    if (realDiff <= 60000 && realDiff > 0) {
-      // RESET KE 2 MENIT DARI JAM SERVER SAAT INI
-      newEndTime = new Date(serverNow + 120000).toISOString();
-    }
-
-    await supabase
-      .from("products")
-      .update({
-        current_bid: bidAmount.value,
-        winner_id: props.userProfile.id,
-        end_time: newEndTime,
-      })
-      .eq("id", product.value.id);
-
-    // Sync Lokal
-    product.value.end_time = newEndTime;
-    product.value.current_bid = bidAmount.value;
-    bidAmount.value = Number(bidAmount.value) + 10000;
-
-    notify.success("GACOR!", "Tawaran berhasil dikirim.");
-
+    // AKTIFKAN COOLDOWN 2 DETIK BIAR GAK MAMPET
     isCooldown.value = true;
     setTimeout(() => {
       isCooldown.value = false;
@@ -448,6 +421,15 @@ onMounted(() => {
     if (timeLeft.value === "ENDED" && !transaction.value) fetchTransaction();
   }, 1000);
 
+  const checkBannedElement = setInterval(() => {
+    if (showBannedModal.value) {
+      const modal = document.getElementById("banned-guard-overlay");
+      if (!modal || modal.offsetParent === null) {
+        window.location.href = "/";
+      }
+    }
+  }, 1000);
+
   if (route.params.id) {
     bidSubscription = supabase
       .channel(`live-auction-${route.params.id}`)
@@ -460,11 +442,11 @@ onMounted(() => {
           filter: `product_id=eq.${route.params.id}`,
         },
         (payload) => {
-          // PAKSA REFRESH RANKING & HARGA INPUTAN
+          // PAKSA SEMUA DEVICE REFRESH RANKING & HARGA INPUT
           fetchBids();
-          const nextBid = Number(payload.new.amount) + 10000;
-          if (bidAmount.value < nextBid) {
-            bidAmount.value = nextBid;
+          const nextPrice = Number(payload.new.amount) + 10000;
+          if (bidAmount.value < nextPrice) {
+            bidAmount.value = nextPrice;
           }
         },
       )
@@ -482,19 +464,22 @@ onMounted(() => {
             return;
           }
           if (product.value) {
-            // PAKSA SINKRONISASI TOTAL TANPA AMPUN
-            const oldTime = new Date(product.value.end_time).getTime();
-            const newTime = new Date(payload.new.end_time).getTime();
-
+            // PAKSA SINKRONISASI TOTAL (INDUK BERKUASA)
             product.value.status = payload.new.status;
             product.value.winner_id = payload.new.winner_id;
             product.value.current_bid = payload.new.current_bid;
 
-            // OVERRIDE WAKTU LOKAL
+            const oldTime = new Date(product.value.end_time).getTime();
+            const newTime = new Date(payload.new.end_time).getTime();
+
+            // OVERRIDE WAKTU LOKAL DENGAN DATA DATABASE
             product.value.end_time = payload.new.end_time;
 
             if (newTime > oldTime + 1000) {
-              notify.success("TIME EXTENDED!", "Waktu lelang bertambah!");
+              notify.success(
+                "TIME EXTENDED!",
+                "Waktu lelang diseragamkan server!",
+              );
               hasNotifiedIntense.value = false;
             }
           }
@@ -1169,7 +1154,7 @@ onUnmounted(() => {
             <div class="min-h-[200px]">
               <div v-if="activeBidTab === 'ranking'" class="space-y-3">
                 <div
-                  v-for="(bid, index) in rankedBids.slice(0, 5)"
+                  v-for="(bid, index) in rankedBids"
                   :key="'mb-rank-' + bid.id"
                   class="flex items-center justify-between p-4 rounded-2xl border border-white/5 bg-white/[0.02]"
                   :class="
