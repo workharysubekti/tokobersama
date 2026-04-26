@@ -15,7 +15,7 @@ import {
   TagIcon,
   ExclamationTriangleIcon,
   UserIcon,
-  // --- ICON TAMBAHAN UNTUK ESCROW & CLOSED ---
+  // --- ICON BARU UNTUK SETTLEMENT ---
   ChatBubbleLeftRightIcon,
   QrCodeIcon,
   LockClosedIcon,
@@ -39,7 +39,7 @@ const isIntense = ref(false); // Mode 2 menit terakhir
 const hasNotifiedIntense = ref(false);
 const showBannedModal = ref(false);
 
-// --- STATE LOGIKA OUTBID & ESCROW ---
+// --- STATE LOGIKA OUTBID & ESCROW (NEW) ---
 const isOutbid = ref(false);
 const transaction = ref(null);
 const showPaymentModal = ref(false);
@@ -263,7 +263,7 @@ const confirmPayment = async (method) => {
     .eq("id", transaction.value.id);
   if (!error) {
     transaction.value.status = "escrow_holding";
-    notify.success("Pembayaran Berhasil", "Dana ditahan di Escrow TokBer.");
+    notify.success("Pembayaran Berhasil", "Dana ditahan di Escrow.");
     showPaymentModal.value = false;
   }
   isSubmittingAction.value = false;
@@ -371,7 +371,7 @@ const placeBid = async () => {
     isSubmitting.value = true;
     let newEndTime = product.value.end_time;
 
-    // --- FIX LOGIKA ANTI-SNIPER DETIK 60 KEBAWAH ---
+    // --- LOGIKA ANTI-SNIPER DETIK 60 KEBAWAH ---
     if (diff <= 60000 && diff > 0) {
       newEndTime = new Date(now + 120000).toISOString();
       notify.success("ANTI-SNIPER!", "Waktu di-reset ke 2 menit lagi!");
@@ -532,6 +532,29 @@ onUnmounted(() => {
       <div class="w-10"></div>
     </div>
 
+    <div
+      class="lg:hidden fixed top-[64px] inset-x-0 z-[90] pointer-events-none px-5 py-3"
+    >
+      <div
+        :class="
+          isIntense
+            ? 'bg-red-600 border-red-500 shadow-red-500/20'
+            : 'bg-yellow-500 border-yellow-400 shadow-yellow-500/20'
+        "
+        class="pointer-events-auto rounded-2xl border-2 shadow-2xl flex items-center justify-between px-6 py-2.5 transition-all duration-500"
+      >
+        <div class="flex items-center gap-2">
+          <ClockIcon class="w-4 h-4 text-black animate-pulse" />
+          <span class="text-[8px] font-black uppercase italic text-black"
+            >Ends In</span
+          >
+        </div>
+        <span class="text-lg font-[1000] italic text-black tracking-tighter">{{
+          timeLeft
+        }}</span>
+      </div>
+    </div>
+
     <div v-if="!loading" class="pt-20 px-5 max-w-7xl mx-auto">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
         <div class="lg:col-span-7 space-y-10">
@@ -577,10 +600,10 @@ onUnmounted(() => {
               </div>
 
               <div
-                class="absolute bottom-6 left-6 z-[50] backdrop-blur-md px-5 py-2.5 rounded-2xl border flex items-center gap-3 transition-all duration-500"
+                class="hidden lg:flex absolute bottom-6 left-6 z-[50] backdrop-blur-md px-5 py-2.5 rounded-2xl border items-center gap-3 transition-all duration-500"
                 :class="
                   isIntense
-                    ? 'bg-red-600 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)] scale-110'
+                    ? 'bg-red-600 border-red-500'
                     : 'bg-black/60 border-white/10'
                 "
               >
@@ -807,34 +830,11 @@ onUnmounted(() => {
           <div
             class="bg-[#0a0a0a] border border-white/10 rounded-[45px] p-8 shadow-2xl relative overflow-hidden"
           >
-            <div class="lg:hidden sticky top-[68px] z-[80] -mx-5 mb-4">
-              <div
-                :class="
-                  isIntense
-                    ? 'bg-red-600 border-red-500'
-                    : 'bg-yellow-500 border-yellow-400'
-                "
-                class="mx-5 py-2.5 px-6 rounded-xl border-2 shadow-xl flex items-center justify-between transition-all duration-500"
-              >
-                <div class="flex items-center gap-2">
-                  <ClockIcon class="w-4 h-4 text-black animate-pulse" />
-                  <span
-                    class="text-[9px] font-black uppercase italic text-black"
-                    >Ends In</span
-                  >
-                </div>
-                <span
-                  class="text-lg font-[1000] italic text-black tracking-tighter"
-                  >{{ timeLeft }}</span
-                >
-              </div>
-            </div>
-
             <div class="flex items-center justify-between mb-4">
               <p
                 class="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] italic"
               >
-                Transmission Bid Price
+                Current Bid Price
               </p>
               <div class="flex items-center gap-2">
                 <div
@@ -854,6 +854,41 @@ onUnmounted(() => {
 
             <div class="space-y-6">
               <div v-if="timeLeft !== 'ENDED'" class="space-y-6">
+                <transition
+                  enter-active-class="animate-bounce"
+                  v-if="recentBids.length > 0"
+                >
+                  <div
+                    class="p-4 bg-yellow-500 rounded-2xl flex items-center justify-between shadow-[0_0_30px_rgba(234,179,8,0.4)]"
+                  >
+                    <div class="flex items-center gap-3">
+                      <TrophyIcon class="w-6 h-6 text-black" />
+                      <div>
+                        <p
+                          class="text-[8px] font-black text-black/60 uppercase leading-none"
+                        >
+                          Highest Bidder
+                        </p>
+                        <p
+                          class="text-xs font-[1000] text-black uppercase italic"
+                        >
+                          @{{ recentBids[0].profiles?.username }}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <p
+                        class="text-[8px] font-black text-black/60 uppercase leading-none"
+                      >
+                        Price
+                      </p>
+                      <p class="text-sm font-[1000] text-black italic">
+                        {{ formatPrice(recentBids[0].amount) }}
+                      </p>
+                    </div>
+                  </div>
+                </transition>
+
                 <div
                   v-if="props.userProfile"
                   class="flex items-center justify-between px-2"
@@ -871,41 +906,6 @@ onUnmounted(() => {
                   >
                 </div>
 
-                <transition
-                  enter-active-class="animate-bounce"
-                  v-if="recentBids.length > 0"
-                >
-                  <div
-                    class="mt-4 p-4 bg-yellow-500 rounded-2xl flex items-center justify-between shadow-[0_0_30px_rgba(234,179,8,0.4)]"
-                  >
-                    <div class="flex items-center gap-3">
-                      <TrophyIcon class="w-6 h-6 text-black" />
-                      <div>
-                        <p
-                          class="text-[8px] font-black text-black/60 uppercase leading-none"
-                        >
-                          Current position #1
-                        </p>
-                        <p
-                          class="text-xs font-[1000] text-black uppercase italic"
-                        >
-                          @{{ recentBids[0].profiles?.username }}
-                        </p>
-                      </div>
-                    </div>
-                    <div class="text-right">
-                      <p
-                        class="text-[8px] font-black text-black/60 uppercase leading-none"
-                      >
-                        Hammer Price
-                      </p>
-                      <p class="text-sm font-[1000] text-black italic">
-                        {{ formatPrice(recentBids[0].amount) }}
-                      </p>
-                    </div>
-                  </div>
-                </transition>
-
                 <div class="relative group">
                   <span
                     class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-sm italic tracking-tighter"
@@ -921,7 +921,7 @@ onUnmounted(() => {
                         bidAmount =
                           (product.current_bid || product.starting_bid) + plus
                       "
-                      class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 hover:bg-yellow-500 hover:text-black transition-all active:scale-90"
+                      class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 active:scale-90"
                     >
                       +{{ plus / 1000 }}K
                     </button>
@@ -938,10 +938,10 @@ onUnmounted(() => {
                   :disabled="isSubmitting"
                   :class="
                     isOutbid
-                      ? 'bg-red-600 shadow-[0_15px_40px_rgba(220,38,38,0.4)] animate-pulse scale-[1.02]'
-                      : 'bg-yellow-500 shadow-[0_15px_40px_rgba(234,179,8,0.2)]'
+                      ? 'bg-red-600 shadow-red-500/40 animate-pulse scale-[1.02]'
+                      : 'bg-yellow-500 shadow-yellow-500/20'
                   "
-                  class="w-full text-black py-7 rounded-[35px] font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all"
+                  class="w-full text-black py-7 rounded-[35px] font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all shadow-2xl"
                 >
                   <div class="flex items-center gap-3">
                     <ArrowPathIcon
@@ -982,9 +982,9 @@ onUnmounted(() => {
                     class="bg-black/40 p-6 rounded-3xl border border-white/5 mb-6"
                   >
                     <div
-                      class="flex justify-between text-[10px] font-bold uppercase italic mb-2"
+                      class="flex justify-between text-[10px] font-bold uppercase italic"
                     >
-                      <span class="text-gray-500">Escrow Settlement</span>
+                      <span class="text-gray-500">Total Settlement</span>
                       <span class="text-white">{{
                         formatPrice(totalToPay)
                       }}</span>
@@ -1003,7 +1003,7 @@ onUnmounted(() => {
                     v-else
                     class="bg-green-500/20 text-green-500 p-4 rounded-2xl text-center text-[10px] font-black uppercase italic"
                   >
-                    Dana Berada di Escrow TokBer
+                    Dana Dimankan Escrow
                   </div>
                   <button
                     @click="router.push(`/chat/${product.id}`)"
@@ -1027,10 +1027,9 @@ onUnmounted(() => {
                     class="p-6 bg-blue-500/10 border border-blue-500/20 rounded-3xl mb-6"
                   >
                     <p
-                      class="text-[10px] font-bold text-blue-400 italic text-center leading-relaxed"
+                      class="text-[10px] font-bold text-blue-400 italic text-center"
                     >
-                      Dana akan diamankan TokBer sampai pengiriman dikonfirmasi
-                      oleh pembeli.
+                      Dana akan ditahan TokBer sampai pembeli konfirmasi barang.
                     </p>
                   </div>
                   <button
@@ -1057,12 +1056,7 @@ onUnmounted(() => {
                   <p
                     class="text-[9px] font-black text-gray-700 uppercase italic mt-2"
                   >
-                    Sold Price: {{ formatPrice(recentBids[0]?.amount) }}
-                  </p>
-                  <p
-                    class="text-[8px] text-gray-800 font-bold uppercase italic mt-4"
-                  >
-                    @{{ recentBids[0]?.profiles?.username }} is the new owner
+                    Winning Bid: {{ formatPrice(recentBids[0]?.amount) }}
                   </p>
                 </div>
               </div>
@@ -1158,7 +1152,7 @@ onUnmounted(() => {
                         v-else
                         class="w-full h-full bg-gray-800 flex items-center justify-center"
                       >
-                        <UserIcon class="w-5 h-5 text-gray-600" />
+                        <UserIcon class="w-6 h-6 text-gray-600" />
                       </div>
                     </div>
                     <p
