@@ -15,6 +15,9 @@ import {
   TagIcon,
   ExclamationTriangleIcon,
   UserIcon,
+  ChatBubbleLeftRightIcon,
+  QrCodeIcon,
+  LockClosedIcon,
 } from "@heroicons/vue/24/outline";
 
 const props = defineProps({ userProfile: Object });
@@ -34,6 +37,78 @@ const activeBidTab = ref("ranking");
 const isIntense = ref(false); // Mode 2 menit terakhir
 const hasNotifiedIntense = ref(false);
 const showBannedModal = ref(false);
+
+// -- STATE TRANSAKSI (ESCROW) ---
+const transaction = ref(null);
+const showPaymentModal = ref(false);
+const adminFee = 5000;
+const isSubmittingAction = ref(false);
+
+// 1. Logika Pemenang
+const isWinner = computed(() => {
+  return (
+    timeLeft.value === "ENDED" &&
+    recentBids.value.length > 0 &&
+    props.userProfile?.id === recentBids.value[0].user_id
+  );
+});
+
+// 2. Logika Penjual
+const isSeller = computed(() => {
+  return props.userProfile?.id === product.value?.owner_id;
+});
+
+// 3. Hitung Total Pembayaran
+const totalToPay = computed(() => {
+  const winningBid = recentBids.value[0]?.amount || 0;
+  return winningBid + adminFee;
+});
+
+// 4. Ambil Data Transaksi
+const fetchTransaction = async () => {
+  if (timeLeft.value !== "ENDED") return;
+  const { data } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("product_id", route.params.id)
+    .maybeSingle();
+
+  if (data) {
+    transaction.value = data;
+  } else if (isWinner.value) {
+    const { data: newTx } = await supabase
+      .from("transactions")
+      .insert({
+        product_id: product.value.id,
+        buyer_id: props.userProfile.id,
+        seller_id: product.value.owner_id,
+        amount_bid: recentBids.value[0].amount,
+        total_amount: totalToPay.value,
+      })
+      .select()
+      .single();
+    transaction.value = newTx;
+  }
+};
+
+// 5. Konfirmasi Bayar ke Escrow
+const confirmPayment = async (method) => {
+  isSubmittingAction.value = true;
+  const { error } = await supabase
+    .from("transactions")
+    .update({
+      status: "escrow_holding",
+      payment_method: method,
+    })
+    .eq("id", transaction.value.id);
+
+  if (!error) {
+    transaction.value.status = "escrow_holding";
+    notify.success("Pembayaran Berhasil", "Dana ditahan di Escrow TokBer.");
+    showPaymentModal.value = false;
+  }
+  isSubmittingAction.value = false;
+};
 
 // --- REFORMASI LOGIKA RANKING (UNIQUE BIDDERS) ---
 const rankedBids = computed(() => {
@@ -176,7 +251,7 @@ const fetchBids = async () => {
     .select("*, profiles(username, full_name, avatar_url, reputation)")
     .eq("product_id", route.params.id)
     .order("amount", { ascending: false })
-    .limit(50); // Ambil 10 bid terakhir
+    .limit(50); // Ambil 50 bid terakhir
 
   if (data) {
     recentBids.value = data;
@@ -252,8 +327,6 @@ const placeBid = async () => {
   }
 
   // 2. SELF-BID GUARD (REFORMASI)
-  // Mencegah user ngebid di atas namanya sendiri agar lelang tetap kompetitif
-  // Perkecualian: System Owner (Admin) bebas ngebid kapan saja untuk testing
   if (props.userProfile?.is_admin !== true) {
     const isCurrentWinner =
       recentBids.value.length > 0 &&
@@ -346,7 +419,10 @@ const placeBid = async () => {
 
 onMounted(() => {
   fetchProductDetail();
-  timerInterval = setInterval(updateTimer, 1000);
+  timerInterval = setInterval(() => {
+    updateTimer();
+    if (timeLeft.value === "ENDED" && !transaction.value) fetchTransaction();
+  }, 1000);
 
   const checkBannedElement = setInterval(() => {
     if (showBannedModal.value) {
@@ -406,7 +482,6 @@ onMounted(() => {
                 "TIME EXTENDED!",
                 "Seseorang ngebid di menit terakhir, waktu ditambah!",
               );
-              // Reset notif intense supaya yang nonton juga dapet alert merah lagi nanti
               hasNotifiedIntense.value = false;
             }
           }
@@ -767,103 +842,216 @@ onUnmounted(() => {
             >
               {{ formatPrice(product.current_bid || product.starting_bid) }}
             </h3>
+
             <div class="space-y-6">
-              <div
-                v-if="props.userProfile"
-                class="flex items-center justify-between px-2"
-              >
-                <p class="text-[9px] font-black text-gray-600 uppercase italic">
-                  Your Rank Status:
-                </p>
-                <span
-                  class="text-[9px] font-[1000] uppercase italic"
-                  :class="userRank.color"
-                  >{{ userRank.name }} (Limit:
-                  {{ formatPrice(userRank.limit) }})</span
-                >
-              </div>
-              <transition
-                enter-active-class="animate-bounce"
-                v-if="timeLeft === 'ENDED' && recentBids.length > 0"
-              >
+              <div v-if="timeLeft !== 'ENDED'" class="space-y-6">
                 <div
-                  class="mt-4 p-4 bg-yellow-500 rounded-2xl flex items-center justify-between shadow-[0_0_30px_rgba(234,179,8,0.4)]"
+                  v-if="props.userProfile"
+                  class="flex items-center justify-between px-2"
                 >
-                  <div class="flex items-center gap-3">
-                    <TrophyIcon class="w-6 h-6 text-black" />
-                    <div>
-                      <p
-                        class="text-[8px] font-black text-black/60 uppercase leading-none"
-                      >
-                        Final Winner
-                      </p>
-                      <p
-                        class="text-xs font-[1000] text-black uppercase italic"
-                      >
-                        @{{ recentBids[0].profiles?.username }}
-                      </p>
+                  <p
+                    class="text-[9px] font-black text-gray-600 uppercase italic"
+                  >
+                    Your Rank Status:
+                  </p>
+                  <span
+                    class="text-[9px] font-[1000] uppercase italic"
+                    :class="userRank.color"
+                    >{{ userRank.name }} (Limit:
+                    {{ formatPrice(userRank.limit) }})</span
+                  >
+                </div>
+
+                <transition
+                  enter-active-class="animate-bounce"
+                  v-if="recentBids.length > 0"
+                >
+                  <div
+                    class="mt-4 p-4 bg-yellow-500 rounded-2xl flex items-center justify-between shadow-[0_0_30px_rgba(234,179,8,0.4)]"
+                  >
+                    <div class="flex items-center gap-3">
+                      <TrophyIcon class="w-6 h-6 text-black" />
+                      <div>
+                        <p
+                          class="text-[8px] font-black text-black/60 uppercase leading-none"
+                        >
+                          Current Position #1
+                        </p>
+                        <p
+                          class="text-xs font-[1000] text-black uppercase italic"
+                        >
+                          @{{ recentBids[0].profiles?.username }}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <div class="text-right">
-                    <p
-                      class="text-[8px] font-black text-black/60 uppercase leading-none"
+                </transition>
+
+                <div class="relative group">
+                  <span
+                    class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-sm italic tracking-tighter"
+                    >IDR</span
+                  >
+                  <div
+                    class="flex gap-3 mb-4 overflow-x-auto no-scrollbar pb-2"
+                  >
+                    <button
+                      v-for="plus in [10000, 50000, 100000, 500000]"
+                      :key="plus"
+                      @click="
+                        bidAmount =
+                          (product.current_bid || product.starting_bid) + plus
+                      "
+                      class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 hover:bg-yellow-500 hover:text-black transition-all active:scale-90"
                     >
-                      Hammer Price
-                    </p>
-                    <p class="text-sm font-[1000] text-black italic">
-                      {{ formatPrice(recentBids[0].amount) }}
+                      +{{ plus / 1000 }}K
+                    </button>
+                  </div>
+                  <input
+                    v-model.number="bidAmount"
+                    type="number"
+                    class="w-full bg-black border-2 border-white/10 rounded-3xl py-7 pl-20 pr-6 text-3xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none"
+                  />
+                </div>
+
+                <button
+                  @click="placeBid"
+                  :disabled="isSubmitting"
+                  class="w-full bg-yellow-500 text-black py-7 rounded-3xl font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all shadow-[0_15px_40px_rgba(234,179,8,0.2)]"
+                >
+                  <div class="flex items-center gap-3">
+                    <ArrowPathIcon
+                      v-if="isSubmitting"
+                      class="w-7 h-7 animate-spin"
+                    />
+                    <BanknotesIcon v-else class="w-7 h-7 stroke-[2.5px]" />
+                    <span class="text-lg">Execute Bid</span>
+                  </div>
+                  <span
+                    v-if="isIntense"
+                    class="text-[8px] font-black tracking-[0.2em] animate-pulse"
+                    >!! FINAL CALL - ANTI SNIPER ACTIVE !!</span
+                  >
+                </button>
+              </div>
+
+              <div v-else class="space-y-6">
+                <div
+                  v-if="isWinner"
+                  class="bg-green-500/10 border-2 border-green-500/30 rounded-[45px] p-8 shadow-2xl relative overflow-hidden"
+                >
+                  <div class="absolute -right-4 -top-4 opacity-10 rotate-12">
+                    <TrophyIcon class="w-40 h-40 text-green-500" />
+                  </div>
+                  <p
+                    class="text-[9px] font-black text-green-500 uppercase italic tracking-[0.4em] mb-1"
+                  >
+                    Contract Fulfilled
+                  </p>
+                  <h2
+                    class="text-2xl font-[1000] italic uppercase text-white mb-6"
+                  >
+                    You Won This Asset!
+                  </h2>
+
+                  <div
+                    class="bg-black/40 p-6 rounded-3xl border border-white/5 mb-6"
+                  >
+                    <div
+                      class="flex justify-between text-[10px] font-bold uppercase italic mb-2"
+                    >
+                      <span class="text-gray-500">Escrow Total</span>
+                      <span class="text-white">{{
+                        formatPrice(totalToPay)
+                      }}</span>
+                    </div>
+                    <p class="text-[8px] text-gray-700 italic">
+                      Incl. Admin Fee: {{ formatPrice(adminFee) }}
                     </p>
                   </div>
-                </div>
-              </transition>
-              <div class="relative group">
-                <span
-                  class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-sm italic tracking-tighter"
-                  >IDR</span
-                >
-                <div class="flex gap-3 mb-4 overflow-x-auto no-scrollbar pb-2">
+
                   <button
-                    v-for="plus in [10000, 50000, 100000, 500000]"
-                    :key="plus"
-                    @click="
-                      bidAmount =
-                        (product.current_bid || product.starting_bid) + plus
+                    v-if="
+                      !transaction || transaction.status === 'pending_payment'
                     "
-                    class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 hover:bg-yellow-500 hover:text-black transition-all active:scale-90"
+                    @click="showPaymentModal = true"
+                    class="w-full bg-green-500 text-black py-5 rounded-[25px] font-black italic uppercase text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
                   >
-                    +{{ plus / 1000 }}K
+                    <ShieldCheckIcon class="w-5 h-5" /> Pay to Escrow
+                  </button>
+                  <div
+                    v-else
+                    class="bg-green-500/20 text-green-500 p-4 rounded-2xl text-center text-[10px] font-black uppercase italic"
+                  >
+                    Dana Diamankan Escrow
+                  </div>
+
+                  <button
+                    @click="router.push(`/chat/${product.id}`)"
+                    class="w-full mt-4 bg-white/5 border border-white/10 text-white py-4 rounded-2xl font-black italic uppercase text-[10px] flex items-center justify-center gap-3"
+                  >
+                    <ChatBubbleLeftRightIcon class="w-5 h-5" /> Live Negotiation
+                    Chat
                   </button>
                 </div>
-                <input
-                  v-model.number="bidAmount"
-                  type="number"
-                  class="w-full bg-black border-2 border-white/10 rounded-3xl py-7 pl-20 pr-6 text-3xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none"
-                />
-              </div>
-              <button
-                @click="placeBid"
-                :disabled="isSubmitting || timeLeft === 'ENDED'"
-                class="w-full bg-yellow-500 text-black py-7 rounded-3xl font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all shadow-[0_15px_40px_rgba(234,179,8,0.2)]"
-              >
-                <div class="flex items-center gap-3">
-                  <ArrowPathIcon
-                    v-if="isSubmitting"
-                    class="w-7 h-7 animate-spin"
-                  /><BanknotesIcon v-else class="w-7 h-7 stroke-[2.5px]" /><span
-                    class="text-lg"
-                    >{{
-                      timeLeft === "ENDED"
-                        ? "TRANSMISSION CLOSED"
-                        : "Execute Bid"
-                    }}</span
-                  >
-                </div>
-                <span
-                  v-if="isIntense"
-                  class="text-[8px] font-black tracking-[0.2em] animate-pulse"
-                  >!! FINAL CALL - ANTI SNIPER ACTIVE !!</span
+
+                <div
+                  v-else-if="isSeller"
+                  class="bg-blue-600/10 border-2 border-blue-500/30 rounded-[45px] p-8 shadow-2xl"
                 >
-              </button>
+                  <p
+                    class="text-[9px] font-black text-blue-500 uppercase italic tracking-[0.4em] mb-1"
+                  >
+                    Asset Status: Sold
+                  </p>
+                  <h2
+                    class="text-2xl font-[1000] italic uppercase text-white mb-6"
+                  >
+                    Lelang Selesai
+                  </h2>
+                  <div
+                    class="p-6 bg-blue-500/10 border border-blue-500/20 rounded-3xl mb-6"
+                  >
+                    <p
+                      class="text-[10px] font-bold text-blue-400 italic text-center leading-relaxed"
+                    >
+                      Menunggu pembayaran dari pemenang. Dana akan ditahan
+                      TokBer sampai barang diterima.
+                    </p>
+                  </div>
+                  <button
+                    @click="router.push(`/chat/${product.id}`)"
+                    class="w-full bg-white/5 border border-white/10 text-white py-5 rounded-[25px] font-black italic uppercase text-[10px] flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
+                  >
+                    <ChatBubbleLeftRightIcon class="w-5 h-5 text-blue-500" />
+                    Open Discussion
+                  </button>
+                </div>
+
+                <div
+                  v-else
+                  class="bg-white/5 border border-white/10 p-10 rounded-[45px] text-center relative overflow-hidden group"
+                >
+                  <div class="absolute -right-4 -top-4 opacity-5 -rotate-12">
+                    <LockClosedIcon class="w-32 h-32 text-white" />
+                  </div>
+                  <h4
+                    class="text-xl font-[1000] italic text-gray-500 uppercase tracking-tighter"
+                  >
+                    Transmission Closed
+                  </h4>
+                  <p
+                    class="text-[9px] font-black text-gray-700 uppercase italic mt-2"
+                  >
+                    Sold at: {{ formatPrice(recentBids[0]?.amount) }}
+                  </p>
+                  <p
+                    class="text-[8px] text-gray-800 font-bold uppercase italic mt-4"
+                  >
+                    @{{ recentBids[0]?.profiles?.username }} is the new owner
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -956,7 +1144,7 @@ onUnmounted(() => {
                         v-else
                         class="w-full h-full bg-gray-800 flex items-center justify-center"
                       >
-                        <UserIcon class="w-5 h-5 text-gray-600" />
+                        <UserIcon class="w-6 h-6 text-gray-600" />
                       </div>
                     </div>
                     <p
@@ -1069,6 +1257,49 @@ onUnmounted(() => {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div
+      v-if="showPaymentModal"
+      class="fixed inset-0 z-[500] flex items-center justify-center p-6"
+    >
+      <div
+        class="absolute inset-0 bg-black/95 backdrop-blur-xl"
+        @click="showPaymentModal = false"
+      ></div>
+      <div
+        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[45px] p-10 text-center shadow-2xl"
+      >
+        <h3 class="text-2xl font-[1000] italic uppercase text-white mb-8">
+          Escrow <span class="text-yellow-500">Payment</span>
+        </h3>
+        <div class="space-y-4 text-left">
+          <button
+            @click="confirmPayment('QRIS')"
+            class="w-full p-6 bg-white/5 border border-white/5 rounded-3xl flex items-center justify-between hover:border-yellow-500/50 transition-all group"
+          >
+            <span class="text-xs font-black italic text-white uppercase"
+              >QRIS / ALL E-WALLET</span
+            >
+            <QrCodeIcon class="w-6 h-6 text-yellow-500" />
+          </button>
+          <button
+            @click="confirmPayment('BANK_TRANSFER')"
+            class="w-full p-6 bg-white/5 border border-white/5 rounded-3xl flex items-center justify-between hover:border-blue-500/50 transition-all group"
+          >
+            <span class="text-xs font-black italic text-white uppercase"
+              >BANK TRANSFER (ESCROW)</span
+            >
+            <BanknotesIcon class="w-6 h-6 text-blue-500" />
+          </button>
+        </div>
+        <button
+          @click="showPaymentModal = false"
+          class="mt-10 text-[9px] font-black text-gray-600 uppercase italic underline underline-offset-4"
+        >
+          Cancel Process
+        </button>
       </div>
     </div>
   </div>
