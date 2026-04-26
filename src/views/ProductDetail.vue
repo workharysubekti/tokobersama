@@ -30,11 +30,10 @@ const loading = ref(true);
 const bidAmount = ref(0);
 const isSubmitting = ref(false);
 const timeLeft = ref("");
-// FIX: Inisialisasi Tab Ranking agar langsung aktif tanpa dipencet
 const activeBidTab = ref("ranking");
 
-// --- STATE BARU REFORMASI ---
-const isIntense = ref(false); // Mode 2 menit terakhir
+// --- STATE REFORMASI (ANT-SNIPER & WAR ZONE) ---
+const isIntense = ref(false);
 const hasNotifiedIntense = ref(false);
 const showBannedModal = ref(false);
 
@@ -42,13 +41,11 @@ const showBannedModal = ref(false);
 const isOutbid = ref(false);
 const transaction = ref(null);
 const showPaymentModal = ref(false);
-const showProofModal = ref(false);
 const adminFee = 5000;
 const isSubmittingAction = ref(false);
 
-// --- FIX: JEDA BID (COOLDOWN) & SYNC JAM ---
+// --- JEDA COOLDOWN (ANTI MAMPET SERVER) ---
 const isCooldown = ref(false);
-const serverOffset = ref(0);
 
 // --- REFORMASI LOGIKA RANKING (UNIQUE BIDDERS) ---
 const rankedBids = computed(() => {
@@ -146,15 +143,13 @@ const allImages = computed(() => {
 
 const nextImage = () => {
   if (allImages.value.length <= 1) return;
-  activeImgIndex.value =
-    (allImages.value.length + activeImgIndex.value + 1) %
-    allImages.value.length;
+  activeImgIndex.value = (activeImgIndex.value + 1) % allImages.value.length;
 };
 
 const prevImage = () => {
   if (allImages.value.length <= 1) return;
   activeImgIndex.value =
-    (allImages.value.length + activeImgIndex.value - 1) %
+    (activeImgIndex.value - 1 + allImages.value.length) %
     allImages.value.length;
 };
 
@@ -304,11 +299,12 @@ const fetchProductDetail = async () => {
   }
 };
 
+// --- LOGIKA TIMER (SUDAH BERSIH DARI GLITCH SERVER OFFSET) ---
 const updateTimer = () => {
   if (!product.value?.end_time) return;
 
   const end = new Date(product.value.end_time).getTime();
-  const now = new Date().getTime();
+  const now = Date.now();
   const diff = end - now;
 
   if (diff <= 0) {
@@ -343,14 +339,13 @@ const updateTimer = () => {
 };
 
 const placeBid = async () => {
-  // 1. AUTH & COOLDOWN GUARD
-  if (!props.userProfile)
+  // 1. AUTH & COOLDOWN GUARD (Mencegah Database Mampet)
+  if (!props.userProfile) {
     return notify.error("Auth Required", "Login dulu bosku!");
-  if (isCooldown.value)
-    return notify.error(
-      "Wait!",
-      "Jeda 2 detik setiap bid biar sistem gak mampet.",
-    );
+  }
+  if (isCooldown.value) {
+    return notify.error("Sabar Mas", "Jeda 2 detik ya, biar real-time lancar!");
+  }
 
   // 2. SELF-BID GUARD
   if (props.userProfile?.is_admin !== true) {
@@ -378,11 +373,9 @@ const placeBid = async () => {
     );
   }
 
-  // 4. TIME & STATUS GUARD (FETCH TERBARU SEBELUM EKSEKUSI)
   if (isSubmitting.value || !product.value) return;
 
-  // Paksa cek waktu dari object product yang paling update dari real-time
-  const now = new Date().getTime();
+  const now = Date.now();
   let end = new Date(product.value.end_time).getTime();
   const diff = end - now;
 
@@ -390,13 +383,12 @@ const placeBid = async () => {
     return notify.error("Lelang Berakhir", "Transmisi ditutup.");
   }
 
-  // 5. PRICE VALIDATION (Gunakan current_bid dari real-time)
   const latestTopPrice =
     product.value.current_bid || product.value.starting_bid || 0;
   if (bidAmount.value <= latestTopPrice) {
     notify.error(
       "Bid Low",
-      `Harga naik kilat ke ${formatPrice(latestTopPrice)}`,
+      `Harga sudah naik ke ${formatPrice(latestTopPrice)}`,
     );
     bidAmount.value = Number(latestTopPrice) + 10000;
     return;
@@ -405,15 +397,13 @@ const placeBid = async () => {
   try {
     isSubmitting.value = true;
 
-    // 6. ANTI-SNIPER LOGIC (REFORMASI DETIK 60 - RESET 2 MENIT)
+    // 6. ANTI-SNIPER LOGIC (AKURAT 2 MENIT DARI SEKARANG)
     let newEndTime = product.value.end_time;
     if (diff <= 60000 && diff > 0) {
-      const extension = 120000; // 2 Menit
+      const extension = 120000; // Reset ke 2 menit (120 detik)
       newEndTime = new Date(now + extension).toISOString();
-      notify.success("ANTI-SNIPER!", "Waktu di-reset ke 2 menit lagi!");
     }
 
-    // 7. DATABASE TRANSMISSION
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
       user_id: props.userProfile.id,
@@ -430,14 +420,13 @@ const placeBid = async () => {
       })
       .eq("id", product.value.id);
 
-    // 8. LOCAL STATE SYNC & COOLDOWN
     product.value.end_time = newEndTime;
     product.value.current_bid = bidAmount.value;
     bidAmount.value = Number(bidAmount.value) + 10000;
 
-    notify.success("GACOR!", "Bid terkirim.");
+    notify.success("GACOR!", "Tawaran transmisi berhasil dikirim.");
 
-    // AKTIFKAN JEDA 2 DETIK
+    // AKTIFKAN COOLDOWN 2 DETIK
     isCooldown.value = true;
     setTimeout(() => {
       isCooldown.value = false;
@@ -477,8 +466,13 @@ onMounted(() => {
           filter: `product_id=eq.${route.params.id}`,
         },
         (payload) => {
-          // PAKSA REFRESH DATA KETIKA ADA INSERT BID BARU
           fetchBids();
+
+          // PAKSA INPUTAN NAIK DI SEMUA DEVICE
+          const nextMinBid = Number(payload.new.amount) + 10000;
+          if (bidAmount.value < nextMinBid) {
+            bidAmount.value = nextMinBid;
+          }
         },
       )
       .on(
@@ -495,25 +489,30 @@ onMounted(() => {
             return;
           }
           if (product.value) {
-            // --- SINKRONISASI TOTAL TANPA AMPUN ---
-            product.value.current_bid = payload.new.current_bid;
-            product.value.winner_id = payload.new.winner_id;
             product.value.status = payload.new.status;
+            product.value.winner_id = payload.new.winner_id;
+            product.value.current_bid = payload.new.current_bid;
 
-            // Sync Waktu (Inti Anti Sniper)
+            // PAKSA INPUTAN NAIK SEKALI LAGI BIAR DOUBLE AMAN
+            const nextMinBid = Number(payload.new.current_bid) + 10000;
+            if (bidAmount.value < nextMinBid) {
+              bidAmount.value = nextMinBid;
+            }
+
+            // --- SYNC JAM TERAGRESIF (MENGHINDARI DEVICE MACET) ---
             const oldTime = new Date(product.value.end_time).getTime();
             const newTime = new Date(payload.new.end_time).getTime();
 
-            if (newTime > oldTime) {
-              product.value.end_time = payload.new.end_time;
+            // Selalu terima waktu dari database tanpa syarat
+            product.value.end_time = payload.new.end_time;
+
+            // Beri notif perpanjangan hanya kalau beneran nambah > 2 detik (menghindari glitch)
+            if (newTime > oldTime + 2000) {
               notify.success(
                 "TIME EXTENDED!",
-                "Seseorang ngebid, waktu bertambah!",
+                "Seseorang ngebid di detik terakhir, waktu ditambah!",
               );
-              hasNotifiedIntense.value = false; // Reset notif merah
-            } else if (newTime < oldTime) {
-              // Kasus glitch waktu mundur, paksa ambil data database
-              product.value.end_time = payload.new.end_time;
+              hasNotifiedIntense.value = false;
             }
           }
         },
@@ -544,7 +543,8 @@ onUnmounted(() => {
         ASSET TERMINATED
       </h1>
       <p class="text-gray-400 italic text-sm mb-10 max-w-md">
-        Barang ini telah di-banned oleh sistem keamanan TokBer.
+        Barang ini telah di-banned oleh sistem keamanan TokBer karena melanggar
+        aturan komunitas atau laporan penipuan.
       </p>
       <button
         @click="router.push('/')"
@@ -911,7 +911,7 @@ onUnmounted(() => {
                         <p
                           class="text-[8px] font-black text-black/60 uppercase leading-none"
                         >
-                          Highest Bidder
+                          Current position #1
                         </p>
                         <p
                           class="text-xs font-[1000] text-black uppercase italic"
@@ -965,7 +965,7 @@ onUnmounted(() => {
                         bidAmount =
                           (product.current_bid || product.starting_bid) + plus
                       "
-                      class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 active:scale-90"
+                      class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 hover:bg-yellow-500 hover:text-black transition-all active:scale-90"
                     >
                       +{{ plus / 1000 }}K
                     </button>
@@ -982,8 +982,8 @@ onUnmounted(() => {
                   :disabled="isSubmitting || isCooldown"
                   :class="[
                     isOutbid
-                      ? 'bg-red-600 shadow-red-500/40 scale-[1.02]'
-                      : 'bg-yellow-500 shadow-yellow-500/20',
+                      ? 'bg-red-600 shadow-[0_15px_40px_rgba(220,38,38,0.4)] scale-[1.02]'
+                      : 'bg-yellow-500 shadow-[0_15px_40px_rgba(234,179,8,0.2)]',
                     isCooldown ? 'opacity-50' : 'animate-pulse',
                   ]"
                   class="w-full text-black py-7 rounded-[35px] font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 transition-all shadow-2xl"
@@ -1052,7 +1052,7 @@ onUnmounted(() => {
                     v-else
                     class="bg-green-500/20 text-green-500 p-4 rounded-2xl text-center text-[10px] font-black uppercase italic"
                   >
-                    Dana Diamankan Escrow
+                    Dana Berada di Escrow TokBer
                   </div>
                   <button
                     @click="router.push(`/chat/${product.id}`)"
@@ -1101,7 +1101,12 @@ onUnmounted(() => {
                   <p
                     class="text-[9px] font-black text-gray-700 uppercase italic mt-2"
                   >
-                    Sold at: {{ formatPrice(recentBids[0]?.amount) }}
+                    Sold Price: {{ formatPrice(recentBids[0]?.amount) }}
+                  </p>
+                  <p
+                    class="text-[8px] text-gray-800 font-bold uppercase italic mt-4"
+                  >
+                    @{{ recentBids[0]?.profiles?.username }} is the new owner
                   </p>
                 </div>
               </div>
