@@ -27,7 +27,8 @@ const loading = ref(true);
 const bidAmount = ref(0);
 const isSubmitting = ref(false);
 const timeLeft = ref("");
-const activeBids = ref("ranking");
+// FIX: Inisialisasi Tab Ranking agar langsung aktif tanpa dipencet
+const activeBidTab = ref("ranking");
 
 // --- STATE BARU REFORMASI ---
 const isIntense = ref(false); // Mode 2 menit terakhir
@@ -46,7 +47,6 @@ const rankedBids = computed(() => {
       uniqueBidders.push(bid);
     }
   }
-  // Ambil Top 5 atau 8 Rival teratas saja
   return uniqueBidders.slice(0, 8);
 });
 
@@ -168,7 +168,7 @@ const fetchBids = async () => {
     .select("*, profiles(username, full_name, avatar_url, reputation_score)")
     .eq("product_id", route.params.id)
     .order("amount", { ascending: false })
-    .limit(8);
+    .limit(10); // Ambil 10 bid terakhir
 
   if (data) {
     recentBids.value = data;
@@ -210,7 +210,6 @@ const updateTimer = () => {
   const now = new Date().getTime();
   const diff = end - now;
 
-  // --- REFORMASI PSIKOLOGI 2 MENIT ---
   if (diff > 0 && diff <= 120000) {
     isIntense.value = true;
     if (!hasNotifiedIntense.value) {
@@ -238,8 +237,6 @@ const updateTimer = () => {
 const placeBid = async () => {
   if (!props.userProfile)
     return notify.error("Auth Required", "Login dulu bosku!");
-
-  // --- REFORMASI 2: LOGIKA REPUTASI & RANK ---
   const rep = props.userProfile?.reputation_score || 0;
   if (rep < 50)
     return notify.error("Reputasi Rendah", "Minimal 50 poin buat ngebid, Mas.");
@@ -267,12 +264,10 @@ const placeBid = async () => {
 
   try {
     isSubmitting.value = true;
-
-    // --- REFORMASI 3: ANTI SNIPER (60 DETIK) ---
     const diff = end - now;
     let newEndTime = product.value.end_time;
     if (diff <= 60000) {
-      const extension = 2 * 60 * 1000; // Tambah 2 menit
+      const extension = 2 * 60 * 1000;
       newEndTime = new Date(end + extension).toISOString();
       notify.success("ANTI-SNIPER!", "Waktu lelang ditambah 2 menit!");
     }
@@ -307,7 +302,6 @@ onMounted(() => {
   fetchProductDetail();
   timerInterval = setInterval(updateTimer, 1000);
 
-  // ANTI-INSPECT GUARD
   const checkBannedElement = setInterval(() => {
     if (showBannedModal.value) {
       const modal = document.getElementById("banned-guard-overlay");
@@ -356,7 +350,7 @@ onMounted(() => {
           if (product.value) {
             product.value.status = payload.new.status;
             product.value.winner_id = payload.new.winner_id;
-            product.value.end_time = payload.new.end_time; // Sinkron Anti-Sniper
+            product.value.end_time = payload.new.end_time;
           }
         },
       )
@@ -480,8 +474,7 @@ onUnmounted(() => {
                   "
                 />
                 <span
-                  class="text-xs font-[1000] italic tracking-[0.2em] uppercase"
-                  :class="isIntense ? 'text-white' : 'text-white'"
+                  class="text-xs font-[1000] italic tracking-[0.2em] uppercase text-white"
                   >{{ timeLeft }}</span
                 >
               </div>
@@ -500,49 +493,36 @@ onUnmounted(() => {
                   Live <span class="text-yellow-500">Rank</span> Transmission
                 </h2>
               </div>
-
               <div
                 class="flex p-1.5 bg-white/5 border border-white/10 rounded-2xl w-full max-w-xs mb-6"
               >
                 <button
-                  type="button"
                   @click="activeBidTab = 'ranking'"
                   :class="
                     activeBidTab === 'ranking'
                       ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20'
                       : 'text-gray-500 hover:text-white'
                   "
-                  class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300 cursor-pointer z-50"
+                  class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300 cursor-pointer"
                 >
-                  <TrophyIcon class="w-3.5 h-3.5" />
-                  Ranking
+                  <TrophyIcon class="w-3.5 h-3.5" /> Ranking
                 </button>
-
                 <button
-                  type="button"
                   @click="activeBidTab = 'history'"
                   :class="
                     activeBidTab === 'history'
                       ? 'bg-white text-black shadow-lg'
                       : 'text-gray-500 hover:text-white'
                   "
-                  class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300 cursor-pointer z-50"
+                  class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300 cursor-pointer"
                 >
-                  <ArrowPathIcon class="w-3.5 h-3.5" />
-                  History
+                  <ArrowPathIcon class="w-3.5 h-3.5" /> History
                 </button>
               </div>
             </div>
 
             <div class="min-h-[300px]">
               <div v-if="activeBidTab === 'ranking'" class="space-y-4">
-                <div
-                  v-if="rankedBids.length === 0"
-                  class="text-center py-10 text-gray-700 italic text-[10px] uppercase font-black tracking-widest"
-                >
-                  No Frequency Detected...
-                </div>
-
                 <div
                   v-for="(bid, index) in rankedBids"
                   :key="'rank-' + bid.id"
@@ -607,15 +587,7 @@ onUnmounted(() => {
                   </div>
                 </div>
               </div>
-
-              <div v-if="activeBidTab === 'history'" class="space-y-3">
-                <div
-                  v-if="recentBids.length === 0"
-                  class="text-center py-10 text-gray-700 italic text-[10px] uppercase font-black tracking-widest"
-                >
-                  Empty Logs...
-                </div>
-
+              <div v-else class="space-y-3">
                 <div
                   v-for="bid in recentBids"
                   :key="'hist-' + bid.id"
@@ -641,10 +613,10 @@ onUnmounted(() => {
                       </p>
                     </div>
                   </div>
-                  <div class="text-right">
-                    <p class="text-sm font-black italic text-gray-400">
-                      {{ formatPrice(bid.amount) }}
-                    </p>
+                  <div
+                    class="text-right font-black italic text-gray-400 text-sm"
+                  >
+                    {{ formatPrice(bid.amount) }}
                   </div>
                 </div>
               </div>
@@ -656,8 +628,7 @@ onUnmounted(() => {
           <div class="space-y-6">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <ShieldCheckIcon class="w-4 h-4 text-blue-500" />
-                <span
+                <ShieldCheckIcon class="w-4 h-4 text-blue-500" /><span
                   class="text-[9px] font-black text-gray-500 uppercase tracking-[0.3em] italic"
                   >Authentic Asset</span
                 >
@@ -666,20 +637,19 @@ onUnmounted(() => {
                 @click="showReportModal = true"
                 class="flex items-center gap-2 bg-red-500/10 px-3 py-1.5 rounded-full border border-red-500/20 active:scale-95 transition-all"
               >
-                <ExclamationTriangleIcon class="w-3.5 h-3.5 text-red-500" />
-                <span
+                <ExclamationTriangleIcon
+                  class="w-3.5 h-3.5 text-red-500"
+                /><span
                   class="text-[8px] font-black text-red-500 uppercase italic"
                   >Report</span
                 >
               </button>
             </div>
-
             <h2
               class="text-4xl lg:text-7xl font-[1000] italic uppercase tracking-tighter leading-[0.8]"
             >
               {{ product.name }}
             </h2>
-
             <div
               @click="router.push(`/user/${product.profiles?.username}`)"
               class="flex items-center gap-4 p-5 bg-white/[0.03] border border-white/10 rounded-[30px] cursor-pointer hover:border-yellow-500/30 transition-all w-fit group"
@@ -739,7 +709,6 @@ onUnmounted(() => {
             >
               {{ formatPrice(product.current_bid || product.starting_bid) }}
             </h3>
-
             <div class="space-y-6">
               <div
                 v-if="props.userProfile"
@@ -755,19 +724,16 @@ onUnmounted(() => {
                   {{ formatPrice(userRank.limit) }})</span
                 >
               </div>
-
               <div class="relative group">
                 <span
                   class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-sm italic tracking-tighter"
                   >IDR</span
-                >
-                <input
+                ><input
                   v-model.number="bidAmount"
                   type="number"
                   class="w-full bg-black border-2 border-white/10 rounded-3xl py-7 pl-20 pr-6 text-3xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none"
                 />
               </div>
-
               <button
                 @click="placeBid"
                 :disabled="isSubmitting || timeLeft === 'ENDED'"
@@ -777,11 +743,14 @@ onUnmounted(() => {
                   <ArrowPathIcon
                     v-if="isSubmitting"
                     class="w-7 h-7 animate-spin"
-                  />
-                  <BanknotesIcon v-else class="w-7 h-7 stroke-[2.5px]" />
-                  <span class="text-lg">{{
-                    timeLeft === "ENDED" ? "TRANSMISSION CLOSED" : "Execute Bid"
-                  }}</span>
+                  /><BanknotesIcon v-else class="w-7 h-7 stroke-[2.5px]" /><span
+                    class="text-lg"
+                    >{{
+                      timeLeft === "ENDED"
+                        ? "TRANSMISSION CLOSED"
+                        : "Execute Bid"
+                    }}</span
+                  >
                 </div>
                 <span
                   v-if="isIntense"
@@ -802,8 +771,7 @@ onUnmounted(() => {
               <div
                 class="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5"
               >
-                <TagIcon class="w-3 h-3 text-gray-500" />
-                <span
+                <TagIcon class="w-3 h-3 text-gray-500" /><span
                   class="text-[8px] font-black text-gray-400 uppercase italic"
                   >{{ product.category }}</span
                 >
@@ -814,6 +782,185 @@ onUnmounted(() => {
             >
               {{ product.description }}
             </p>
+          </div>
+
+          <div class="lg:hidden space-y-6 pt-10 border-t border-white/5 mt-10">
+            <div class="flex items-center gap-3 mb-4">
+              <div
+                class="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-ping"
+              ></div>
+              <h3
+                class="text-[10px] font-[1000] italic uppercase tracking-[0.2em] text-white"
+              >
+                Live <span class="text-yellow-500">Transmission</span> Feed
+              </h3>
+            </div>
+            <div
+              class="flex p-1 bg-white/5 border border-white/10 rounded-xl w-full mb-6"
+            >
+              <button
+                @click="activeBidTab = 'ranking'"
+                :class="
+                  activeBidTab === 'ranking'
+                    ? 'bg-yellow-500 text-black shadow-lg'
+                    : 'text-gray-500'
+                "
+                class="flex-1 py-2.5 rounded-lg text-[9px] font-black uppercase italic transition-all"
+              >
+                Ranking
+              </button>
+              <button
+                @click="activeBidTab = 'history'"
+                :class="
+                  activeBidTab === 'history'
+                    ? 'bg-white text-black shadow-lg'
+                    : 'text-gray-500'
+                "
+                class="flex-1 py-2.5 rounded-lg text-[9px] font-black uppercase italic transition-all"
+              >
+                History
+              </button>
+            </div>
+            <div class="min-h-[200px]">
+              <div v-if="activeBidTab === 'ranking'" class="space-y-3">
+                <div
+                  v-for="(bid, index) in rankedBids.slice(0, 5)"
+                  :key="'mb-rank-' + bid.id"
+                  class="flex items-center justify-between p-4 rounded-2xl border border-white/5 bg-white/[0.02]"
+                  :class="
+                    index === 0 ? 'border-yellow-500/20 bg-yellow-500/5' : ''
+                  "
+                >
+                  <div class="flex items-center gap-3">
+                    <span
+                      class="font-[1000] italic text-sm w-4"
+                      :class="index < 3 ? 'text-yellow-500' : 'text-gray-700'"
+                      >#{{ index + 1 }}</span
+                    >
+                    <div
+                      @click="router.push(`/user/${bid.profiles?.username}`)"
+                      class="w-10 h-10 rounded-xl overflow-hidden border border-white/10"
+                    >
+                      <img
+                        v-if="bid.profiles?.avatar_url"
+                        :src="bid.profiles.avatar_url"
+                        class="w-full h-full object-cover"
+                      />
+                      <div
+                        v-else
+                        class="w-full h-full bg-gray-800 flex items-center justify-center"
+                      >
+                        <UserIcon class="w-5 h-5 text-gray-600" />
+                      </div>
+                    </div>
+                    <p
+                      @click="router.push(`/user/${bid.profiles?.username}`)"
+                      class="text-xs font-black italic uppercase"
+                    >
+                      @{{ bid.profiles?.username }}
+                    </p>
+                  </div>
+                  <p
+                    class="text-sm font-[1000] italic"
+                    :class="index === 0 ? 'text-yellow-500' : 'text-white'"
+                  >
+                    {{ formatPrice(bid.amount) }}
+                  </p>
+                </div>
+              </div>
+              <div v-else class="space-y-3">
+                <div
+                  v-for="bid in recentBids.slice(0, 8)"
+                  :key="'mb-hist-' + bid.id"
+                  class="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-black/40"
+                >
+                  <div class="flex items-center gap-3">
+                    <div
+                      class="w-1.5 h-1.5 rounded-full bg-yellow-500/30 animate-pulse"
+                    ></div>
+                    <p
+                      class="text-[9px] font-black italic uppercase text-gray-300"
+                    >
+                      @{{ bid.profiles?.username }}
+                    </p>
+                  </div>
+                  <p class="text-[10px] font-black italic text-gray-500">
+                    {{ formatPrice(bid.amount) }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="showReportModal"
+      class="fixed inset-0 z-[200] flex items-center justify-center px-6"
+    >
+      <div
+        class="absolute inset-0 bg-black/90 backdrop-blur-md"
+        @click="showReportModal = false"
+      ></div>
+      <div
+        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-8 lg:p-10 shadow-2xl overflow-hidden"
+      >
+        <div class="text-center mb-8">
+          <div
+            class="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-red-500/20"
+          >
+            <ExclamationTriangleIcon class="w-8 h-8 text-red-500" />
+          </div>
+          <h3
+            class="text-xl font-[1000] italic uppercase tracking-tighter text-white"
+          >
+            Report Asset
+          </h3>
+        </div>
+        <div class="space-y-6">
+          <div>
+            <label
+              class="text-[9px] font-black text-gray-600 uppercase tracking-widest block mb-3 italic"
+              >Reason Category</label
+            ><select
+              v-model="reportForm.category"
+              class="w-full bg-black border border-white/10 rounded-2xl p-4 text-xs font-bold text-white outline-none focus:border-red-500 appearance-none cursor-pointer"
+            >
+              <option
+                v-for="cat in reportCategories"
+                :key="cat"
+                :value="cat"
+                class="bg-gray-900"
+              >
+                {{ cat }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label
+              class="text-[9px] font-black text-gray-600 uppercase tracking-widest block mb-3 italic"
+              >Additional Details</label
+            ><textarea
+              v-model="reportForm.details"
+              rows="4"
+              placeholder="Alasan pelaporan..."
+              class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs font-bold text-white outline-none focus:border-red-500 resize-none normal-case italic"
+            ></textarea>
+          </div>
+          <div class="flex gap-3">
+            <button
+              @click="showReportModal = false"
+              class="flex-1 bg-white/5 text-gray-500 py-5 rounded-[24px] font-[1000] italic uppercase text-[10px]"
+            >
+              Cancel</button
+            ><button
+              @click="submitReport"
+              :disabled="isSubmittingReport"
+              class="flex-[2] bg-red-600 text-white py-5 rounded-[24px] font-[1000] italic uppercase tracking-[0.1em] text-[10px]"
+            >
+              {{ isSubmittingReport ? "TRANSMITTING..." : "CONFIRM REPORT" }}
+            </button>
           </div>
         </div>
       </div>
