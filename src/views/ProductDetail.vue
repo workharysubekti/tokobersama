@@ -31,7 +31,6 @@ import {
 const props = defineProps({ 
   userProfile: Object 
 });
-
 const route = useRoute();
 const router = useRouter();
 
@@ -79,7 +78,7 @@ const rankedBids = computed(() => {
 });
 
 // --- LOGIKA SETTLEMENT ---
-// SEKARANG WINNER HANYA MUNCUL JIKA STATUS DATABASE 'closed'
+// Winner Section hanya muncul jika status resmi database adalah 'closed'
 const isWinner = computed(() => {
   return (
     product.value?.status === 'closed' &&
@@ -106,21 +105,10 @@ const userRank = computed(() => {
       color: "text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.8)] font-black",
     };
   }
-  
   const rep = props.userProfile?.reputation || 0;
-  
-  if (rep >= 600) {
-    return { name: "LEGEND", limit: Infinity, color: "text-purple-500" };
-  }
-  
-  if (rep >= 400) {
-    return { name: "EXPERT", limit: 100000000, color: "text-red-500" };
-  }
-  
-  if (rep >= 200) {
-    return { name: "INTERMEDIATE", limit: 20000000, color: "text-blue-500" };
-  }
-  
+  if (rep >= 600) return { name: "LEGEND", limit: Infinity, color: "text-purple-500" };
+  if (rep >= 400) return { name: "EXPERT", limit: 100000000, color: "text-red-500" };
+  if (rep >= 200) return { name: "INTERMEDIATE", limit: 20000000, color: "text-blue-500" };
   return { name: "NEWBIE", limit: 5000000, color: "text-green-500" };
 });
 
@@ -129,12 +117,10 @@ watch(recentBids, (newVal, oldVal) => {
   if (oldVal && oldVal.length > 0 && newVal.length > 0 && props.userProfile) {
     const wasTop = oldVal[0].user_id === props.userProfile.id;
     const isNowOutbid = newVal[0].user_id !== props.userProfile.id;
-
     if (wasTop && isNowOutbid && product.value?.status !== 'closed') {
       isOutbid.value = true;
     }
   }
-  
   if (newVal.length > 0 && newVal[0].user_id === props.userProfile?.id) {
     isOutbid.value = false;
   }
@@ -149,12 +135,10 @@ const allImages = computed(() => {
   if (!product.value) return [];
   const images = [];
   if (product.value.image_url) images.push(product.value.image_url);
-  
   const extra = product.value.additional_images;
   if (extra) {
-    if (Array.isArray(extra)) {
-      images.push(...extra);
-    } else if (typeof extra === "string") {
+    if (Array.isArray(extra)) images.push(...extra);
+    else if (typeof extra === "string") {
       try {
         const parsed = JSON.parse(extra);
         if (Array.isArray(parsed)) images.push(...parsed);
@@ -174,18 +158,11 @@ const nextImage = () => {
 
 const prevImage = () => {
   if (allImages.value.length <= 1) return;
-  activeImgIndex.value = (allImages.value.length + activeImgIndex.value - 1) % allImages.value.length;
+  activeImgIndex.value = (activeImgIndex.value - 1 + allImages.value.length) % allImages.value.length;
 };
 
-const handleTouchStart = (e) => { 
-  touchStartX.value = e.screenX || e.touches[0].clientX; 
-};
-
-const handleTouchEnd = (e) => { 
-  touchEndX.value = e.screenX || e.changedTouches[0].clientX; 
-  handleSwipe(); 
-};
-
+const handleTouchStart = (e) => { touchStartX.value = e.screenX || e.touches[0].clientX; };
+const handleTouchEnd = (e) => { touchEndX.value = e.screenX || e.changedTouches[0].clientX; handleSwipe(); };
 const handleSwipe = () => {
   const swipeDistance = touchStartX.value - touchEndX.value;
   if (swipeDistance > 50) nextImage();
@@ -196,19 +173,11 @@ const handleSwipe = () => {
 const showReportModal = ref(false);
 const isSubmittingReport = ref(false);
 const reportForm = ref({ category: "Palsu / Kw", details: "" });
-const reportCategories = [
-  "Palsu / KW",
-  "Penipuan Harga",
-  "Foto Tidak Sesuai",
-  "Kategori Salah",
-  "Mengandung Unsur SARA/Pornografi",
-  "Lainnya",
-];
+const reportCategories = ["Palsu / KW", "Penipuan Harga", "Foto Tidak Sesuai", "Kategori Salah", "Mengandung Unsur SARA/Pornografi", "Lainnya"];
 
 const submitReport = async () => {
   if (!props.userProfile) return notify.error("Auth Required", "Login dulu!");
   if (reportForm.value.details.length < 5) return notify.error("Data Kurang", "Minimal 5 karakter.");
-  
   try {
     isSubmittingReport.value = true;
     const { error } = await supabase.from("reports").insert({
@@ -230,7 +199,7 @@ const submitReport = async () => {
   }
 };
 
-// --- UTILS ---
+// --- UTILS & FETCHING ---
 let timerInterval = null;
 let bidSubscription = null;
 
@@ -286,25 +255,17 @@ const confirmPayment = async (method) => {
   isSubmittingAction.value = false;
 };
 
-// --- FUNGSI SILENT EXECUTIONER (TUTUP OTOMATIS) ---
+// --- FUNGSI TERMINATOR ---
 const closeAuctionOfficial = async () => {
   if (!product.value || product.value.status === "closed") return;
-  
   try {
-    const { error } = await supabase
-      .from("products")
-      .update({ status: "closed" })
-      .eq("id", product.value.id)
-      .eq("status", "active"); // Guard agar tidak update berkali-kali
-
+    const { error } = await supabase.from("products").update({ status: "closed" }).eq("id", product.value.id).eq("status", "active");
     if (!error) {
       product.value.status = "closed";
       notify.success("LELANG SELESAI", "Transmisi ditutup secara resmi.");
       fetchTransaction();
     }
-  } catch (e) {
-    console.error("Auto-close error:", e);
-  }
+  } catch (e) { console.error(e); }
 };
 
 const fetchProductDetail = async () => {
@@ -325,7 +286,7 @@ const fetchProductDetail = async () => {
   }
 };
 
-// --- LOGIKA TIMER (SINKRONISASI SERVER-SIDE + AUTO-TERMINATOR) ---
+// --- LOGIKA TIMER (SINKRONISASI & TERMINATOR) ---
 const updateTimer = () => {
   if (!product.value?.end_time) return;
   
@@ -333,14 +294,13 @@ const updateTimer = () => {
   const now = new Date().getTime(); 
   const diff = end - now;
 
-  // --- LOGIKA TERMINASI ---
   if (diff <= 0) {
     if (product.value.status === 'closed') {
       timeLeft.value = "ENDED";
       isIntense.value = false;
     } else {
       timeLeft.value = "00:00:00";
-      // Jika waktu sudah lewat 5 detik tapi status masih active, PAKSA TUTUP.
+      // Grace period 5 detik sebelum database dipaksa closed
       if (diff < -5000) {
         closeAuctionOfficial();
       }
@@ -348,7 +308,6 @@ const updateTimer = () => {
     return;
   }
 
-  // Notif Zona Perang (Hanya Muncul Sekali)
   if (diff > 0 && diff <= 120000) {
     isIntense.value = true;
     if (!hasNotifiedIntense.value) {
@@ -374,14 +333,13 @@ const updateTimer = () => {
   }
 };
 
-// --- FUNGSI PLACE BID (SINKRONISASI RPC) ---
+// --- FUNGSI PLACE BID (RPC) ---
 const placeBid = async () => {
   if (!props.userProfile) return notify.error("Auth Required", "Login dulu!");
   if (isCooldown.value) return;
 
-  // Jika waktu di UI sudah 00:00, blokir bid lokal sebelum server confirm
-  if (timeLeft.value === "00:00:00" || timeLeft.value === "ENDED") {
-    return notify.error("Lelang Berakhir", "Waktu sudah habis bosku.");
+  if (product.value.status === 'closed') {
+    return notify.error("Lelang Berakhir", "Pintu transmisi sudah ditutup.");
   }
 
   if (props.userProfile?.is_admin !== true) {
@@ -390,7 +348,7 @@ const placeBid = async () => {
   }
 
   const rep = props.userProfile?.reputation || 0;
-  if (rep < 50 && props.userProfile?.is_admin !== true) return notify.error("Reputasi Rendah", "Minimal 50 poin buat ngebid.");
+  if (rep < 50 && props.userProfile?.is_admin !== true) return notify.error("Reputasi Rendah", "Minimal 50 poin.");
 
   if (bidAmount.value > userRank.value.limit) {
     return notify.error("Limit Rank", `Maksimal bid ${formatPrice(userRank.value.limit)}`);
@@ -400,8 +358,6 @@ const placeBid = async () => {
 
   try {
     isSubmitting.value = true;
-
-    // PANGGIL RPC (KEBENARAN SERVER)
     const { data, error } = await supabase.rpc('execute_bid_v1', {
       p_product_id: product.value.id,
       p_user_id: props.userProfile.id,
@@ -419,22 +375,16 @@ const placeBid = async () => {
     bidAmount.value = Number(data.new_bid) + 10000;
     
     nextTick(() => { updateTimer(); });
-
     notify.success("GACOR!", "Tawaran diterima server.");
     
     isCooldown.value = true;
     setTimeout(() => { isCooldown.value = false; }, 1500);
 
-  } catch (err) {
-    notify.error("Error", err.message);
-  } finally {
-    isSubmitting.value = false;
-  }
+  } catch (err) { notify.error("Error", err.message); } finally { isSubmitting.value = false; }
 };
 
 onMounted(() => {
   fetchProductDetail();
-  
   timerInterval = setInterval(() => {
     updateTimer();
     if (product.value?.status === "closed" && !transaction.value) {
@@ -452,7 +402,14 @@ onMounted(() => {
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "products", filter: `id=eq.${route.params.id}` }, (payload) => {
           if (payload.new.status === "banned") { showBannedModal.value = true; return; }
+          
           if (product.value) {
+            // JIKA LELANG DIHIDUPKAN LAGI (REBIRTH)
+            if (payload.new.status === 'active' && product.value.status === 'closed') {
+              transaction.value = null; // Reset escrow state
+              notify.success("REBIRTH!", "Lelang dibuka kembali oleh sistem!");
+            }
+
             product.value.status = payload.new.status;
             product.value.winner_id = payload.new.winner_id;
             product.value.current_bid = payload.new.current_bid;
@@ -463,7 +420,7 @@ onMounted(() => {
             const oldT = new Date(payload.old.end_time).getTime();
             const newT = new Date(payload.new.end_time).getTime();
             if (newT > oldT + 2000) {
-              notify.success("TIME EXTENDED!", "Seseorang ngebid, waktu bertambah!");
+              notify.success("TIME EXTENDED!", "Waktu lelang bertambah!");
               hasNotifiedIntense.value = false; 
             }
           }
@@ -483,7 +440,7 @@ onUnmounted(() => {
     
     <div v-if="showBannedModal" id="banned-guard-overlay" class="fixed inset-0 z-[999] bg-black flex flex-col items-center justify-center p-8 text-center">
       <ExclamationTriangleIcon class="w-24 h-24 text-red-500 mb-6" />
-      <h1 class="text-4xl font-[1000] italic uppercase mb-4">ASSET TERMINATED</h1>
+      <h1 class="text-4xl font-[1000] italic uppercase text-white mb-4">ASSET TERMINATED</h1>
       <button @click="router.push('/')" class="bg-white text-black px-10 py-4 rounded-2xl font-black italic text-xs uppercase">Back Home</button>
     </div>
 
@@ -528,9 +485,15 @@ onUnmounted(() => {
           </div>
 
           <div class="hidden lg:block space-y-6">
-            <div class="flex p-1.5 bg-white/5 border border-white/10 rounded-2xl w-full max-w-xs mb-6">
-              <button @click="activeBidTab = 'ranking'" :class="activeBidTab === 'ranking' ? 'bg-yellow-500 text-black shadow-lg' : 'text-gray-500 hover:text-white'" class="flex-1 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300">Ranking</button>
-              <button @click="activeBidTab = 'history'" :class="activeBidTab === 'history' ? 'bg-white text-black shadow-lg' : 'text-gray-500 hover:text-white'" class="flex-1 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300">History</button>
+            <div class="px-2">
+              <div class="flex items-center gap-3 mb-5">
+                <div class="w-2 h-2 bg-yellow-500 rounded-full animate-ping"></div>
+                <h2 class="text-sm font-[1000] italic uppercase tracking-[0.3em] text-white">Live <span class="text-yellow-500">Feed</span> Transmission</h2>
+              </div>
+              <div class="flex p-1.5 bg-white/5 border border-white/10 rounded-2xl w-full max-w-xs mb-6">
+                <button @click="activeBidTab = 'ranking'" :class="activeBidTab === 'ranking' ? 'bg-yellow-500 text-black shadow-lg' : 'text-gray-500 hover:text-white'" class="flex-1 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300">Ranking</button>
+                <button @click="activeBidTab = 'history'" :class="activeBidTab === 'history' ? 'bg-white text-black shadow-lg' : 'text-gray-500 hover:text-white'" class="flex-1 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300">History</button>
+              </div>
             </div>
 
             <div class="min-h-[400px]">
@@ -607,8 +570,7 @@ onUnmounted(() => {
             </h3>
             
             <div class="space-y-6">
-              <div v-if="product.status !== 'closed'" class="space-y-6">
-                
+              <div v-if="product.status === 'active'" class="space-y-6">
                 <transition enter-active-class="animate-bounce" v-if="recentBids.length > 0">
                   <div class="p-4 bg-yellow-500 rounded-2xl flex items-center justify-between shadow-[0_0_30px_rgba(234,179,8,0.4)]">
                     <div class="flex items-center gap-3">
@@ -619,7 +581,7 @@ onUnmounted(() => {
                       </div>
                     </div>
                     <div class="text-right">
-                      <p class="text-[8px] font-black text-black/60 uppercase leading-none">Hammer Price</p>
+                      <p class="text-[8px] font-black text-black/60 uppercase leading-none">Price</p>
                       <p class="text-sm font-[1000] text-black italic">{{ formatPrice(recentBids[0].amount) }}</p>
                     </div>
                   </div>
@@ -638,7 +600,7 @@ onUnmounted(() => {
                   <input v-model.number="bidAmount" type="number" class="w-full bg-black border-2 border-white/10 rounded-3xl py-7 pl-20 pr-6 text-3xl font-[1000] italic focus:border-yellow-500 text-white outline-none" />
                 </div>
 
-                <button @click="placeBid" :disabled="isSubmitting || isCooldown" :class="isOutbid ? 'bg-red-600 shadow-red-500/40 animate-pulse scale-[1.02]' : 'bg-yellow-500 shadow-yellow-500/20'" class="w-full text-black py-7 rounded-3xl font-[1000] italic uppercase active:scale-95 flex flex-col items-center justify-center gap-1 transition-all shadow-2xl">
+                <button @click="placeBid" :disabled="isSubmitting || isCooldown" :class="isOutbid ? 'bg-red-600 shadow-red-500/40 animate-pulse scale-[1.02]' : 'bg-yellow-500 shadow-yellow-500/20'" class="w-full text-black py-7 rounded-[35px] font-[1000] italic uppercase active:scale-95 flex flex-col items-center justify-center gap-1 transition-all shadow-2xl">
                   <div class="flex items-center gap-3">
                     <ArrowPathIcon v-if="isSubmitting" class="w-7 h-7 animate-spin" />
                     <BanknotesIcon v-else class="w-7 h-7 stroke-[2.5px]" />
@@ -685,7 +647,7 @@ onUnmounted(() => {
             </div>
             
             <div class="flex p-1 bg-white/5 border border-white/10 rounded-xl w-full mb-6">
-              <button @click="activeBidTab = 'ranking'" :class="activeBidTab === 'ranking' ? 'bg-yellow-500 text-black shadow-lg' : 'text-gray-500'" class="flex-1 py-2.5 rounded-lg text-[9px] font-black uppercase italic transition-all">Ranking</button>
+              <button @click="activeBidTab = 'ranking'" :class="activeBidTab === 'ranking' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20' : 'text-gray-500'" class="flex-1 py-2.5 rounded-lg text-[9px] font-black uppercase italic transition-all">Ranking</button>
               <button @click="activeBidTab = 'history'" :class="activeBidTab === 'history' ? 'bg-white text-black shadow-lg' : 'text-gray-500'" class="flex-1 py-2.5 rounded-lg text-[9px] font-black uppercase italic transition-all">History</button>
             </div>
 
