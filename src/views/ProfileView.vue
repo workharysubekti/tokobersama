@@ -127,12 +127,8 @@ onMounted(() => {
 <template>
   <div class="min-h-screen bg-[#050505] pt-12 lg:pt-16 pb-32 px-6 text-white font-sans uppercase italic font-[1000]">
     
-    <div v-if="userProfile" class="max-w-2xl lg:max-w-5xl mx-auto relative">
+    <div v-if="userProfile" class="max-w-2xl lg:max-w-5xl mx-auto">
       
-      <button @click="handleLogout" class="absolute top-0 right-0 p-3 bg-white/5 border border-white/10 rounded-2xl text-red-500 active:scale-90 transition-all z-30 hover:bg-red-500/10">
-        <ArrowRightOnRectangleIcon class="w-5 h-5" />
-      </button>
-
       <div class="flex flex-col lg:flex-row gap-10 items-center lg:items-start">
         
         <div class="w-full lg:w-1/3 flex flex-col items-center text-center space-y-6">
@@ -234,7 +230,7 @@ onMounted(() => {
               ]"
               :key="item.path"
               :to="item.path"
-              class="flex items-center justify-between p-7 active:bg-white/[0.02] transition-all border-white/5 border-b last:border-b-0"
+              class="flex items-center justify-between p-7 active:bg-white/[0.02] transition-all border-white/5 border-b"
             >
               <div class="flex items-center gap-4">
                 <span class="text-[10px] lg:text-[11px] font-[1000] uppercase italic tracking-[0.2em] text-gray-400">{{ item.name }}</span>
@@ -244,6 +240,17 @@ onMounted(() => {
               </div>
               <ChevronRightIcon class="w-3.5 h-3.5 text-gray-800" />
             </router-link>
+
+            <button 
+              @click="handleLogout"
+              class="w-full flex items-center justify-between p-7 active:bg-red-500/5 transition-all text-red-500"
+            >
+              <div class="flex items-center gap-4">
+                <ArrowRightOnRectangleIcon class="w-4 h-4" />
+                <span class="text-[10px] lg:text-[11px] font-[1000] uppercase italic tracking-[0.2em]">Keluar dari Sistem</span>
+              </div>
+              <ChevronRightIcon class="w-3.5 h-3.5 text-red-500/20" />
+            </button>
           </div>
 
         </div>
