@@ -218,10 +218,10 @@ const updateTimer = () => {
   const now = new Date().getTime();
   const diff = end - now;
 
-  if (diff > 0 && diff <= 120000) {
+  if (diff > 0 && diff <= 121000) {
     isIntense.value = true;
     if (!hasNotifiedIntense.value) {
-      notify.warning("WAR ZONE!", "Lelang sisa 2 menit lagi! Gaskeun!");
+      notify.error("WAR ZONE!", "Lelang sisa 2 menit lagi! Gaskeun!");
       hasNotifiedIntense.value = true;
     }
   } else {
@@ -236,16 +236,13 @@ const updateTimer = () => {
     isIntense.value = false;
     return;
   }
-  const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+  // Hitung angka (HH:MM:SS)
   const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   const s = Math.floor((diff % (1000 * 60)) / 1000);
-  if (d > 0) {
-    timeLeft.value = `${d}D ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  } else {
-    // Jika di bawah 24 jam, tampilkan Jam:Menit:Detik
-    timeLeft.value = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  }
+
+  // Update variabel timeLeft yang di-render di HTML
+  timeLeft.value = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 };
 
 const placeBid = async () => {
