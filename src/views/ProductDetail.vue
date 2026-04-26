@@ -20,35 +20,44 @@ import {
   LockClosedIcon,
 } from "@heroicons/vue/24/outline";
 
-const props = defineProps({ userProfile: Object });
+// --- PROPS & ROUTING ---
+const props = defineProps({
+  userProfile: Object,
+});
 const route = useRoute();
 const router = useRouter();
 
+// --- DATA STATES ---
 const product = ref(null);
 const recentBids = ref([]);
 const loading = ref(true);
 const bidAmount = ref(0);
 const isSubmitting = ref(false);
 const timeLeft = ref("");
-// Tab Ranking aktif secara default
 const activeBidTab = ref("ranking");
 
-// --- STATE REFORMASI STABILITAS ---
+// --- AUCTION BEHAVIOR STATES ---
 const isIntense = ref(false);
 const hasNotifiedIntense = ref(false);
 const showBannedModal = ref(false);
 
-// --- STATE LOGIKA OUTBID & ESCROW ---
+// --- OUTBID & ESCROW STATES ---
 const isOutbid = ref(false);
 const transaction = ref(null);
 const showPaymentModal = ref(false);
+const showProofModal = ref(false);
 const adminFee = 5000;
 const isSubmittingAction = ref(false);
+
+// --- SYNC & THROTTLE STATES ---
 const isCooldown = ref(false);
 
 // --- LOGIKA RANKING (UNIQUE BIDDERS) ---
 const rankedBids = computed(() => {
-  if (!recentBids.value || recentBids.value.length === 0) return [];
+  if (!recentBids.value || recentBids.value.length === 0) {
+    return [];
+  }
+
   const seenUsers = new Set();
   const uniqueBidders = [];
 
@@ -58,10 +67,11 @@ const rankedBids = computed(() => {
       uniqueBidders.push(bid);
     }
   }
+
   return uniqueBidders.slice(0, 8);
 });
 
-// --- LOGIKA SETTLEMENT (PEMENANG & PENJUAL) ---
+// --- LOGIKA SETTLEMENT (WINNER & SELLER) ---
 const isWinner = computed(() => {
   return (
     timeLeft.value === "ENDED" &&
@@ -79,7 +89,7 @@ const totalToPay = computed(() => {
   return winningBid + adminFee;
 });
 
-// --- LOGIKA RANK & LIMIT ---
+// --- LOGIKA USER RANK & LIMIT ---
 const userRank = computed(() => {
   if (props.userProfile?.is_admin === true) {
     return {
@@ -89,17 +99,25 @@ const userRank = computed(() => {
         "text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.8)] font-black",
     };
   }
+
   const rep = props.userProfile?.reputation || 0;
-  if (rep >= 600)
+
+  if (rep >= 600) {
     return { name: "LEGEND", limit: Infinity, color: "text-purple-500" };
-  if (rep >= 400)
+  }
+
+  if (rep >= 400) {
     return { name: "EXPERT", limit: 100000000, color: "text-red-500" };
-  if (rep >= 200)
+  }
+
+  if (rep >= 200) {
     return { name: "INTERMEDIATE", limit: 20000000, color: "text-blue-500" };
+  }
+
   return { name: "NEWBIE", limit: 5000000, color: "text-green-500" };
 });
 
-// WATCHER POSISI BID (OUTBID ALERT)
+// --- WATCHER UNTUK POSISI BID (OUTBID ALERT) ---
 watch(recentBids, (newVal, oldVal) => {
   if (oldVal && oldVal.length > 0 && newVal.length > 0 && props.userProfile) {
     const wasTop = oldVal[0].user_id === props.userProfile.id;
@@ -115,7 +133,7 @@ watch(recentBids, (newVal, oldVal) => {
   }
 });
 
-// --- LOGIKA MULTI-IMAGE STACK (SUCI) ---
+// --- LOGIKA MULTI-IMAGE STACK (ASLI) ---
 const activeImgIndex = ref(0);
 const touchStartX = ref(0);
 const touchEndX = ref(0);
@@ -123,15 +141,23 @@ const touchEndX = ref(0);
 const allImages = computed(() => {
   if (!product.value) return [];
   const images = [];
-  if (product.value.image_url) images.push(product.value.image_url);
+
+  if (product.value.image_url) {
+    images.push(product.value.image_url);
+  }
+
   const extra = product.value.additional_images;
   if (extra) {
-    if (Array.isArray(extra)) images.push(...extra);
-    else if (typeof extra === "string") {
+    if (Array.isArray(extra)) {
+      images.push(...extra);
+    } else if (typeof extra === "string") {
       try {
         const parsed = JSON.parse(extra);
-        if (Array.isArray(parsed)) images.push(...parsed);
-        else images.push(extra);
+        if (Array.isArray(parsed)) {
+          images.push(...parsed);
+        } else {
+          images.push(extra);
+        }
       } catch (e) {
         images.push(extra);
       }
@@ -155,17 +181,19 @@ const prevImage = () => {
 const handleTouchStart = (e) => {
   touchStartX.value = e.screenX || e.touches[0].clientX;
 };
+
 const handleTouchEnd = (e) => {
   touchEndX.value = e.screenX || e.changedTouches[0].clientX;
   handleSwipe();
 };
+
 const handleSwipe = () => {
   const swipeDistance = touchStartX.value - touchEndX.value;
   if (swipeDistance > 50) nextImage();
   if (swipeDistance < -50) prevImage();
 };
 
-// --- LOGIKA REPORT (SUCI) ---
+// --- LOGIKA REPORT (LENGKAP) ---
 const showReportModal = ref(false);
 const isSubmittingReport = ref(false);
 const reportForm = ref({ category: "Palsu / Kw", details: "" });
@@ -180,8 +208,10 @@ const reportCategories = [
 
 const submitReport = async () => {
   if (!props.userProfile) return notify.error("Auth Required", "Login dulu!");
-  if (reportForm.value.details.length < 5)
+  if (reportForm.value.details.length < 5) {
     return notify.error("Data Kurang", "Berikan alasan minimal 5 karakter.");
+  }
+
   try {
     isSubmittingReport.value = true;
     const { error } = await supabase.from("reports").insert({
@@ -192,6 +222,7 @@ const submitReport = async () => {
       reason: reportForm.value.details,
       status: "pending",
     });
+
     if (error) throw error;
     notify.success("Laporan Masuk", "Admin akan segera meninjau aset ini.");
     showReportModal.value = false;
@@ -203,6 +234,7 @@ const submitReport = async () => {
   }
 };
 
+// --- UTILS & FETCHING ---
 let timerInterval = null;
 let bidSubscription = null;
 
@@ -238,6 +270,7 @@ const fetchTransaction = async () => {
     .select("*")
     .eq("product_id", route.params.id)
     .maybeSingle();
+
   if (data) {
     transaction.value = data;
   } else if (isWinner.value) {
@@ -262,6 +295,7 @@ const confirmPayment = async (method) => {
     .from("transactions")
     .update({ status: "escrow_holding", payment_method: method })
     .eq("id", transaction.value.id);
+
   if (!error) {
     transaction.value.status = "escrow_holding";
     notify.success("Pembayaran Berhasil", "Dana ditahan di Escrow TokBer.");
@@ -281,9 +315,12 @@ const fetchProductDetail = async () => {
       )
       .eq("id", route.params.id)
       .maybeSingle();
+
     if (error || !data) return router.push("/");
+
     product.value = data;
     await fetchBids();
+
     if (recentBids.value.length > 0) {
       bidAmount.value = Number(recentBids.value[0].amount) + 10000;
     } else {
@@ -296,7 +333,7 @@ const fetchProductDetail = async () => {
   }
 };
 
-// --- FUNGSI TIMER (FIX DRIFT & FIX SPAM NOTIF) ---
+// --- LOGIKA TIMER (SINKRONISASI HARI, JAM, MENIT) ---
 const updateTimer = () => {
   if (!product.value?.end_time) return;
 
@@ -310,7 +347,7 @@ const updateTimer = () => {
     return;
   }
 
-  // LOGIKA NOTIFIKASI WAR ZONE (HANYA MUNCUL SEKALI)
+  // Notif Zona Perang (Hanya Muncul Sekali)
   if (diff > 0 && diff <= 120000) {
     isIntense.value = true;
     if (!hasNotifiedIntense.value) {
@@ -318,10 +355,9 @@ const updateTimer = () => {
       hasNotifiedIntense.value = true;
     }
   } else {
-    // Reset flag jika waktu nambah kembali di atas 2 menit (Misal admin extend)
     if (diff > 120000) {
       isIntense.value = false;
-      hasNotifiedIntious.value = false;
+      hasNotifiedIntense.value = false;
     }
   }
 
@@ -337,24 +373,19 @@ const updateTimer = () => {
   }
 };
 
-// --- FUNGSI PLACE BID (DENGAN RPC ANTI BENTROK) ---
+// --- FUNGSI PLACE BID (RPC SERVER-SIDE AUTHORITY) ---
 const placeBid = async () => {
-  if (!props.userProfile)
-    return notify.error("Auth Required", "Login dulu bosku!");
+  // Guard Cooldown & Auth
+  if (!props.userProfile) return notify.error("Auth Required", "Login dulu!");
   if (isCooldown.value) return;
 
-  if (props.userProfile?.is_admin !== true) {
-    const isCurrentWinner =
-      recentBids.value.length > 0 &&
-      recentBids.value[0].user_id === props.userProfile.id;
-    if (isCurrentWinner)
-      return notify.error("Top Position", "Tawaranmu masih yang tertinggi!");
+  // Guard Reputasi
+  const rep = props.userProfile?.reputation || 0;
+  if (rep < 50 && props.userProfile?.is_admin !== true) {
+    return notify.error("Reputasi Rendah", "Minimal 50 poin buat ngebid.");
   }
 
-  const rep = props.userProfile?.reputation || 0;
-  if (rep < 50 && props.userProfile?.is_admin !== true)
-    return notify.error("Reputasi Rendah", "Minimal 50 poin buat ngebid.");
-
+  // Guard Rank
   if (bidAmount.value > userRank.value.limit) {
     return notify.error(
       "Limit Rank",
@@ -367,7 +398,7 @@ const placeBid = async () => {
   try {
     isSubmitting.value = true;
 
-    // EKSEKUSI VIA RPC (DATABASE POWER)
+    // --- PEMANGGILAN RPC KE SUPABASE ---
     const { data, error } = await supabase.rpc("execute_bid_v1", {
       p_product_id: product.value.id,
       p_user_id: props.userProfile.id,
@@ -375,19 +406,20 @@ const placeBid = async () => {
     });
 
     if (error) {
-      notify.error("Gagal", error.message);
-      // Re-fetch data untuk memastikan harga sinkron
+      notify.error("Gagal Transmisi", error.message);
+      // Jika telat, paksa sinkron data asli
       await fetchBids();
       return;
     }
 
-    // UPDATE LOKAL INSTAN BIAR USER PUAS
+    // UPDATE LOKAL (Instant Feedback)
     product.value.end_time = data.new_end_time;
     product.value.current_bid = data.new_bid;
     bidAmount.value = Number(data.new_bid) + 10000;
 
-    notify.success("GACOR!", "Tawaran transmisi diterima server.");
+    notify.success("GACOR!", "Tawaran diterima server.");
 
+    // Aktifkan Jeda Sinkronisasi
     isCooldown.value = true;
     setTimeout(() => {
       isCooldown.value = false;
@@ -399,11 +431,15 @@ const placeBid = async () => {
   }
 };
 
+// --- LIFECYCLE & REAL-TIME CHANNELS ---
 onMounted(() => {
   fetchProductDetail();
+
   timerInterval = setInterval(() => {
     updateTimer();
-    if (timeLeft.value === "ENDED" && !transaction.value) fetchTransaction();
+    if (timeLeft.value === "ENDED" && !transaction.value) {
+      fetchTransaction();
+    }
   }, 1000);
 
   const checkBannedElement = setInterval(() => {
@@ -427,10 +463,13 @@ onMounted(() => {
           filter: `product_id=eq.${route.params.id}`,
         },
         (payload) => {
+          // PAKSA REFRESH RANKING & FOTO PROFIL
           fetchBids();
-          // Paksa input bid naik di semua device
-          const nextMin = Number(payload.new.amount) + 10000;
-          if (bidAmount.value < nextMin) bidAmount.value = nextMin;
+          // Update Harga Input Otomatis (Anti-Lag)
+          const minNext = Number(payload.new.amount) + 10000;
+          if (bidAmount.value < minNext) {
+            bidAmount.value = minNext;
+          }
         },
       )
       .on(
@@ -446,30 +485,30 @@ onMounted(() => {
             showBannedModal.value = true;
             return;
           }
+
           if (product.value) {
-            // SINKRONISASI TOTAL TANPA AMPUN
+            // TERIMA KEBENARAN TUNGGAL DARI DATABASE
             product.value.status = payload.new.status;
             product.value.winner_id = payload.new.winner_id;
             product.value.current_bid = payload.new.current_bid;
 
-            // PAKSA SEMUA DEVICE NERIMA WAKTU TERBARU DARI DATABASE
+            // Override Waktu (Mencegah Glitch antar device)
             product.value.end_time = payload.new.end_time;
 
-            // --- KUNCI: PAKSA TIMER RE-CALCULATE DETIK INI JUGA ---
-            // Ini untuk mencegah Laptop merasa "ENDED" padahal HP A baru saja nambah waktu
+            // Paksa Hitung Ulang Timer Detik Ini Juga
             nextTick(() => {
               updateTimer();
             });
 
-            // Beri notif extend hanya jika waktu benar-benar bertambah signifikan
+            // Notif Extend (Hanya jika benar-benar bertambah > 2 detik)
             const oldT = new Date(payload.old.end_time).getTime();
             const newT = new Date(payload.new.end_time).getTime();
+
             if (newT > oldT + 2000) {
               notify.success(
                 "TIME EXTENDED!",
                 "Seseorang ngebid, waktu bertambah!",
               );
-              // Jangan reset hasNotifiedIntense di sini agar tidak spam
             }
           }
         },
@@ -480,7 +519,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearInterval(timerInterval);
-  if (bidSubscription) supabase.removeChannel(bidSubscription);
+  if (bidSubscription) {
+    supabase.removeChannel(bidSubscription);
+  }
 });
 </script>
 
@@ -500,7 +541,8 @@ onUnmounted(() => {
         ASSET TERMINATED
       </h1>
       <p class="text-gray-400 italic text-sm mb-10 max-w-md">
-        Barang ini telah di-banned oleh sistem keamanan TokBer.
+        Barang ini telah di-banned oleh sistem keamanan TokBer karena melanggar
+        aturan komunitas.
       </p>
       <button
         @click="router.push('/')"
@@ -642,10 +684,10 @@ onUnmounted(() => {
                   @click="activeBidTab = 'ranking'"
                   :class="
                     activeBidTab === 'ranking'
-                      ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20'
+                      ? 'bg-yellow-500 text-black shadow-lg'
                       : 'text-gray-500 hover:text-white'
                   "
-                  class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300 cursor-pointer"
+                  class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300"
                 >
                   <TrophyIcon class="w-3.5 h-3.5" /> Ranking
                 </button>
@@ -656,7 +698,7 @@ onUnmounted(() => {
                       ? 'bg-white text-black shadow-lg'
                       : 'text-gray-500 hover:text-white'
                   "
-                  class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300 cursor-pointer"
+                  class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300"
                 >
                   <ArrowPathIcon class="w-3.5 h-3.5" /> History
                 </button>
@@ -671,7 +713,7 @@ onUnmounted(() => {
                   class="flex items-center justify-between p-5 rounded-[28px] border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-all group"
                   :class="
                     index === 0
-                      ? 'border-yellow-500/30 bg-yellow-500/5 ring-1 ring-yellow-500/20 shadow-[0_10px_40px_rgba(234,179,8,0.1)]'
+                      ? 'border-yellow-500/30 bg-yellow-500/5 ring-1 ring-yellow-500/20 shadow-2xl'
                       : ''
                   "
                 >
@@ -684,7 +726,7 @@ onUnmounted(() => {
                     </div>
                     <div
                       @click="router.push(`/user/${bid.profiles?.username}`)"
-                      class="w-12 h-12 rounded-2xl overflow-hidden border-2 border-white/10 cursor-pointer active:scale-90 transition-transform"
+                      class="w-12 h-12 rounded-2xl overflow-hidden border-2 border-white/10 cursor-pointer"
                     >
                       <img
                         v-if="bid.profiles?.avatar_url"
@@ -698,18 +740,13 @@ onUnmounted(() => {
                         <UserIcon class="w-6 h-6 text-gray-500" />
                       </div>
                     </div>
-                    <div
-                      @click="router.push(`/user/${bid.profiles?.username}`)"
-                      class="cursor-pointer"
-                    >
+                    <div class="cursor-pointer">
                       <p
-                        class="text-sm font-black italic uppercase group-hover:text-yellow-500 transition-colors"
+                        class="text-sm font-black italic uppercase group-hover:text-yellow-500"
                       >
                         @{{ bid.profiles?.username }}
                       </p>
-                      <p
-                        class="text-[8px] text-gray-600 font-bold uppercase tracking-widest mt-0.5"
-                      >
+                      <p class="text-[8px] text-gray-600 font-bold uppercase">
                         {{ bid.profiles?.reputation || 0 }} REP PTS
                       </p>
                     </div>
@@ -726,39 +763,6 @@ onUnmounted(() => {
                     >
                       Highest Bid
                     </p>
-                  </div>
-                </div>
-              </div>
-              <div v-else class="space-y-3">
-                <div
-                  v-for="bid in recentBids"
-                  :key="'hist-' + bid.id"
-                  class="flex items-center justify-between p-4 rounded-2xl border border-white/5 bg-black/40 hover:bg-white/[0.03] transition-all"
-                >
-                  <div class="flex items-center gap-4">
-                    <div
-                      class="w-2 h-2 rounded-full bg-yellow-500/40 animate-pulse"
-                    ></div>
-                    <div>
-                      <p
-                        class="text-[10px] font-black italic uppercase text-white"
-                      >
-                        @{{ bid.profiles?.username }}
-                        <span class="text-gray-600 font-normal"
-                          >Transmitted a bid</span
-                        >
-                      </p>
-                      <p
-                        class="text-[8px] text-gray-700 font-bold uppercase mt-0.5 tracking-tighter"
-                      >
-                        {{ new Date(bid.created_at).toLocaleTimeString() }}
-                      </p>
-                    </div>
-                  </div>
-                  <div
-                    class="text-right font-black italic text-gray-400 text-sm"
-                  >
-                    {{ formatPrice(bid.amount) }}
                   </div>
                 </div>
               </div>
@@ -788,20 +792,12 @@ onUnmounted(() => {
                 <UserCircleIcon v-else class="w-full h-full text-gray-700" />
               </div>
               <div>
-                <div class="flex items-center gap-2 mb-0.5">
-                  <p
-                    class="text-[7px] font-black text-gray-500 uppercase tracking-[0.2em] italic"
-                  >
-                    Contractor
-                  </p>
-                  <span
-                    class="text-[7px] font-black px-2 py-0.5 bg-yellow-500/10 text-yellow-500 rounded-full border border-yellow-500/20 italic"
-                    >REP: {{ product.profiles?.reputation }}</span
-                  >
-                </div>
                 <p
-                  class="text-sm font-black italic group-hover:text-yellow-500 transition-colors uppercase leading-none"
+                  class="text-[7px] font-black text-gray-500 uppercase tracking-[0.2em] italic"
                 >
+                  Contractor
+                </p>
+                <p class="text-sm font-black italic uppercase leading-none">
                   @{{ product.profiles?.username }}
                 </p>
               </div>
@@ -812,17 +808,15 @@ onUnmounted(() => {
             class="bg-[#0a0a0a] border border-white/10 rounded-[45px] p-8 shadow-2xl relative overflow-hidden"
           >
             <div class="flex items-center justify-between mb-4">
-              <p
-                class="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] italic"
-              >
-                Transmission Bid Price
+              <p class="text-[10px] font-black text-gray-500 uppercase italic">
+                Transmission Price
               </p>
               <div class="flex items-center gap-2">
                 <div
                   class="w-2 h-2 rounded-full bg-red-600 animate-pulse"
                 ></div>
                 <span
-                  class="text-[8px] font-black text-red-500 uppercase tracking-widest italic"
+                  class="text-[8px] font-black text-red-500 uppercase italic"
                   >Live Mode</span
                 >
               </div>
@@ -848,7 +842,7 @@ onUnmounted(() => {
                         <p
                           class="text-[8px] font-black text-black/60 uppercase leading-none"
                         >
-                          Highest Bidder
+                          Current Position #1
                         </p>
                         <p
                           class="text-xs font-[1000] text-black uppercase italic"
@@ -861,7 +855,7 @@ onUnmounted(() => {
                       <p
                         class="text-[8px] font-black text-black/60 uppercase leading-none"
                       >
-                        Price
+                        Hammer Price
                       </p>
                       <p class="text-sm font-[1000] text-black italic">
                         {{ formatPrice(recentBids[0].amount) }}
@@ -872,16 +866,10 @@ onUnmounted(() => {
 
                 <div
                   v-if="props.userProfile"
-                  class="flex items-center justify-between px-2"
+                  class="flex items-center justify-between px-2 text-[9px] font-black uppercase italic"
                 >
-                  <p
-                    class="text-[9px] font-black text-gray-600 uppercase italic"
-                  >
-                    Your Rank Status:
-                  </p>
-                  <span
-                    class="text-[9px] font-[1000] uppercase italic"
-                    :class="userRank.color"
+                  <span class="text-gray-600">Your Rank Status:</span>
+                  <span :class="userRank.color"
                     >{{ userRank.name }} (Limit:
                     {{ formatPrice(userRank.limit) }})</span
                   >
@@ -889,7 +877,7 @@ onUnmounted(() => {
 
                 <div class="relative group">
                   <span
-                    class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-sm italic tracking-tighter"
+                    class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-sm italic"
                     >IDR</span
                   >
                   <div
@@ -902,7 +890,7 @@ onUnmounted(() => {
                         bidAmount =
                           (product.current_bid || product.starting_bid) + plus
                       "
-                      class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 hover:bg-yellow-500 hover:text-black transition-all active:scale-90"
+                      class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 hover:bg-yellow-500 hover:text-black transition-all"
                     >
                       +{{ plus / 1000 }}K
                     </button>
@@ -910,7 +898,7 @@ onUnmounted(() => {
                   <input
                     v-model.number="bidAmount"
                     type="number"
-                    class="w-full bg-black border-2 border-white/10 rounded-3xl py-7 pl-20 pr-6 text-3xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none"
+                    class="w-full bg-black border-2 border-white/10 rounded-3xl py-7 pl-20 pr-6 text-3xl font-[1000] italic focus:border-yellow-500 text-white outline-none"
                   />
                 </div>
 
@@ -919,10 +907,10 @@ onUnmounted(() => {
                   :disabled="isSubmitting || isCooldown"
                   :class="
                     isOutbid
-                      ? 'bg-red-600 shadow-[0_15px_40px_rgba(220,38,38,0.4)] animate-pulse scale-[1.02]'
-                      : 'bg-yellow-500 shadow-[0_15px_40px_rgba(234,179,8,0.2)]'
+                      ? 'bg-red-600 shadow-red-500/40 animate-pulse scale-[1.02]'
+                      : 'bg-yellow-500 shadow-yellow-500/20'
                   "
-                  class="w-full text-black py-7 rounded-3xl font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all shadow-2xl"
+                  class="w-full text-black py-7 rounded-3xl font-[1000] italic uppercase active:scale-95 flex flex-col items-center justify-center gap-1 transition-all shadow-2xl"
                 >
                   <div class="flex items-center gap-3">
                     <ArrowPathIcon
@@ -972,7 +960,8 @@ onUnmounted(() => {
                     <span
                       class="text-[10px] font-bold uppercase italic text-gray-500"
                       >Total Settlement</span
-                    ><span class="text-white font-black italic">{{
+                    >
+                    <span class="text-white font-black italic">{{
                       formatPrice(totalToPay)
                     }}</span>
                   </div>
@@ -981,7 +970,7 @@ onUnmounted(() => {
                       !transaction || transaction.status === 'pending_payment'
                     "
                     @click="showPaymentModal = true"
-                    class="w-full bg-green-500 text-black py-5 rounded-[25px] font-black italic uppercase text-xs flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg"
+                    class="w-full bg-green-500 text-black py-5 rounded-[25px] font-black italic uppercase text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
                   >
                     <ShieldCheckIcon class="w-5 h-5" /> Pay to Escrow
                   </button>
@@ -991,34 +980,6 @@ onUnmounted(() => {
                   >
                     <ChatBubbleLeftRightIcon class="w-5 h-5" /> Live Chat with
                     Seller
-                  </button>
-                </div>
-
-                <div
-                  v-else-if="isSeller"
-                  class="bg-blue-600/10 border-2 border-blue-500/30 rounded-[45px] p-8 shadow-2xl relative text-center"
-                >
-                  <h2
-                    class="text-2xl font-[1000] italic uppercase text-white mb-6"
-                  >
-                    Asset Sold
-                  </h2>
-                  <div
-                    class="p-6 bg-blue-500/10 border border-blue-500/20 rounded-3xl mb-6"
-                  >
-                    <p
-                      class="text-[10px] font-bold text-blue-400 italic text-center leading-relaxed"
-                    >
-                      Dana akan diamankan TokBer sampai pembeli mengonfirmasi
-                      penerimaan barang.
-                    </p>
-                  </div>
-                  <button
-                    @click="router.push(`/chat/${product.id}`)"
-                    class="w-full bg-white/5 border border-white/10 text-white py-5 rounded-[25px] font-black italic uppercase text-[10px] flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
-                  >
-                    <ChatBubbleLeftRightIcon class="w-5 h-5 text-blue-500" />
-                    Chat with Winner
                   </button>
                 </div>
 
@@ -1039,11 +1000,6 @@ onUnmounted(() => {
                   >
                     Sold Price: {{ formatPrice(recentBids[0]?.amount) }}
                   </p>
-                  <p
-                    class="text-[8px] text-gray-800 font-bold uppercase italic mt-4"
-                  >
-                    @{{ recentBids[0]?.profiles?.username }} is the new owner
-                  </p>
                 </div>
               </div>
             </div>
@@ -1055,75 +1011,6 @@ onUnmounted(() => {
             <p class="text-gray-400 text-sm italic leading-relaxed">
               {{ product.description }}
             </p>
-          </div>
-
-          <div class="lg:hidden space-y-6 pt-10 border-t border-white/5 mt-10">
-            <div
-              class="flex p-1 bg-white/5 border border-white/10 rounded-xl w-full mb-6"
-            >
-              <button
-                @click="activeBidTab = 'ranking'"
-                :class="
-                  activeBidTab === 'ranking'
-                    ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20'
-                    : 'text-gray-500'
-                "
-                class="flex-1 py-2.5 rounded-lg text-[9px] font-black uppercase italic transition-all"
-              >
-                Ranking
-              </button>
-              <button
-                @click="activeBidTab = 'history'"
-                :class="
-                  activeBidTab === 'history'
-                    ? 'bg-white text-black shadow-lg'
-                    : 'text-gray-500'
-                "
-                class="flex-1 py-2.5 rounded-lg text-[9px] font-black uppercase italic transition-all"
-              >
-                History
-              </button>
-            </div>
-            <div class="min-h-[200px]">
-              <div v-if="activeBidTab === 'ranking'" class="space-y-3">
-                <div
-                  v-for="(bid, index) in rankedBids.slice(0, 5)"
-                  :key="'mb-rank-' + bid.id"
-                  class="flex items-center justify-between p-4 rounded-2xl border border-white/5 bg-white/[0.02]"
-                  :class="
-                    index === 0 ? 'border-yellow-500/20 bg-yellow-500/5' : ''
-                  "
-                >
-                  <div class="flex items-center gap-3">
-                    <span class="font-[1000] italic text-sm text-yellow-500 w-4"
-                      >#{{ index + 1 }}</span
-                    >
-                    <div
-                      @click="router.push(`/user/${bid.profiles?.username}`)"
-                      class="w-10 h-10 rounded-xl overflow-hidden border border-white/10"
-                    >
-                      <img
-                        v-if="bid.profiles?.avatar_url"
-                        :src="bid.profiles.avatar_url"
-                        class="w-full h-full object-cover"
-                      />
-                      <div
-                        v-else
-                        class="w-full h-full bg-gray-800 flex items-center justify-center"
-                      >
-                        <UserIcon class="w-6 h-6 text-gray-600" />
-                      </div>
-                    </div>
-                    <p class="text-xs font-black italic uppercase">
-                      @{{ bid.profiles?.username }}
-                    </p>
-                  </div>
-                  <p class="text-sm font-[1000] italic">
-                    {{ formatPrice(bid.amount) }}
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -1153,9 +1040,10 @@ onUnmounted(() => {
             <label
               class="text-[9px] font-black text-gray-600 uppercase block mb-3 italic"
               >Reason Category</label
-            ><select
+            >
+            <select
               v-model="reportForm.category"
-              class="w-full bg-black border border-white/10 rounded-2xl p-4 text-xs font-bold text-white outline-none focus:border-red-500 appearance-none cursor-pointer"
+              class="w-full bg-black border border-white/10 rounded-2xl p-4 text-xs font-bold text-white outline-none focus:border-red-500"
             >
               <option v-for="cat in reportCategories" :key="cat" :value="cat">
                 {{ cat }}
@@ -1166,25 +1054,27 @@ onUnmounted(() => {
             <label
               class="text-[9px] font-black text-gray-600 uppercase block mb-3 italic"
               >Additional Details</label
-            ><textarea
+            >
+            <textarea
               v-model="reportForm.details"
               rows="4"
-              placeholder="Alasan pelaporan..."
-              class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs font-bold text-white outline-none focus:border-red-500 resize-none italic"
+              placeholder="Detail laporan..."
+              class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-red-500 italic resize-none"
             ></textarea>
           </div>
           <div class="flex gap-3">
             <button
               @click="showReportModal = false"
-              class="flex-1 bg-white/5 text-gray-500 py-5 rounded-[24px] font-[1000] italic uppercase text-[10px]"
+              class="flex-1 bg-white/5 text-gray-500 py-5 rounded-2xl font-[1000] italic uppercase text-[10px]"
             >
-              Cancel</button
-            ><button
+              Cancel
+            </button>
+            <button
               @click="submitReport"
               :disabled="isSubmittingReport"
-              class="flex-[2] bg-red-600 text-white py-5 rounded-[24px] font-[1000] italic uppercase tracking-[0.1em] text-[10px]"
+              class="flex-[2] bg-red-600 text-white py-5 rounded-2xl font-[1000] italic uppercase text-[10px]"
             >
-              {{ isSubmittingReport ? "TRANSMITTING..." : "CONFIRM REPORT" }}
+              CONFIRM REPORT
             </button>
           </div>
         </div>
