@@ -79,9 +79,10 @@ const rankedBids = computed(() => {
 });
 
 // --- LOGIKA SETTLEMENT ---
+// SEKARANG BERGANTUNG PADA STATUS DATABASE, BUKAN CUMA TIMER
 const isWinner = computed(() => {
   return (
-    timeLeft.value === "ENDED" &&
+    product.value?.status === 'closed' &&
     recentBids.value.length > 0 &&
     props.userProfile?.id === recentBids.value[0].user_id
   );
@@ -129,7 +130,7 @@ watch(recentBids, (newVal, oldVal) => {
     const wasTop = oldVal[0].user_id === props.userProfile.id;
     const isNowOutbid = newVal[0].user_id !== props.userProfile.id;
 
-    if (wasTop && isNowOutbid && timeLeft.value !== 'ENDED') {
+    if (wasTop && isNowOutbid && product.value?.status !== 'closed') {
       isOutbid.value = true;
     }
   }
@@ -184,11 +185,18 @@ const handleSwipe = () => {
   if (swipeDistance < -50) prevImage();
 };
 
-// --- LOGIKA REPORT ---
+// --- LOGIKA REPORT (LENGKAP) ---
 const showReportModal = ref(false);
 const isSubmittingReport = ref(false);
 const reportForm = ref({ category: "Palsu / Kw", details: "" });
-const reportCategories = ["Palsu / KW", "Penipuan Harga", "Foto Tidak Sesuai", "Kategori Salah", "Mengandung Unsur SARA/Pornografi", "Lainnya"];
+const reportCategories = [
+  "Palsu / KW",
+  "Penipuan Harga",
+  "Foto Tidak Sesuai",
+  "Kategori Salah",
+  "Mengandung Unsur SARA/Pornografi",
+  "Lainnya",
+];
 
 const submitReport = async () => {
   if (!props.userProfile) return notify.error("Auth Required", "Login dulu!");
@@ -245,7 +253,7 @@ const fetchBids = async () => {
 };
 
 const fetchTransaction = async () => {
-  if (timeLeft.value !== "ENDED") return;
+  if (product.value?.status !== "closed") return;
   const { data } = await supabase.from("transactions").select("*").eq("product_id", route.params.id).maybeSingle();
   if (data) transaction.value = data;
   else if (isWinner.value) {
@@ -289,7 +297,7 @@ const fetchProductDetail = async () => {
   }
 };
 
-// --- LOGIKA TIMER (SINKRONISASI SERVER-SIDE + LAG SHIELD) ---
+// --- LOGIKA TIMER (THE LAG SHIELD VERSION) ---
 const updateTimer = () => {
   if (!product.value?.end_time) return;
   
@@ -297,15 +305,20 @@ const updateTimer = () => {
   const now = new Date().getTime(); 
   const diff = end - now;
 
-  // --- LAG SHIELD: BERI NAPAS 3 DETIK SEBELUM NYATAKAN ENDED ---
-  // Ini untuk mencegah glitch saat database sedang update jam
-  if (diff <= -3000) {
-    timeLeft.value = "ENDED";
-    isIntense.value = false;
+  // --- REVOLUSI: JANGAN PERNAH BILANG ENDED SEBELUM DATABASE BILANG CLOSED ---
+  if (diff <= 0) {
+    if (product.value.status === 'closed') {
+       timeLeft.value = "ENDED";
+       isIntense.value = false;
+    } else {
+       // Status lelang di UI tertahan di 00:00 (Closing...) menunggu sinyal database
+       timeLeft.value = "00:00:00"; 
+       isIntense.value = false;
+    }
     return;
   }
 
-  // Jika waktu kritis di mata device
+  // Notif Zona Perang (Hanya Muncul Sekali)
   if (diff > 0 && diff <= 120000) {
     isIntense.value = true;
     if (!hasNotifiedIntense.value) {
@@ -327,11 +340,7 @@ const updateTimer = () => {
   if (d > 0) {
     timeLeft.value = `${d}d ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   } else {
-    // Tampilkan 00:00 jika dalam masa tenggang Lag Shield (3 detik tadi)
-    const displayH = h < 0 ? 0 : h;
-    const displayM = m < 0 ? 0 : m;
-    const displayS = s < 0 ? 0 : s;
-    timeLeft.value = `${displayH.toString().padStart(2, "0")}:${displayM.toString().padStart(2, "0")}:${displayS.toString().padStart(2, "0")}`;
+    timeLeft.value = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   }
 };
 
@@ -357,6 +366,7 @@ const placeBid = async () => {
   try {
     isSubmitting.value = true;
 
+    // PANGGIL RPC (KEBENARAN SERVER)
     const { data, error } = await supabase.rpc('execute_bid_v1', {
       p_product_id: product.value.id,
       p_user_id: props.userProfile.id,
@@ -390,9 +400,12 @@ const placeBid = async () => {
 
 onMounted(() => {
   fetchProductDetail();
+  
   timerInterval = setInterval(() => {
     updateTimer();
-    if (timeLeft.value === "ENDED" && !transaction.value) fetchTransaction();
+    if (product.value?.status === "closed" && !transaction.value) {
+      fetchTransaction();
+    }
   }, 1000);
 
   if (route.params.id) {
@@ -409,12 +422,14 @@ onMounted(() => {
             product.value.status = payload.new.status;
             product.value.winner_id = payload.new.winner_id;
             product.value.current_bid = payload.new.current_bid;
+            
+            // PAKSA SINKRON WAKTU DARI INDUK
+            const oldT = new Date(product.value.end_time).getTime();
+            const newT = new Date(payload.new.end_time).getTime();
             product.value.end_time = payload.new.end_time;
             
             nextTick(() => { updateTimer(); });
 
-            const oldT = new Date(payload.old.end_time).getTime();
-            const newT = new Date(payload.new.end_time).getTime();
             if (newT > oldT + 2000) {
               notify.success("TIME EXTENDED!", "Waktu lelang bertambah!");
               hasNotifiedIntense.value = false; 
@@ -488,7 +503,7 @@ onUnmounted(() => {
 
             <div class="min-h-[400px]">
               <div v-if="activeBidTab === 'ranking'" class="space-y-4">
-                <div v-for="(bid, index) in rankedBids" :key="'rank-' + bid.id" @click="router.push(`/user/${bid.profiles?.username}`)" class="flex items-center justify-between p-5 rounded-[28px] border border-white/5 bg-white/[0.02] group cursor-pointer hover:border-yellow-500/30 transition-all" :class="index === 0 ? 'border-yellow-500/30 bg-yellow-500/5 shadow-2xl' : ''">
+                <div v-for="(bid, index) in rankedBids" :key="'rank-' + bid.id" @click="router.push(`/user/${bid.profiles?.username}`)" class="flex items-center justify-between p-5 rounded-[28px] border border-white/5 bg-white/[0.02] group cursor-pointer hover:border-yellow-500/30 transition-all" :class="index === 0 ? 'border-yellow-500/30 bg-yellow-500/5 ring-1 ring-yellow-500/20 shadow-2xl' : ''">
                   <div class="flex items-center gap-5">
                     <div class="w-8 text-center font-[1000] italic text-xl" :class="index < 3 ? 'text-yellow-500' : 'text-gray-700'">#{{ index + 1 }}</div>
                     
@@ -500,7 +515,7 @@ onUnmounted(() => {
                     </div>
 
                     <div>
-                      <p class="text-sm font-black italic uppercase group-hover:text-yellow-500">@{{ bid.profiles?.username }}</p>
+                      <p class="text-sm font-black italic uppercase group-hover:text-yellow-500 transition-colors">@{{ bid.profiles?.username }}</p>
                       <p class="text-[8px] text-gray-600 font-bold uppercase tracking-widest">{{ bid.profiles?.reputation || 0 }} REP PTS</p>
                     </div>
                   </div>
@@ -551,7 +566,7 @@ onUnmounted(() => {
 
           <div class="bg-[#0a0a0a] border border-white/10 rounded-[45px] p-8 shadow-2xl relative overflow-hidden">
             <div class="flex items-center justify-between mb-4">
-              <p class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Hammer Price</p>
+              <p class="text-[10px] font-black text-gray-500 uppercase tracking-widest italic">Hammer Price</p>
               <div class="flex items-center gap-2">
                 <div class="w-2 h-2 rounded-full bg-red-600 animate-pulse"></div>
                 <span class="text-[8px] font-black text-red-500 uppercase italic">Live Mode</span>
@@ -562,7 +577,7 @@ onUnmounted(() => {
             </h3>
             
             <div class="space-y-6">
-              <div v-if="timeLeft !== 'ENDED'" class="space-y-6">
+              <div v-if="product.status !== 'closed'" class="space-y-6">
                 <transition enter-active-class="animate-bounce" v-if="recentBids.length > 0">
                   <div class="p-4 bg-yellow-500 rounded-2xl flex items-center justify-between shadow-[0_0_30px_rgba(234,179,8,0.4)]">
                     <div class="flex items-center gap-3">
@@ -573,7 +588,7 @@ onUnmounted(() => {
                       </div>
                     </div>
                     <div class="text-right">
-                      <p class="text-[8px] font-black text-black/60 uppercase leading-none">Hammer Price</p>
+                      <p class="text-[8px] font-black text-black/60 uppercase leading-none">Price</p>
                       <p class="text-sm font-[1000] text-black italic">{{ formatPrice(recentBids[0].amount) }}</p>
                     </div>
                   </div>
@@ -587,12 +602,12 @@ onUnmounted(() => {
                 <div class="relative group">
                   <span class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-sm italic tracking-tighter">IDR</span>
                   <div class="flex gap-3 mb-4 overflow-x-auto no-scrollbar pb-2">
-                    <button v-for="plus in [10000, 50000, 100000, 500000]" :key="plus" @click="bidAmount = (product.current_bid || product.starting_bid) + plus" class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 active:scale-90">+{{ plus / 1000 }}K</button>
+                    <button v-for="plus in [10000, 50000, 100000, 500000]" :key="plus" @click="bidAmount = (product.current_bid || product.starting_bid) + plus" class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 hover:bg-yellow-500 hover:text-black transition-all active:scale-90">+{{ plus / 1000 }}K</button>
                   </div>
                   <input v-model.number="bidAmount" type="number" class="w-full bg-black border-2 border-white/10 rounded-3xl py-7 pl-20 pr-6 text-3xl font-[1000] italic focus:border-yellow-500 text-white outline-none" />
                 </div>
 
-                <button @click="placeBid" :disabled="isSubmitting || isCooldown" :class="isOutbid ? 'bg-red-600 shadow-red-500/40 animate-pulse scale-[1.02]' : 'bg-yellow-500 shadow-yellow-500/20'" class="w-full text-black py-7 rounded-3xl font-[1000] italic uppercase active:scale-95 flex flex-col items-center justify-center gap-1 transition-all shadow-2xl">
+                <button @click="placeBid" :disabled="isSubmitting || isCooldown" :class="isOutbid ? 'bg-red-600 shadow-red-500/40 animate-pulse scale-[1.02]' : 'bg-yellow-500 shadow-yellow-500/20'" class="w-full text-black py-7 rounded-[35px] font-[1000] italic uppercase active:scale-95 flex flex-col items-center justify-center gap-1 transition-all shadow-2xl">
                   <div class="flex items-center gap-3">
                     <ArrowPathIcon v-if="isSubmitting" class="w-7 h-7 animate-spin" />
                     <BanknotesIcon v-else class="w-7 h-7 stroke-[2.5px]" />
@@ -661,7 +676,7 @@ onUnmounted(() => {
               </div>
               
               <div v-else class="space-y-3">
-                <div v-for="bid in recentBids.slice(0, 8)" :key="'mb-hist-' + bid.id" class="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-black/40">
+                <div v-for="bid in recentBids" :key="'mb-hist-' + bid.id" class="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-black/40">
                   <div class="flex items-center gap-3">
                     <div class="w-1.5 h-1.5 rounded-full bg-yellow-500/30 animate-pulse"></div>
                     <p class="text-[9px] font-black italic uppercase text-gray-300">@{{ bid.profiles?.username }}</p>
