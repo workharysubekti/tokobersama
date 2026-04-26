@@ -52,6 +52,14 @@ const rankedBids = computed(() => {
 
 // --- LOGIKA RANK & LIMIT (REFORMASI) ---
 const userRank = computed(() => {
+  if (props.userProfile?.is_admin === true) {
+    return {
+      name: "OWNER",
+      limit: Infinity,
+      color:
+        "text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.8)] font-black",
+    };
+  }
   const rep = props.userProfile?.reputation_score || 0;
   if (rep >= 600)
     return { name: "LEGEND", limit: Infinity, color: "text-purple-500" };
