@@ -27,6 +27,7 @@ const loading = ref(true);
 const bidAmount = ref(0);
 const isSubmitting = ref(false);
 const timeLeft = ref("");
+const activeBids = ref("ranking");
 
 // --- STATE BARU REFORMASI ---
 const isIntense = ref(false); // Mode 2 menit terakhir
@@ -487,19 +488,31 @@ onUnmounted(() => {
           </div>
 
           <div class="hidden lg:block space-y-6">
-            <div class="flex items-center justify-between px-2">
-              <div class="flex items-center gap-3">
-                <TrophyIcon class="w-5 h-5 text-yellow-500" />
-                <h3
-                  class="text-sm font-[1000] italic uppercase tracking-widest"
+            <div class="flex items-center justify-between px-2 mb-4">
+              <div class="flex gap-4">
+                <button
+                  @click="activeBidTab = 'ranking'"
+                  :class="
+                    activeBidTab === 'ranking'
+                      ? 'text-yellow-500 border-b-2 border-yellow-500'
+                      : 'text-gray-500'
+                  "
+                  class="text-[10px] font-black uppercase italic pb-1 transition-all"
                 >
-                  Global Ranking Feed
-                </h3>
+                  Ranking
+                </button>
+                <button
+                  @click="activeBidTab = 'history'"
+                  :class="
+                    activeBidTab === 'history'
+                      ? 'text-yellow-500 border-b-2 border-yellow-500'
+                      : 'text-gray-500'
+                  "
+                  class="text-[10px] font-black uppercase italic pb-1 transition-all"
+                >
+                  History
+                </button>
               </div>
-              <span
-                class="text-[8px] font-black text-gray-600 uppercase tracking-widest italic"
-                >Live Transmission</span
-              >
             </div>
             <div class="space-y-4">
               <div
