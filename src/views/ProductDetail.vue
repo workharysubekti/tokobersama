@@ -176,7 +176,7 @@ const fetchBids = async () => {
     .select("*, profiles(username, full_name, avatar_url, reputation)")
     .eq("product_id", route.params.id)
     .order("amount", { ascending: false })
-    .limit(10); // Ambil 10 bid terakhir
+    .limit(50); // Ambil 10 bid terakhir
 
   if (data) {
     recentBids.value = data;
