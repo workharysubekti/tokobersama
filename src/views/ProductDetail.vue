@@ -46,6 +46,10 @@ const showProofModal = ref(false);
 const adminFee = 5000;
 const isSubmittingAction = ref(false);
 
+// --- FIX: JEDA BID (COOLDOWN) & SYNC JAM ---
+const isCooldown = ref(false);
+const serverOffset = ref(0);
+
 // --- REFORMASI LOGIKA RANKING (UNIQUE BIDDERS) ---
 const rankedBids = computed(() => {
   if (!recentBids.value || recentBids.value.length === 0) return [];
@@ -142,13 +146,15 @@ const allImages = computed(() => {
 
 const nextImage = () => {
   if (allImages.value.length <= 1) return;
-  activeImgIndex.value = (activeImgIndex.value + 1) % allImages.value.length;
+  activeImgIndex.value =
+    (allImages.value.length + activeImgIndex.value + 1) %
+    allImages.value.length;
 };
 
 const prevImage = () => {
   if (allImages.value.length <= 1) return;
   activeImgIndex.value =
-    (activeImgIndex.value - 1 + allImages.value.length) %
+    (allImages.value.length + activeImgIndex.value - 1) %
     allImages.value.length;
 };
 
@@ -302,7 +308,7 @@ const updateTimer = () => {
   if (!product.value?.end_time) return;
 
   const end = new Date(product.value.end_time).getTime();
-  const now = new Date().getTime(); // MENGGUNAKAN JAM LOKAL YANG STABIL
+  const now = new Date().getTime();
   const diff = end - now;
 
   if (diff <= 0) {
@@ -324,7 +330,6 @@ const updateTimer = () => {
     }
   }
 
-  // LOGIKA HITUNG HARI (d), JAM (h), MENIT (m), DETIK (s)
   const d = Math.floor(diff / (1000 * 60 * 60 * 24));
   const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
@@ -338,10 +343,16 @@ const updateTimer = () => {
 };
 
 const placeBid = async () => {
-  if (!props.userProfile) {
+  // 1. AUTH & COOLDOWN GUARD
+  if (!props.userProfile)
     return notify.error("Auth Required", "Login dulu bosku!");
-  }
+  if (isCooldown.value)
+    return notify.error(
+      "Wait!",
+      "Jeda 2 detik setiap bid biar sistem gak mampet.",
+    );
 
+  // 2. SELF-BID GUARD
   if (props.userProfile?.is_admin !== true) {
     const isCurrentWinner =
       recentBids.value.length > 0 &&
@@ -354,6 +365,7 @@ const placeBid = async () => {
     }
   }
 
+  // 3. REPUTASI & RANK GUARD
   const rep = props.userProfile?.reputation || 0;
   if (rep < 50 && props.userProfile?.is_admin !== true) {
     return notify.error("Reputasi Rendah", "Minimal 50 poin buat ngebid, Mas.");
@@ -366,8 +378,10 @@ const placeBid = async () => {
     );
   }
 
+  // 4. TIME & STATUS GUARD (FETCH TERBARU SEBELUM EKSEKUSI)
   if (isSubmitting.value || !product.value) return;
 
+  // Paksa cek waktu dari object product yang paling update dari real-time
   const now = new Date().getTime();
   let end = new Date(product.value.end_time).getTime();
   const diff = end - now;
@@ -376,12 +390,13 @@ const placeBid = async () => {
     return notify.error("Lelang Berakhir", "Transmisi ditutup.");
   }
 
+  // 5. PRICE VALIDATION (Gunakan current_bid dari real-time)
   const latestTopPrice =
-    recentBids.value[0]?.amount || product.value.starting_bid || 0;
+    product.value.current_bid || product.value.starting_bid || 0;
   if (bidAmount.value <= latestTopPrice) {
     notify.error(
       "Bid Low",
-      `Harga sudah naik ke ${formatPrice(latestTopPrice)}`,
+      `Harga naik kilat ke ${formatPrice(latestTopPrice)}`,
     );
     bidAmount.value = Number(latestTopPrice) + 10000;
     return;
@@ -390,13 +405,15 @@ const placeBid = async () => {
   try {
     isSubmitting.value = true;
 
-    // ANTI-SNIPER DETIK 60 - RESET KE 2 MENIT (120000ms)
+    // 6. ANTI-SNIPER LOGIC (REFORMASI DETIK 60 - RESET 2 MENIT)
     let newEndTime = product.value.end_time;
     if (diff <= 60000 && diff > 0) {
-      newEndTime = new Date(now + 120000).toISOString();
-      notify.success("ANTI-SNIPER!", "Waktu lelang di-reset ke 2 menit lagi!");
+      const extension = 120000; // 2 Menit
+      newEndTime = new Date(now + extension).toISOString();
+      notify.success("ANTI-SNIPER!", "Waktu di-reset ke 2 menit lagi!");
     }
 
+    // 7. DATABASE TRANSMISSION
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
       user_id: props.userProfile.id,
@@ -413,11 +430,18 @@ const placeBid = async () => {
       })
       .eq("id", product.value.id);
 
+    // 8. LOCAL STATE SYNC & COOLDOWN
     product.value.end_time = newEndTime;
     product.value.current_bid = bidAmount.value;
     bidAmount.value = Number(bidAmount.value) + 10000;
 
-    notify.success("GACOR!", "Tawaran transmisi berhasil dikirim.");
+    notify.success("GACOR!", "Bid terkirim.");
+
+    // AKTIFKAN JEDA 2 DETIK
+    isCooldown.value = true;
+    setTimeout(() => {
+      isCooldown.value = false;
+    }, 2000);
   } catch (err) {
     notify.error("System Error", err.message);
   } finally {
@@ -453,15 +477,8 @@ onMounted(() => {
           filter: `product_id=eq.${route.params.id}`,
         },
         (payload) => {
+          // PAKSA REFRESH DATA KETIKA ADA INSERT BID BARU
           fetchBids();
-          if (
-            product.value &&
-            payload.new.amount > (product.value.current_bid || 0)
-          ) {
-            product.value.current_bid = payload.new.amount;
-            if (bidAmount.value <= payload.new.amount)
-              bidAmount.value = Number(payload.new.amount) + 10000;
-          }
         },
       )
       .on(
@@ -478,10 +495,12 @@ onMounted(() => {
             return;
           }
           if (product.value) {
-            product.value.status = payload.new.status;
-            product.value.winner_id = payload.new.winner_id;
+            // --- SINKRONISASI TOTAL TANPA AMPUN ---
             product.value.current_bid = payload.new.current_bid;
+            product.value.winner_id = payload.new.winner_id;
+            product.value.status = payload.new.status;
 
+            // Sync Waktu (Inti Anti Sniper)
             const oldTime = new Date(product.value.end_time).getTime();
             const newTime = new Date(payload.new.end_time).getTime();
 
@@ -489,9 +508,12 @@ onMounted(() => {
               product.value.end_time = payload.new.end_time;
               notify.success(
                 "TIME EXTENDED!",
-                "Seseorang ngebid di menit terakhir, waktu ditambah!",
+                "Seseorang ngebid, waktu bertambah!",
               );
-              hasNotifiedIntense.value = false;
+              hasNotifiedIntense.value = false; // Reset notif merah
+            } else if (newTime < oldTime) {
+              // Kasus glitch waktu mundur, paksa ambil data database
+              product.value.end_time = payload.new.end_time;
             }
           }
         },
@@ -957,13 +979,14 @@ onUnmounted(() => {
 
                 <button
                   @click="placeBid"
-                  :disabled="isSubmitting"
-                  :class="
+                  :disabled="isSubmitting || isCooldown"
+                  :class="[
                     isOutbid
-                      ? 'bg-red-600 shadow-red-500/40 animate-pulse scale-[1.02]'
-                      : 'bg-yellow-500 shadow-yellow-500/20'
-                  "
-                  class="w-full text-black py-7 rounded-[35px] font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all shadow-2xl"
+                      ? 'bg-red-600 shadow-red-500/40 scale-[1.02]'
+                      : 'bg-yellow-500 shadow-yellow-500/20',
+                    isCooldown ? 'opacity-50' : 'animate-pulse',
+                  ]"
+                  class="w-full text-black py-7 rounded-[35px] font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 transition-all shadow-2xl"
                 >
                   <div class="flex items-center gap-3">
                     <ArrowPathIcon
@@ -971,9 +994,15 @@ onUnmounted(() => {
                       class="w-7 h-7 animate-spin"
                     />
                     <BanknotesIcon v-else class="w-7 h-7 stroke-[2.5px]" />
-                    <span class="text-xl">{{
-                      isOutbid ? "RECLAIM POSITION!" : "Execute Bid"
-                    }}</span>
+                    <span class="text-xl">
+                      {{
+                        isCooldown
+                          ? "WAIT 2S..."
+                          : isOutbid
+                            ? "RECLAIM POSITION!"
+                            : "Execute Bid"
+                      }}
+                    </span>
                   </div>
                   <span
                     v-if="isIntense"
@@ -1027,7 +1056,7 @@ onUnmounted(() => {
                   </div>
                   <button
                     @click="router.push(`/chat/${product.id}`)"
-                    class="w-full mt-4 bg-white/5 border border-white/10 text-white py-4 rounded-2xl font-black italic text-[10px] flex items-center justify-center gap-3"
+                    class="w-full mt-4 bg-white/5 border border-white/10 text-white py-4 rounded-2xl font-black italic uppercase text-[10px] flex items-center justify-center gap-3"
                   >
                     <ChatBubbleLeftRightIcon class="w-5 h-5" /> Live Chat with
                     Seller
@@ -1046,8 +1075,7 @@ onUnmounted(() => {
                   <div
                     class="p-6 bg-blue-500/10 border border-blue-500/20 rounded-3xl mb-6 text-center text-[10px] font-bold text-blue-400 italic"
                   >
-                    Dana akan diamankan TokBer sampai pembeli mengonfirmasi
-                    penerimaan barang.
+                    Dana akan diamankan TokBer sampai pembeli konfirmasi barang.
                   </div>
                   <button
                     @click="router.push(`/chat/${product.id}`)"
