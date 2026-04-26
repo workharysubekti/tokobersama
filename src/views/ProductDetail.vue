@@ -173,7 +173,7 @@ const nextImage = () => {
 
 const prevImage = () => {
   if (allImages.value.length <= 1) return;
-  activeImgIndex.value = (allImages.value.length + activeImgIndex.value - 1) % allImages.value.length;
+  activeImgIndex.value = (activeImgIndex.value - 1 + allImages.value.length) % allImages.value.length;
 };
 
 const handleTouchStart = (e) => { 
@@ -303,7 +303,7 @@ const fetchProductDetail = async () => {
   }
 };
 
-// --- LOGIKA TIMER (SINKRONISASI SERVER-SIDE) ---
+// --- LOGIKA TIMER (SINKRONISASI & GRACE PERIOD) ---
 const updateTimer = () => {
   if (!product.value?.end_time) return;
   
@@ -311,7 +311,10 @@ const updateTimer = () => {
   const now = new Date().getTime(); 
   const diff = end - now;
 
-  if (diff <= 0) {
+  // --- ANTI GLITCH ENDED ---
+  // Jika hitungan lokal <= 0 tapi status di state belum 'closed' (atau bid baru sedang masuk),
+  // kita beri toleransi 1 detik sebelum benar-benar menunjukkan ENDED.
+  if (diff <= -1000) {
     timeLeft.value = "ENDED";
     isIntense.value = false;
     return;
@@ -321,7 +324,7 @@ const updateTimer = () => {
   if (diff > 0 && diff <= 120000) {
     isIntense.value = true;
     if (!hasNotifiedIntense.value) {
-      notify.error("WAR ZONE!", "Sisa waktu di bawah 2 menit!");
+      notify.error("WAR ZONE!", "Lelang sisa 2 menit lagi!");
       hasNotifiedIntense.value = true;
     }
   } else {
@@ -378,9 +381,14 @@ const placeBid = async () => {
       return;
     }
 
+    // PAKSA UPDATE LOKAL SECEPAT KILAT AGAR TIDAK TERLIHAT ENDED
     product.value.end_time = data.new_end_time;
     product.value.current_bid = data.new_bid;
     bidAmount.value = Number(data.new_bid) + 10000;
+    
+    nextTick(() => {
+      updateTimer();
+    });
 
     notify.success("GACOR!", "Tawaran diterima server.");
     
@@ -394,6 +402,7 @@ const placeBid = async () => {
   }
 };
 
+// --- REAL-TIME LISTENERS ---
 onMounted(() => {
   fetchProductDetail();
   
@@ -426,17 +435,20 @@ onMounted(() => {
             product.value.status = payload.new.status;
             product.value.winner_id = payload.new.winner_id;
             product.value.current_bid = payload.new.current_bid;
+            
+            // PAKSA SINKRON WAKTU DARI INDUK
+            const oldT = new Date(product.value.end_time).getTime();
+            const newT = new Date(payload.new.end_time).getTime();
             product.value.end_time = payload.new.end_time;
-
-            nextTick(() => {
-              updateTimer();
+            
+            // PAKSA RE-KALKULASI TIMER DETIK INI JUGA (MENCEGAH ENDED PALSU)
+            nextTick(() => { 
+              updateTimer(); 
             });
 
-            const oldT = new Date(payload.old.end_time).getTime();
-            const newT = new Date(payload.new.end_time).getTime();
-            
             if (newT > oldT + 2000) {
-              notify.success("TIME EXTENDED!", "Seseorang ngebid, waktu bertambah!");
+              notify.success("TIME EXTENDED!", "Waktu lelang bertambah!");
+              hasNotifiedIntense.value = false; 
             }
           }
         },
@@ -507,30 +519,26 @@ onUnmounted(() => {
                 <h2 class="text-sm font-[1000] italic uppercase tracking-[0.3em] text-white">Live <span class="text-yellow-500">Feed</span> Transmission</h2>
               </div>
               <div class="flex p-1.5 bg-white/5 border border-white/10 rounded-2xl w-full max-w-xs mb-6">
-                <button @click="activeBidTab = 'ranking'" :class="activeBidTab === 'ranking' ? 'bg-yellow-500 text-black shadow-lg' : 'text-gray-500'" class="flex-1 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300">Ranking</button>
-                <button @click="activeBidTab = 'history'" :class="activeBidTab === 'history' ? 'bg-white text-black shadow-lg' : 'text-gray-500'" class="flex-1 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300">History</button>
+                <button @click="activeBidTab = 'ranking'" :class="activeBidTab === 'ranking' ? 'bg-yellow-500 text-black shadow-lg' : 'text-gray-500 hover:text-white'" class="flex-1 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300">Ranking</button>
+                <button @click="activeBidTab = 'history'" :class="activeBidTab === 'history' ? 'bg-white text-black shadow-lg' : 'text-gray-500 hover:text-white'" class="flex-1 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300">History</button>
               </div>
             </div>
 
             <div class="min-h-[400px]">
               <div v-if="activeBidTab === 'ranking'" class="space-y-4">
-                <div v-for="(bid, index) in rankedBids" :key="'rank-' + bid.id" class="flex items-center justify-between p-5 rounded-[28px] border border-white/5 bg-white/[0.02] group" :class="index === 0 ? 'border-yellow-500/30 bg-yellow-500/5 ring-1 ring-yellow-500/20 shadow-2xl' : ''">
+                <div v-for="(bid, index) in rankedBids" :key="'rank-' + bid.id" @click="router.push(`/user/${bid.profiles?.username}`)" class="flex items-center justify-between p-5 rounded-[28px] border border-white/5 bg-white/[0.02] group cursor-pointer hover:border-yellow-500/30 transition-all" :class="index === 0 ? 'border-yellow-500/30 bg-yellow-500/5 ring-1 ring-yellow-500/20 shadow-2xl' : ''">
                   <div class="flex items-center gap-5">
                     <div class="w-8 text-center font-[1000] italic text-xl" :class="index < 3 ? 'text-yellow-500' : 'text-gray-700'">#{{ index + 1 }}</div>
                     
-                    <div class="w-12 h-12 rounded-2xl overflow-hidden border-2 border-white/10">
-                      <img 
-                        v-if="bid.profiles?.avatar_url && bid.profiles.avatar_url.trim() !== ''" 
-                        :src="bid.profiles.avatar_url" 
-                        class="w-full h-full object-cover" 
-                      />
+                    <div class="w-12 h-12 rounded-2xl overflow-hidden border-2 border-white/10 flex-shrink-0">
+                      <img v-if="bid.profiles?.avatar_url && bid.profiles.avatar_url.trim() !== ''" :src="bid.profiles.avatar_url" class="w-full h-full object-cover" />
                       <div v-else class="w-full h-full bg-gray-800 flex items-center justify-center">
                         <UserIcon class="w-6 h-6 text-gray-500" />
                       </div>
                     </div>
 
                     <div>
-                      <p class="text-sm font-black italic uppercase group-hover:text-yellow-500">@{{ bid.profiles?.username }}</p>
+                      <p class="text-sm font-black italic uppercase group-hover:text-yellow-500 transition-colors">@{{ bid.profiles?.username }}</p>
                       <p class="text-[8px] text-gray-600 font-bold uppercase tracking-widest">{{ bid.profiles?.reputation || 0 }} REP PTS</p>
                     </div>
                   </div>
@@ -568,7 +576,7 @@ onUnmounted(() => {
             </div>
             <h2 class="text-4xl lg:text-7xl font-[1000] italic uppercase tracking-tighter leading-[0.8]">{{ product.name }}</h2>
             <div @click="router.push(`/user/${product.profiles?.username}`)" class="flex items-center gap-4 p-5 bg-white/[0.03] border border-white/10 rounded-[30px] cursor-pointer w-fit group">
-              <div class="w-12 h-12 rounded-2xl overflow-hidden border border-white/10">
+              <div class="w-12 h-12 rounded-2xl overflow-hidden border border-white/10 flex-shrink-0">
                 <img v-if="product.profiles?.avatar_url && product.profiles.avatar_url.trim() !== ''" :src="product.profiles.avatar_url" class="w-full h-full object-cover" />
                 <UserCircleIcon v-else class="w-full h-full text-gray-700" />
               </div>
@@ -637,8 +645,10 @@ onUnmounted(() => {
                   <div class="absolute -right-4 -top-4 opacity-10 rotate-12"><TrophyIcon class="w-40 h-40 text-green-500" /></div>
                   <h2 class="text-2xl font-[1000] italic uppercase text-white mb-6">You Won This Asset!</h2>
                   <div class="bg-black/40 p-6 rounded-3xl border border-white/5 mb-6 flex justify-between items-center"><span class="text-[10px] font-bold uppercase italic text-gray-500">Total Settlement</span><span class="text-white font-black italic">{{ formatPrice(totalToPay) }}</span></div>
-                  <button v-if="!transaction || transaction.status === 'pending_payment'" @click="showPaymentModal = true" class="w-full bg-green-500 text-black py-5 rounded-[25px] font-black italic uppercase text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"><ShieldCheckIcon class="w-5 h-5" /> Pay to Escrow</button>
-                  <button @click="router.push(`/chat/${product.id}`)" class="w-full mt-4 bg-white/5 border border-white/10 text-white py-4 rounded-2xl font-black italic uppercase text-[10px] flex items-center justify-center gap-3"><ChatBubbleLeftRightIcon class="w-5 h-5" /> Live Chat with Seller</button>
+                  <button v-if="!transaction || transaction.status === 'pending_payment'" @click="showPaymentModal = true" class="w-full bg-green-500 text-black py-5 rounded-[25px] font-black italic uppercase text-xs flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg"><ShieldCheckIcon class="w-5 h-5" /> Pay to Escrow</button>
+                  <button @click="router.push(`/chat/${product.id}`)" class="w-full mt-4 bg-white/5 border border-white/10 text-white py-4 rounded-2xl font-black italic uppercase text-[10px] flex items-center justify-center gap-3">
+                    <ChatBubbleLeftRightIcon class="w-5 h-5" /> Live Chat with Seller
+                  </button>
                 </div>
 
                 <div v-else class="bg-white/5 border border-white/10 p-10 rounded-[45px] text-center relative overflow-hidden group">
@@ -673,17 +683,13 @@ onUnmounted(() => {
 
             <div class="min-h-[200px]">
               <div v-if="activeBidTab === 'ranking'" class="space-y-3">
-                <div v-for="(bid, index) in rankedBids.slice(0, 5)" :key="'mb-rank-' + bid.id" class="flex items-center justify-between p-4 rounded-2xl border border-white/5 bg-white/[0.02]" :class="index === 0 ? 'border-yellow-500/20 bg-yellow-500/5' : ''">
+                <div v-for="(bid, index) in rankedBids" :key="'mb-rank-' + bid.id" @click="router.push(`/user/${bid.profiles?.username}`)" class="flex items-center justify-between p-4 rounded-2xl border border-white/5 bg-white/[0.02] cursor-pointer" :class="index === 0 ? 'border-yellow-500/20 bg-yellow-500/5 shadow-xl' : ''">
                   <div class="flex items-center gap-3">
                     <span class="font-[1000] italic text-sm text-yellow-500 w-4">#{{ index + 1 }}</span>
-                    <div @click="router.push(`/user/${bid.profiles?.username}`)" class="w-10 h-10 rounded-xl overflow-hidden border border-white/10">
-                      <img 
-                        v-if="bid.profiles?.avatar_url && bid.profiles.avatar_url.trim() !== ''" 
-                        :src="bid.profiles.avatar_url" 
-                        class="w-full h-full object-cover" 
-                      />
+                    <div class="w-10 h-10 rounded-xl overflow-hidden border border-white/10 flex-shrink-0">
+                      <img v-if="bid.profiles?.avatar_url && bid.profiles.avatar_url.trim() !== ''" :src="bid.profiles.avatar_url" class="w-full h-full object-cover" />
                       <div v-else class="w-full h-full bg-gray-800 flex items-center justify-center">
-                        <UserIcon class="w-5 h-5 text-gray-500 p-2" />
+                        <UserIcon class="w-6 h-6 text-gray-500" />
                       </div>
                     </div>
                     <p class="text-xs font-black italic uppercase">@{{ bid.profiles?.username }}</p>
@@ -715,7 +721,7 @@ onUnmounted(() => {
         <h3 class="text-xl font-[1000] italic uppercase tracking-tighter text-white mb-8">Report Asset</h3>
         <div class="space-y-6 text-left">
           <div><label class="text-[9px] font-black text-gray-600 uppercase block mb-3 italic">Reason Category</label>
-            <select v-model="reportForm.category" class="w-full bg-black border border-white/10 rounded-2xl p-4 text-xs font-bold text-white outline-none focus:border-red-500">
+            <select v-model="reportForm.category" class="w-full bg-black border border-white/10 rounded-2xl p-4 text-xs font-bold text-white outline-none focus:border-red-500 appearance-none">
               <option v-for="cat in reportCategories" :key="cat" :value="cat">{{ cat }}</option>
             </select>
           </div>
