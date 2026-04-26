@@ -515,74 +515,105 @@ onUnmounted(() => {
               </div>
             </div>
             <div class="space-y-4">
-              <div
-                v-for="(bid, index) in rankedBids"
-                :key="bid.id"
-                class="flex items-center justify-between p-5 rounded-[28px] border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-all group"
-                :class="
-                  index === 0
-                    ? 'border-yellow-500/30 bg-yellow-500/5 ring-1 ring-yellow-500/20'
-                    : ''
-                "
-              >
-                <div class="flex items-center gap-5">
-                  <div
-                    class="w-8 text-center font-[1000] italic text-xl"
-                    :class="index < 3 ? 'text-yellow-500' : 'text-gray-700'"
-                  >
-                    #{{ index + 1 }}
-                  </div>
-                  <div
-                    @click="router.push(`/user/${bid.profiles?.username}`)"
-                    class="w-12 h-12 rounded-2xl overflow-hidden border-2 border-white/10 cursor-pointer active:scale-90 transition-transform"
-                  >
-                    <img
-                      v-if="bid.profiles?.avatar_url"
-                      :src="bid.profiles.avatar_url"
-                      class="w-full h-full object-cover"
-                    />
+              <template v-if="activeBidTab === 'ranking'">
+                <div
+                  v-for="(bid, index) in rankedBids"
+                  :key="'rank-' + bid.id"
+                  class="flex items-center justify-between p-5 rounded-[28px] border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] transition-all group"
+                  :class="
+                    index === 0
+                      ? 'border-yellow-500/30 bg-yellow-500/5 ring-1 ring-yellow-500/20 shadow-[0_10px_40px_rgba(234,179,8,0.1)]'
+                      : ''
+                  "
+                >
+                  <div class="flex items-center gap-5">
                     <div
-                      v-else
-                      class="w-full h-full bg-gray-800 flex items-center justify-center"
+                      class="w-8 text-center font-[1000] italic text-xl"
+                      :class="index < 3 ? 'text-yellow-500' : 'text-gray-700'"
                     >
-                      <UserIcon class="w-6 h-6 text-gray-500" />
+                      #{{ index + 1 }}
                     </div>
-                  </div>
-                  <div
-                    @click="router.push(`/user/${bid.profiles?.username}`)"
-                    class="cursor-pointer"
-                  >
-                    <p
-                      class="text-sm font-black italic uppercase group-hover:text-yellow-500 transition-colors"
+                    <div
+                      @click="router.push(`/user/${bid.profiles?.username}`)"
+                      class="w-12 h-12 rounded-2xl overflow-hidden border-2 border-white/10 cursor-pointer active:scale-90 transition-transform"
                     >
-                      @{{ bid.profiles?.username }}
-                    </p>
-                    <div class="flex items-center gap-2 mt-0.5">
+                      <img
+                        v-if="bid.profiles?.avatar_url"
+                        :src="bid.profiles.avatar_url"
+                        class="w-full h-full object-cover"
+                      />
                       <div
-                        class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"
-                      ></div>
+                        v-else
+                        class="w-full h-full bg-gray-800 flex items-center justify-center"
+                      >
+                        <UserIcon class="w-6 h-6 text-gray-500" />
+                      </div>
+                    </div>
+                    <div
+                      @click="router.push(`/user/${bid.profiles?.username}`)"
+                      class="cursor-pointer"
+                    >
                       <p
-                        class="text-[8px] text-gray-600 font-bold uppercase tracking-widest"
+                        class="text-sm font-black italic uppercase group-hover:text-yellow-500 transition-colors"
+                      >
+                        @{{ bid.profiles?.username }}
+                      </p>
+                      <p
+                        class="text-[8px] text-gray-600 font-bold uppercase tracking-widest mt-0.5"
                       >
                         {{ bid.profiles?.reputation_score || 0 }} REPUTATION PTS
                       </p>
                     </div>
                   </div>
+                  <div class="text-right">
+                    <p
+                      class="text-xl font-[1000] italic"
+                      :class="index === 0 ? 'text-yellow-500' : 'text-white'"
+                    >
+                      {{ formatPrice(bid.amount) }}
+                    </p>
+                    <p
+                      class="text-[8px] text-gray-700 font-bold uppercase italic"
+                    >
+                      Highest Bid
+                    </p>
+                  </div>
                 </div>
-                <div class="text-right">
-                  <p
-                    class="text-xl font-[1000] italic"
-                    :class="index === 0 ? 'text-yellow-500' : 'text-white'"
-                  >
-                    {{ formatPrice(bid.amount) }}
-                  </p>
-                  <p
-                    class="text-[8px] text-gray-700 font-bold uppercase italic"
-                  >
-                    {{ new Date(bid.created_at).toLocaleTimeString() }}
-                  </p>
+              </template>
+
+              <template v-else>
+                <div
+                  v-for="bid in recentBids"
+                  :key="'hist-' + bid.id"
+                  class="flex items-center justify-between p-4 rounded-2xl border border-white/5 bg-black/40 hover:bg-white/[0.03] transition-all"
+                >
+                  <div class="flex items-center gap-4">
+                    <div
+                      class="w-2 h-2 rounded-full bg-yellow-500/40 animate-pulse"
+                    ></div>
+                    <div>
+                      <p
+                        class="text-[10px] font-black italic uppercase text-white"
+                      >
+                        @{{ bid.profiles?.username }}
+                        <span class="text-gray-600 font-normal"
+                          >Placed a bid</span
+                        >
+                      </p>
+                      <p
+                        class="text-[8px] text-gray-700 font-bold uppercase mt-0.5 tracking-tighter"
+                      >
+                        {{ new Date(bid.created_at).toLocaleString() }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-black italic text-gray-400">
+                      {{ formatPrice(bid.amount) }}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              </template>
             </div>
           </div>
         </div>
