@@ -30,12 +30,15 @@ const loading = ref(true);
 const bidAmount = ref(0);
 const isSubmitting = ref(false);
 const timeLeft = ref("");
+// FIX: Inisialisasi Tab Ranking agar langsung aktif tanpa dipencet
 const activeBidTab = ref("ranking");
 
-const isIntense = ref(false);
+// --- STATE BARU REFORMASI ---
+const isIntense = ref(false); // Mode 2 menit terakhir
 const hasNotifiedIntense = ref(false);
 const showBannedModal = ref(false);
 
+// --- STATE LOGIKA OUTBID & ESCROW ---
 const isOutbid = ref(false);
 const transaction = ref(null);
 const showPaymentModal = ref(false);
@@ -43,9 +46,10 @@ const showProofModal = ref(false);
 const adminFee = 5000;
 const isSubmittingAction = ref(false);
 
-// --- COOLDOWN AGAR DATABASE TIDAK MAMPET ---
+// --- JEDA BID (COOLDOWN) ---
 const isCooldown = ref(false);
 
+// --- REFORMASI LOGIKA RANKING (UNIQUE BIDDERS) ---
 const rankedBids = computed(() => {
   if (!recentBids.value || recentBids.value.length === 0) return [];
   const seenUsers = new Set();
@@ -60,6 +64,7 @@ const rankedBids = computed(() => {
   return uniqueBidders.slice(0, 8);
 });
 
+// --- LOGIKA SETTLEMENT (PEMENANG & PENJUAL) ---
 const isWinner = computed(() => {
   return (
     timeLeft.value === "ENDED" &&
@@ -77,6 +82,7 @@ const totalToPay = computed(() => {
   return winningBid + adminFee;
 });
 
+// --- LOGIKA RANK & LIMIT (REFORMASI) ---
 const userRank = computed(() => {
   if (props.userProfile?.is_admin === true) {
     return {
@@ -96,6 +102,7 @@ const userRank = computed(() => {
   return { name: "NEWBIE", limit: 5000000, color: "text-green-500" };
 });
 
+// --- WATCHER POSISI BID (OUTBID ALERT) ---
 watch(recentBids, (newVal, oldVal) => {
   if (oldVal && oldVal.length > 0 && newVal.length > 0 && props.userProfile) {
     const wasTop = oldVal[0].user_id === props.userProfile.id;
@@ -111,6 +118,7 @@ watch(recentBids, (newVal, oldVal) => {
   }
 });
 
+// --- LOGIKA MULTI-IMAGE STACK (SUCI) ---
 const activeImgIndex = ref(0);
 const touchStartX = ref(0);
 const touchEndX = ref(0);
@@ -160,6 +168,7 @@ const handleSwipe = () => {
   if (swipeDistance < -50) prevImage();
 };
 
+// --- LOGIKA REPORT (SUCI) ---
 const showReportModal = ref(false);
 const isSubmittingReport = ref(false);
 const reportForm = ref({ category: "Palsu / Kw", details: "" });
@@ -330,17 +339,12 @@ const updateTimer = () => {
   }
 };
 
-// --- FUNGSI REVOLUSI SERVER-SIDE TRUTH ---
 const placeBid = async () => {
   if (!props.userProfile)
     return notify.error("Auth Required", "Login dulu bosku!");
 
-  // Mencegah spam klik yang bikin realtime nyangkut
   if (isCooldown.value)
-    return notify.error(
-      "Sabar Mas",
-      "Jeda sinkronisasi server sedang berjalan.",
-    );
+    return notify.error("Sabar Mas", "Jeda sinkronisasi sedang berjalan...");
 
   if (props.userProfile?.is_admin !== true) {
     const isCurrentWinner =
@@ -366,29 +370,27 @@ const placeBid = async () => {
   try {
     isSubmitting.value = true;
 
-    // 1. TANYA KE DATABASE DULU SEBELUM BERTINDAK (Mencegah Harga/Waktu Nyangkut)
-    const { data: dbProduct, error: fetchErr } = await supabase
+    // --- REVOLUSI: TANYA DATABASE SEBELUM BID (SERVER-SIDE TRUTH) ---
+    const { data: dbProduct } = await supabase
       .from("products")
       .select("end_time, current_bid, starting_bid")
       .eq("id", product.value.id)
       .single();
 
-    if (fetchErr) throw fetchErr;
-
-    // 2. CEK HARGA AKTUAL DI DATABASE (Bukan harga HP yang nge-lag)
     const latestTopPrice = dbProduct.current_bid || dbProduct.starting_bid || 0;
+
     if (bidAmount.value <= latestTopPrice) {
       notify.error(
-        "Telat Bos!",
-        `Harga keburu disalip ke ${formatPrice(latestTopPrice)}`,
+        "Harga Berubah!",
+        `Seseorang baru saja ngebid ${formatPrice(latestTopPrice)}`,
       );
-      // Update visual langsung agar user tahu harga asli
       product.value.current_bid = latestTopPrice;
       bidAmount.value = Number(latestTopPrice) + 10000;
-      return; // Berhenti di sini, gak usah nge-bid ke database
+      isSubmitting.value = false;
+      return;
     }
 
-    // 3. INSERT BID (Sekaligus mengambil JAM ABSOLUT dari Server)
+    // INSERT BID & AMBIL JAM SERVER
     const { data: bidData, error: bidErr } = await supabase
       .from("bids")
       .insert({
@@ -396,34 +398,22 @@ const placeBid = async () => {
         user_id: props.userProfile.id,
         amount: bidAmount.value,
       })
-      .select("id, created_at") // created_at adalah jam resmi Supabase
+      .select("created_at")
       .single();
 
     if (bidErr) throw bidErr;
 
-    // 4. LOGIKA ANTI-SNIPER MUTLAK BERDASARKAN JAM SERVER
+    // HITUNG ANTI-SNIPER BERDASARKAN JAM SERVER (CREATED_AT)
     const serverNow = new Date(bidData.created_at).getTime();
     const dbEndTime = new Date(dbProduct.end_time).getTime();
     const realDiff = dbEndTime - serverNow;
 
-    // Kalau ternyata di server udah expired pas bid masuk
-    if (realDiff <= 0) {
-      await supabase.from("bids").delete().eq("id", bidData.id); // Batalkan bid
-      return notify.error(
-        "Lelang Berakhir",
-        "Telat sekian milidetik, bid ditolak server.",
-      );
-    }
-
     let newEndTime = dbProduct.end_time;
-
-    // Jika bid masuk MURNI di detik 60 ke bawah di server
-    if (realDiff <= 60000) {
-      // Waktu ditambah 2 Menit (120000ms) dari DETIK SERVER saat itu
+    if (realDiff <= 60000 && realDiff > 0) {
+      // RESET KE 2 MENIT DARI JAM SERVER SAAT INI
       newEndTime = new Date(serverNow + 120000).toISOString();
     }
 
-    // 5. UPDATE PRODUK DI DATABASE (Memicu Realtime ke semua Device)
     await supabase
       .from("products")
       .update({
@@ -433,14 +423,13 @@ const placeBid = async () => {
       })
       .eq("id", product.value.id);
 
-    // 6. UPDATE LOKAL (Instant Feedback untuk yang ngebid)
+    // Sync Lokal
     product.value.end_time = newEndTime;
     product.value.current_bid = bidAmount.value;
     bidAmount.value = Number(bidAmount.value) + 10000;
 
-    notify.success("GACOR!", "Tawaran transmisi berhasil dikirim.");
+    notify.success("GACOR!", "Tawaran berhasil dikirim.");
 
-    // AKTIFKAN COOLDOWN 2 DETIK
     isCooldown.value = true;
     setTimeout(() => {
       isCooldown.value = false;
@@ -459,15 +448,6 @@ onMounted(() => {
     if (timeLeft.value === "ENDED" && !transaction.value) fetchTransaction();
   }, 1000);
 
-  const checkBannedElement = setInterval(() => {
-    if (showBannedModal.value) {
-      const modal = document.getElementById("banned-guard-overlay");
-      if (!modal || modal.offsetParent === null) {
-        window.location.href = "/";
-      }
-    }
-  }, 1000);
-
   if (route.params.id) {
     bidSubscription = supabase
       .channel(`live-auction-${route.params.id}`)
@@ -480,11 +460,11 @@ onMounted(() => {
           filter: `product_id=eq.${route.params.id}`,
         },
         (payload) => {
+          // PAKSA REFRESH RANKING & HARGA INPUTAN
           fetchBids();
-          // Tarik paksa input bid kalau ada yang nyalip
-          const nextMinBid = Number(payload.new.amount) + 10000;
-          if (bidAmount.value < nextMinBid) {
-            bidAmount.value = nextMinBid;
+          const nextBid = Number(payload.new.amount) + 10000;
+          if (bidAmount.value < nextBid) {
+            bidAmount.value = nextBid;
           }
         },
       )
@@ -502,24 +482,20 @@ onMounted(() => {
             return;
           }
           if (product.value) {
+            // PAKSA SINKRONISASI TOTAL TANPA AMPUN
+            const oldTime = new Date(product.value.end_time).getTime();
+            const newTime = new Date(payload.new.end_time).getTime();
+
             product.value.status = payload.new.status;
             product.value.winner_id = payload.new.winner_id;
             product.value.current_bid = payload.new.current_bid;
 
-            // PAKSA SEMUA DEVICE NERIMA WAKTU TERBARU (Meskipun Mundur/Maju)
-            const oldTime = new Date(product.value.end_time).getTime();
-            const newTime = new Date(payload.new.end_time).getTime();
-
-            // Override waktu lokal
+            // OVERRIDE WAKTU LOKAL
             product.value.end_time = payload.new.end_time;
 
-            // Beri notif extend hanya jika waktunya terbukti nambah jauh (Anti-Glitch)
             if (newTime > oldTime + 1000) {
-              notify.success(
-                "TIME EXTENDED!",
-                "Seseorang ngebid, waktu bertambah!",
-              );
-              hasNotifiedIntense.value = false; // Buka proteksi notif intense
+              notify.success("TIME EXTENDED!", "Waktu lelang bertambah!");
+              hasNotifiedIntense.value = false;
             }
           }
         },
@@ -918,7 +894,7 @@ onUnmounted(() => {
                         <p
                           class="text-[8px] font-black text-black/60 uppercase leading-none"
                         >
-                          Current position #1
+                          Highest Bidder
                         </p>
                         <p
                           class="text-xs font-[1000] text-black uppercase italic"
@@ -987,13 +963,12 @@ onUnmounted(() => {
                 <button
                   @click="placeBid"
                   :disabled="isSubmitting || isCooldown"
-                  :class="[
+                  :class="
                     isOutbid
                       ? 'bg-red-600 shadow-[0_15px_40px_rgba(220,38,38,0.4)] animate-pulse scale-[1.02]'
-                      : 'bg-yellow-500 shadow-[0_15px_40px_rgba(234,179,8,0.2)]',
-                    isCooldown ? 'opacity-50' : '',
-                  ]"
-                  class="w-full text-black py-7 rounded-[35px] font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 transition-all shadow-2xl"
+                      : 'bg-yellow-500 shadow-[0_15px_40px_rgba(234,179,8,0.2)]'
+                  "
+                  class="w-full text-black py-7 rounded-3xl font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all shadow-2xl"
                 >
                   <div class="flex items-center gap-3">
                     <ArrowPathIcon
@@ -1004,7 +979,7 @@ onUnmounted(() => {
                     <span class="text-xl">
                       {{
                         isCooldown
-                          ? "WAIT 2S..."
+                          ? "SINKRONISASI..."
                           : isOutbid
                             ? "RECLAIM POSITION!"
                             : "Execute Bid"
@@ -1014,19 +989,20 @@ onUnmounted(() => {
                   <span
                     v-if="isIntense"
                     class="text-[8px] font-black tracking-[0.2em] animate-pulse"
-                    >{{
+                  >
+                    {{
                       isOutbid
                         ? "!! SOMEONE TOOK YOUR ASSET !!"
                         : "!! FINAL CALL - ANTI SNIPER ACTIVE !!"
-                    }}</span
-                  >
+                    }}
+                  </span>
                 </button>
               </div>
 
               <div v-else class="space-y-6">
                 <div
                   v-if="isWinner"
-                  class="bg-green-500/10 border-2 border-green-500/30 rounded-[45px] p-8 shadow-2xl relative overflow-hidden"
+                  class="bg-green-500/10 border-2 border-green-500/30 rounded-[45px] p-8 shadow-2xl relative overflow-hidden text-center"
                 >
                   <div class="absolute -right-4 -top-4 opacity-10 rotate-12">
                     <TrophyIcon class="w-40 h-40 text-green-500" />
@@ -1036,16 +1012,20 @@ onUnmounted(() => {
                   >
                     You Won This Asset!
                   </h2>
+
                   <div
-                    class="bg-black/40 p-6 rounded-3xl border border-white/5 mb-6 flex justify-between items-center"
+                    class="bg-black/40 p-6 rounded-3xl border border-white/5 mb-6"
                   >
-                    <span
-                      class="text-[10px] font-bold uppercase italic text-gray-500"
-                      >Total Settlement</span
-                    ><span class="text-white font-black italic">{{
-                      formatPrice(totalToPay)
-                    }}</span>
+                    <div
+                      class="flex justify-between text-[10px] font-bold uppercase italic mb-2"
+                    >
+                      <span class="text-gray-500">Total Settlement</span>
+                      <span class="text-white">{{
+                        formatPrice(totalToPay)
+                      }}</span>
+                    </div>
                   </div>
+
                   <button
                     v-if="
                       !transaction || transaction.status === 'pending_payment'
@@ -1061,6 +1041,7 @@ onUnmounted(() => {
                   >
                     Dana Berada di Escrow TokBer
                   </div>
+
                   <button
                     @click="router.push(`/chat/${product.id}`)"
                     class="w-full mt-4 bg-white/5 border border-white/10 text-white py-4 rounded-2xl font-black italic uppercase text-[10px] flex items-center justify-center gap-3"
@@ -1072,7 +1053,7 @@ onUnmounted(() => {
 
                 <div
                   v-else-if="isSeller"
-                  class="bg-blue-600/10 border-2 border-blue-500/30 rounded-[45px] p-8 shadow-2xl relative"
+                  class="bg-blue-600/10 border-2 border-blue-500/30 rounded-[45px] p-8 shadow-2xl relative text-center"
                 >
                   <h2
                     class="text-2xl font-[1000] italic uppercase text-white mb-6"
@@ -1080,10 +1061,14 @@ onUnmounted(() => {
                     Asset Sold
                   </h2>
                   <div
-                    class="p-6 bg-blue-500/10 border border-blue-500/20 rounded-3xl mb-6 text-center text-[10px] font-bold text-blue-400 italic"
+                    class="p-6 bg-blue-500/10 border border-blue-500/20 rounded-3xl mb-6"
                   >
-                    Dana akan diamankan TokBer sampai pembeli mengonfirmasi
-                    penerimaan barang.
+                    <p
+                      class="text-[10px] font-bold text-blue-400 italic text-center"
+                    >
+                      Dana akan diamankan TokBer sampai pembeli mengonfirmasi
+                      penerimaan barang.
+                    </p>
                   </div>
                   <button
                     @click="router.push(`/chat/${product.id}`)"
@@ -1121,7 +1106,9 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div class="bg-white/[0.02] border border-white/5 rounded-[32px] p-7">
+          <div
+            class="bg-white/[0.02] border border-white/5 rounded-[32px] p-7 text-justify"
+          >
             <div class="flex items-center justify-between mb-5">
               <p
                 class="text-[10px] font-black text-yellow-500 uppercase italic tracking-widest"
@@ -1137,9 +1124,7 @@ onUnmounted(() => {
                 >
               </div>
             </div>
-            <p
-              class="text-gray-400 text-sm italic leading-relaxed text-justify"
-            >
+            <p class="text-gray-400 text-sm italic leading-relaxed">
               {{ product.description }}
             </p>
           </div>
@@ -1210,7 +1195,7 @@ onUnmounted(() => {
                         v-else
                         class="w-full h-full bg-gray-800 flex items-center justify-center"
                       >
-                        <UserIcon class="w-5 h-5 text-gray-600" />
+                        <UserIcon class="w-6 h-6 text-gray-600" />
                       </div>
                     </div>
                     <p
@@ -1295,7 +1280,7 @@ onUnmounted(() => {
             ><textarea
               v-model="reportForm.details"
               rows="4"
-              placeholder="Alasan..."
+              placeholder="Alasan pelaporan..."
               class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs font-bold text-white outline-none focus:border-red-500 resize-none italic"
             ></textarea>
           </div>
