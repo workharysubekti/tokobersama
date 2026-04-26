@@ -32,22 +32,20 @@ const isSubmitting = ref(false);
 const timeLeft = ref("");
 const activeBidTab = ref("ranking");
 
-// --- STATE REFORMASI (ANT-SNIPER & WAR ZONE) ---
 const isIntense = ref(false);
 const hasNotifiedIntense = ref(false);
 const showBannedModal = ref(false);
 
-// --- STATE LOGIKA OUTBID & ESCROW ---
 const isOutbid = ref(false);
 const transaction = ref(null);
 const showPaymentModal = ref(false);
+const showProofModal = ref(false);
 const adminFee = 5000;
 const isSubmittingAction = ref(false);
 
-// --- JEDA COOLDOWN (ANTI MAMPET SERVER) ---
+// --- COOLDOWN AGAR DATABASE TIDAK MAMPET ---
 const isCooldown = ref(false);
 
-// --- REFORMASI LOGIKA RANKING (UNIQUE BIDDERS) ---
 const rankedBids = computed(() => {
   if (!recentBids.value || recentBids.value.length === 0) return [];
   const seenUsers = new Set();
@@ -62,7 +60,6 @@ const rankedBids = computed(() => {
   return uniqueBidders.slice(0, 8);
 });
 
-// --- LOGIKA SETTLEMENT (PEMENANG & PENJUAL) ---
 const isWinner = computed(() => {
   return (
     timeLeft.value === "ENDED" &&
@@ -80,7 +77,6 @@ const totalToPay = computed(() => {
   return winningBid + adminFee;
 });
 
-// --- LOGIKA RANK & LIMIT (REFORMASI) ---
 const userRank = computed(() => {
   if (props.userProfile?.is_admin === true) {
     return {
@@ -100,7 +96,6 @@ const userRank = computed(() => {
   return { name: "NEWBIE", limit: 5000000, color: "text-green-500" };
 });
 
-// --- WATCHER POSISI BID (OUTBID ALERT) ---
 watch(recentBids, (newVal, oldVal) => {
   if (oldVal && oldVal.length > 0 && newVal.length > 0 && props.userProfile) {
     const wasTop = oldVal[0].user_id === props.userProfile.id;
@@ -116,7 +111,6 @@ watch(recentBids, (newVal, oldVal) => {
   }
 });
 
-// --- LOGIKA MULTI-IMAGE STACK (SUCI) ---
 const activeImgIndex = ref(0);
 const touchStartX = ref(0);
 const touchEndX = ref(0);
@@ -166,7 +160,6 @@ const handleSwipe = () => {
   if (swipeDistance < -50) prevImage();
 };
 
-// --- LOGIKA REPORT (SUCI) ---
 const showReportModal = ref(false);
 const isSubmittingReport = ref(false);
 const reportForm = ref({ category: "Palsu / Kw", details: "" });
@@ -299,12 +292,11 @@ const fetchProductDetail = async () => {
   }
 };
 
-// --- LOGIKA TIMER (SUDAH BERSIH DARI GLITCH SERVER OFFSET) ---
 const updateTimer = () => {
   if (!product.value?.end_time) return;
 
   const end = new Date(product.value.end_time).getTime();
-  const now = Date.now();
+  const now = new Date().getTime();
   const diff = end - now;
 
   if (diff <= 0) {
@@ -338,79 +330,100 @@ const updateTimer = () => {
   }
 };
 
+// --- FUNGSI REVOLUSI SERVER-SIDE TRUTH ---
 const placeBid = async () => {
-  // 1. AUTH & COOLDOWN GUARD (Mencegah Database Mampet)
-  if (!props.userProfile) {
+  if (!props.userProfile)
     return notify.error("Auth Required", "Login dulu bosku!");
-  }
-  if (isCooldown.value) {
-    return notify.error("Sabar Mas", "Jeda 2 detik ya, biar real-time lancar!");
-  }
 
-  // 2. SELF-BID GUARD
+  // Mencegah spam klik yang bikin realtime nyangkut
+  if (isCooldown.value)
+    return notify.error(
+      "Sabar Mas",
+      "Jeda sinkronisasi server sedang berjalan.",
+    );
+
   if (props.userProfile?.is_admin !== true) {
     const isCurrentWinner =
       recentBids.value.length > 0 &&
       recentBids.value[0].user_id === props.userProfile.id;
-    if (isCurrentWinner) {
-      return notify.error(
-        "Top Position",
-        "Tawaranmu masih yang tertinggi. Tunggu rival lain!",
-      );
-    }
+    if (isCurrentWinner)
+      return notify.error("Top Position", "Tawaranmu masih yang tertinggi!");
   }
 
-  // 3. REPUTASI & RANK GUARD
   const rep = props.userProfile?.reputation || 0;
-  if (rep < 50 && props.userProfile?.is_admin !== true) {
-    return notify.error("Reputasi Rendah", "Minimal 50 poin buat ngebid, Mas.");
-  }
+  if (rep < 50 && props.userProfile?.is_admin !== true)
+    return notify.error("Reputasi Rendah", "Minimal 50 poin buat ngebid.");
 
   if (bidAmount.value > userRank.value.limit) {
     return notify.error(
       "Limit Rank",
-      `Rank ${userRank.value.name} maksimal bid ${formatPrice(userRank.value.limit)}`,
+      `Rank maksimal bid ${formatPrice(userRank.value.limit)}`,
     );
   }
 
   if (isSubmitting.value || !product.value) return;
 
-  const now = Date.now();
-  let end = new Date(product.value.end_time).getTime();
-  const diff = end - now;
-
-  if (diff <= 0 || timeLeft.value === "ENDED") {
-    return notify.error("Lelang Berakhir", "Transmisi ditutup.");
-  }
-
-  const latestTopPrice =
-    product.value.current_bid || product.value.starting_bid || 0;
-  if (bidAmount.value <= latestTopPrice) {
-    notify.error(
-      "Bid Low",
-      `Harga sudah naik ke ${formatPrice(latestTopPrice)}`,
-    );
-    bidAmount.value = Number(latestTopPrice) + 10000;
-    return;
-  }
-
   try {
     isSubmitting.value = true;
 
-    // 6. ANTI-SNIPER LOGIC (AKURAT 2 MENIT DARI SEKARANG)
-    let newEndTime = product.value.end_time;
-    if (diff <= 60000 && diff > 0) {
-      const extension = 120000; // Reset ke 2 menit (120 detik)
-      newEndTime = new Date(now + extension).toISOString();
+    // 1. TANYA KE DATABASE DULU SEBELUM BERTINDAK (Mencegah Harga/Waktu Nyangkut)
+    const { data: dbProduct, error: fetchErr } = await supabase
+      .from("products")
+      .select("end_time, current_bid, starting_bid")
+      .eq("id", product.value.id)
+      .single();
+
+    if (fetchErr) throw fetchErr;
+
+    // 2. CEK HARGA AKTUAL DI DATABASE (Bukan harga HP yang nge-lag)
+    const latestTopPrice = dbProduct.current_bid || dbProduct.starting_bid || 0;
+    if (bidAmount.value <= latestTopPrice) {
+      notify.error(
+        "Telat Bos!",
+        `Harga keburu disalip ke ${formatPrice(latestTopPrice)}`,
+      );
+      // Update visual langsung agar user tahu harga asli
+      product.value.current_bid = latestTopPrice;
+      bidAmount.value = Number(latestTopPrice) + 10000;
+      return; // Berhenti di sini, gak usah nge-bid ke database
     }
 
-    const { error: bidErr } = await supabase.from("bids").insert({
-      product_id: product.value.id,
-      user_id: props.userProfile.id,
-      amount: bidAmount.value,
-    });
+    // 3. INSERT BID (Sekaligus mengambil JAM ABSOLUT dari Server)
+    const { data: bidData, error: bidErr } = await supabase
+      .from("bids")
+      .insert({
+        product_id: product.value.id,
+        user_id: props.userProfile.id,
+        amount: bidAmount.value,
+      })
+      .select("id, created_at") // created_at adalah jam resmi Supabase
+      .single();
+
     if (bidErr) throw bidErr;
 
+    // 4. LOGIKA ANTI-SNIPER MUTLAK BERDASARKAN JAM SERVER
+    const serverNow = new Date(bidData.created_at).getTime();
+    const dbEndTime = new Date(dbProduct.end_time).getTime();
+    const realDiff = dbEndTime - serverNow;
+
+    // Kalau ternyata di server udah expired pas bid masuk
+    if (realDiff <= 0) {
+      await supabase.from("bids").delete().eq("id", bidData.id); // Batalkan bid
+      return notify.error(
+        "Lelang Berakhir",
+        "Telat sekian milidetik, bid ditolak server.",
+      );
+    }
+
+    let newEndTime = dbProduct.end_time;
+
+    // Jika bid masuk MURNI di detik 60 ke bawah di server
+    if (realDiff <= 60000) {
+      // Waktu ditambah 2 Menit (120000ms) dari DETIK SERVER saat itu
+      newEndTime = new Date(serverNow + 120000).toISOString();
+    }
+
+    // 5. UPDATE PRODUK DI DATABASE (Memicu Realtime ke semua Device)
     await supabase
       .from("products")
       .update({
@@ -420,6 +433,7 @@ const placeBid = async () => {
       })
       .eq("id", product.value.id);
 
+    // 6. UPDATE LOKAL (Instant Feedback untuk yang ngebid)
     product.value.end_time = newEndTime;
     product.value.current_bid = bidAmount.value;
     bidAmount.value = Number(bidAmount.value) + 10000;
@@ -467,8 +481,7 @@ onMounted(() => {
         },
         (payload) => {
           fetchBids();
-
-          // PAKSA INPUTAN NAIK DI SEMUA DEVICE
+          // Tarik paksa input bid kalau ada yang nyalip
           const nextMinBid = Number(payload.new.amount) + 10000;
           if (bidAmount.value < nextMinBid) {
             bidAmount.value = nextMinBid;
@@ -493,26 +506,20 @@ onMounted(() => {
             product.value.winner_id = payload.new.winner_id;
             product.value.current_bid = payload.new.current_bid;
 
-            // PAKSA INPUTAN NAIK SEKALI LAGI BIAR DOUBLE AMAN
-            const nextMinBid = Number(payload.new.current_bid) + 10000;
-            if (bidAmount.value < nextMinBid) {
-              bidAmount.value = nextMinBid;
-            }
-
-            // --- SYNC JAM TERAGRESIF (MENGHINDARI DEVICE MACET) ---
+            // PAKSA SEMUA DEVICE NERIMA WAKTU TERBARU (Meskipun Mundur/Maju)
             const oldTime = new Date(product.value.end_time).getTime();
             const newTime = new Date(payload.new.end_time).getTime();
 
-            // Selalu terima waktu dari database tanpa syarat
+            // Override waktu lokal
             product.value.end_time = payload.new.end_time;
 
-            // Beri notif perpanjangan hanya kalau beneran nambah > 2 detik (menghindari glitch)
-            if (newTime > oldTime + 2000) {
+            // Beri notif extend hanya jika waktunya terbukti nambah jauh (Anti-Glitch)
+            if (newTime > oldTime + 1000) {
               notify.success(
                 "TIME EXTENDED!",
-                "Seseorang ngebid di detik terakhir, waktu ditambah!",
+                "Seseorang ngebid, waktu bertambah!",
               );
-              hasNotifiedIntense.value = false;
+              hasNotifiedIntense.value = false; // Buka proteksi notif intense
             }
           }
         },
@@ -982,9 +989,9 @@ onUnmounted(() => {
                   :disabled="isSubmitting || isCooldown"
                   :class="[
                     isOutbid
-                      ? 'bg-red-600 shadow-[0_15px_40px_rgba(220,38,38,0.4)] scale-[1.02]'
+                      ? 'bg-red-600 shadow-[0_15px_40px_rgba(220,38,38,0.4)] animate-pulse scale-[1.02]'
                       : 'bg-yellow-500 shadow-[0_15px_40px_rgba(234,179,8,0.2)]',
-                    isCooldown ? 'opacity-50' : 'animate-pulse',
+                    isCooldown ? 'opacity-50' : '',
                   ]"
                   class="w-full text-black py-7 rounded-[35px] font-[1000] italic uppercase tracking-widest active:scale-95 flex flex-col items-center justify-center gap-1 transition-all shadow-2xl"
                 >
@@ -1075,7 +1082,8 @@ onUnmounted(() => {
                   <div
                     class="p-6 bg-blue-500/10 border border-blue-500/20 rounded-3xl mb-6 text-center text-[10px] font-bold text-blue-400 italic"
                   >
-                    Dana akan diamankan TokBer sampai pembeli konfirmasi barang.
+                    Dana akan diamankan TokBer sampai pembeli mengonfirmasi
+                    penerimaan barang.
                   </div>
                   <button
                     @click="router.push(`/chat/${product.id}`)"
@@ -1202,7 +1210,7 @@ onUnmounted(() => {
                         v-else
                         class="w-full h-full bg-gray-800 flex items-center justify-center"
                       >
-                        <UserIcon class="w-6 h-6 text-gray-600" />
+                        <UserIcon class="w-5 h-5 text-gray-600" />
                       </div>
                     </div>
                     <p
