@@ -58,7 +58,9 @@ const uploadAvatar = async (event) => {
 
     if (uploadError) throw uploadError;
 
-    const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath);
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("avatars").getPublicUrl(filePath);
 
     const { error: updateError } = await supabase
       .from("profiles")
@@ -83,7 +85,9 @@ const fetchUserStats = async () => {
     supabase
       .from("products")
       .select("id")
-      .or(`owner_id.eq.${props.userProfile.id},winner_id.eq.${props.userProfile.id}`)
+      .or(
+        `owner_id.eq.${props.userProfile.id},winner_id.eq.${props.userProfile.id}`,
+      )
       .eq("status", "closed"),
     supabase
       .from("follows")
@@ -103,12 +107,34 @@ const fetchUserStats = async () => {
 // --- LOGIKA RANK ---
 const userRank = computed(() => {
   if (props.userProfile?.is_admin === true) {
-    return { name: "OWNER", color: "text-red-600", bg: "bg-red-600/10", icon: ShieldCheckIcon };
+    return {
+      name: "OWNER",
+      color: "text-red-600",
+      bg: "bg-red-600/10",
+      icon: ShieldCheckIcon,
+    };
   }
   const count = followersCount.value;
-  if (count >= 100) return { name: "LEGEND", color: "text-yellow-500", bg: "bg-yellow-500/10", icon: TrophyIcon };
-  if (count >= 30) return { name: "EXPERT", color: "text-red-500", bg: "bg-red-600/10", icon: FireIcon };
-  return { name: "MEMBER", color: "text-blue-500", bg: "bg-blue-500/10", icon: ShieldCheckIcon };
+  if (count >= 100)
+    return {
+      name: "LEGEND",
+      color: "text-yellow-500",
+      bg: "bg-yellow-500/10",
+      icon: TrophyIcon,
+    };
+  if (count >= 30)
+    return {
+      name: "EXPERT",
+      color: "text-red-500",
+      bg: "bg-red-600/10",
+      icon: FireIcon,
+    };
+  return {
+    name: "NEWBIE",
+    color: "text-blue-500",
+    bg: "bg-blue-500/10",
+    icon: ShieldCheckIcon,
+  };
 });
 
 const editData = ref({
@@ -150,7 +176,9 @@ const unreadCount = ref(0);
 const unreadNotif = ref(0);
 
 const fetchUnreadNotifications = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return;
   const { count } = await supabase
     .from("notifications")
@@ -179,9 +207,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#050505] pt-12 pb-32 px-6 text-white font-sans uppercase italic font-[1000]">
+  <div
+    class="min-h-screen bg-[#050505] pt-12 pb-32 px-6 text-white font-sans uppercase italic font-[1000]"
+  >
     <div v-if="userProfile" class="max-w-2xl mx-auto relative">
-      
       <button
         @click="handleLogout"
         class="absolute top-0 right-0 p-2.5 bg-white/5 border border-white/10 rounded-2xl text-red-500 active:scale-90 transition-all z-10"
@@ -191,94 +220,194 @@ onMounted(() => {
 
       <div class="flex flex-col items-center mb-8">
         <div class="relative group mb-6">
-          <div class="w-32 h-32 md:w-36 md:h-36 rounded-full border-4 border-yellow-500/10 overflow-hidden bg-black shadow-2xl">
-            <img :src="userProfile.avatar_url || 'https://via.placeholder.com/150'" class="w-full h-full object-cover" />
+          <div
+            class="w-32 h-32 md:w-36 md:h-36 rounded-full border-4 border-yellow-500/10 overflow-hidden bg-black shadow-2xl"
+          >
+            <img
+              :src="userProfile.avatar_url || 'https://via.placeholder.com/150'"
+              class="w-full h-full object-cover"
+            />
           </div>
-          <input type="file" ref="fileInput" class="hidden" accept="image/*" @change="uploadAvatar" />
-          <button @click="triggerFileInput" :disabled="loading" class="absolute bottom-1 right-1 bg-yellow-500 p-2.5 rounded-full text-black shadow-xl active:scale-110">
+          <input
+            type="file"
+            ref="fileInput"
+            class="hidden"
+            accept="image/*"
+            @change="uploadAvatar"
+          />
+          <button
+            @click="triggerFileInput"
+            :disabled="loading"
+            class="absolute bottom-1 right-1 bg-yellow-500 p-2.5 rounded-full text-black shadow-xl active:scale-110"
+          >
             <CameraIcon v-if="!loading" class="w-5 h-5" />
             <ArrowPathIcon v-else class="w-5 h-5 animate-spin" />
           </button>
         </div>
 
-        <h1 class="text-3xl tracking-tighter mb-1 text-white">{{ userProfile.full_name || "MEMBER" }}</h1>
-        <p class="text-[10px] text-yellow-500/40 tracking-[0.4em] mb-6">@{{ userProfile.username }}</p>
+        <h1 class="text-3xl tracking-tighter mb-1 text-white">
+          {{ userProfile.full_name || "MEMBER" }}
+        </h1>
+        <p class="text-[10px] text-yellow-500/40 tracking-[0.4em] mb-6">
+          @{{ userProfile.username }}
+        </p>
 
-        <router-link 
+        <router-link
           to="/reputation-info"
           class="inline-flex items-center gap-4 px-8 py-3 bg-yellow-500/5 border border-yellow-500/20 rounded-[24px] active:scale-95 transition-all mb-8"
         >
-          <div :class="[userRank.bg, userRank.color]" class="p-2 rounded-xl border border-white/5">
+          <div
+            :class="[userRank.bg, userRank.color]"
+            class="p-2 rounded-xl border border-white/5"
+          >
             <component :is="userRank.icon" class="w-4 h-4" />
           </div>
           <div class="text-left">
-            <p class="text-[10px] text-white leading-none mb-1 font-black">RANK: {{ userRank.name }}</p>
-            <p class="text-[7px] text-yellow-500/50 tracking-widest leading-none italic uppercase">Lihat Aturan & Bonus</p>
+            <p class="text-[10px] text-white leading-none mb-1 font-black">
+              RANK: {{ userRank.name }}
+            </p>
+            <p
+              class="text-[7px] text-yellow-500/50 tracking-widest leading-none italic uppercase"
+            >
+              Lihat Aturan & Bonus
+            </p>
           </div>
           <ChevronRightIcon class="w-4 h-4 text-yellow-500/30" />
         </router-link>
 
-        <div class="flex items-center gap-4 mb-6 text-[10px] tracking-widest text-gray-600">
-          <button @click="router.push(`/user/${userProfile.username}/followers`)" class="active:text-white">
+        <div
+          class="flex items-center gap-4 mb-6 text-[10px] tracking-widest text-gray-600"
+        >
+          <button
+            @click="router.push(`/user/${userProfile.username}/followers`)"
+            class="active:text-white"
+          >
             <span class="text-white">{{ followersCount }}</span> PENGIKUT
           </button>
           <span class="text-white/10 text-xs font-light">|</span>
-          <button @click="router.push(`/user/${userProfile.username}/following`)" class="active:text-white">
+          <button
+            @click="router.push(`/user/${userProfile.username}/following`)"
+            class="active:text-white"
+          >
             <span class="text-white">{{ followingCount }}</span> MENGIKUTI
           </button>
         </div>
 
         <div class="mb-6 max-w-md text-center">
-          <p class="text-[11px] leading-relaxed text-gray-500 normal-case italic font-bold">
-            {{ userProfile.bio || "Belum ada biodata yang direkam oleh sistem." }}
+          <p
+            class="text-[11px] leading-relaxed text-gray-500 normal-case italic font-bold"
+          >
+            {{
+              userProfile.bio || "Belum ada biodata yang direkam oleh sistem."
+            }}
           </p>
         </div>
-        
-        <button @click="isEditing = !isEditing" class="text-[9px] text-yellow-500 tracking-[0.2em] font-black border border-yellow-500/10 px-6 py-2 rounded-full active:bg-yellow-500/5">
-            {{ isEditing ? "BATALKAN EDIT" : "EDIT BIODATA" }}
+
+        <button
+          @click="isEditing = !isEditing"
+          class="text-[9px] text-yellow-500 tracking-[0.2em] font-black border border-yellow-500/10 px-6 py-2 rounded-full active:bg-yellow-500/5"
+        >
+          {{ isEditing ? "BATALKAN EDIT" : "EDIT BIODATA" }}
         </button>
       </div>
 
-      <div v-if="isEditing" class="mb-8 bg-yellow-500/[0.02] border border-yellow-500/10 rounded-[32px] p-6 space-y-4">
-          <input v-model="editData.full_name" type="text" placeholder="Nama Lengkap" class="w-full bg-black border border-white/5 rounded-2xl p-5 text-xs text-white outline-none focus:border-yellow-500/30" />
-          <textarea v-model="editData.bio" rows="3" placeholder="Biodata..." class="w-full bg-black border border-white/5 rounded-2xl p-5 text-xs text-white normal-case italic font-bold outline-none focus:border-yellow-500/30"></textarea>
-          <button @click="handleUpdate" class="w-full bg-yellow-500 text-black py-4 rounded-2xl font-black text-[10px] uppercase italic active:scale-95">Simpan Perubahan</button>
+      <div
+        v-if="isEditing"
+        class="mb-8 bg-yellow-500/[0.02] border border-yellow-500/10 rounded-[32px] p-6 space-y-4"
+      >
+        <input
+          v-model="editData.full_name"
+          type="text"
+          placeholder="Nama Lengkap"
+          class="w-full bg-black border border-white/5 rounded-2xl p-5 text-xs text-white outline-none focus:border-yellow-500/30"
+        />
+        <textarea
+          v-model="editData.bio"
+          rows="3"
+          placeholder="Biodata..."
+          class="w-full bg-black border border-white/5 rounded-2xl p-5 text-xs text-white normal-case italic font-bold outline-none focus:border-yellow-500/30"
+        ></textarea>
+        <button
+          @click="handleUpdate"
+          class="w-full bg-yellow-500 text-black py-4 rounded-2xl font-black text-[10px] uppercase italic active:scale-95"
+        >
+          Simpan Perubahan
+        </button>
       </div>
 
       <div class="grid grid-cols-2 gap-4 mb-8">
-        <router-link to="/wallet" class="bg-white/[0.02] border border-white/5 rounded-[32px] p-6 active:bg-white/[0.05] transition-all flex flex-col justify-between aspect-square">
+        <router-link
+          to="/wallet"
+          class="bg-white/[0.02] border border-white/5 rounded-[32px] p-6 active:bg-white/[0.05] transition-all flex flex-col justify-between aspect-square"
+        >
           <div class="flex justify-between items-start">
-            <div class="p-2.5 bg-yellow-500/5 rounded-xl border border-yellow-500/10">
-                <BanknotesIcon class="w-4 h-4 text-yellow-500" />
+            <div
+              class="p-2.5 bg-yellow-500/5 rounded-xl border border-yellow-500/10"
+            >
+              <BanknotesIcon class="w-4 h-4 text-yellow-500" />
             </div>
             <ArrowUpRightIcon class="w-3.5 h-3.5 text-gray-800" />
           </div>
           <div>
-            <p class="text-[8px] text-gray-600 tracking-widest mb-1 font-black italic">SALDO AKTIF</p>
-            <p class="text-base font-[1000] text-white">Rp {{ balance.toLocaleString() }}</p>
+            <p
+              class="text-[8px] text-gray-600 tracking-widest mb-1 font-black italic"
+            >
+              SALDO AKTIF
+            </p>
+            <p class="text-base font-[1000] text-white">
+              Rp {{ balance.toLocaleString() }}
+            </p>
           </div>
         </router-link>
 
-        <router-link :to="`/user/${userProfile.username}`" class="bg-white/[0.02] border border-white/5 rounded-[32px] p-6 active:bg-white/[0.05] transition-all flex flex-col justify-between aspect-square">
+        <router-link
+          :to="`/user/${userProfile.username}`"
+          class="bg-white/[0.02] border border-white/5 rounded-[32px] p-6 active:bg-white/[0.05] transition-all flex flex-col justify-between aspect-square"
+        >
           <div class="flex justify-between items-start">
-            <div class="p-2.5 bg-white/5 rounded-xl border border-white/5 text-white">
-                <UserIcon class="w-4 h-4" />
+            <div
+              class="p-2.5 bg-white/5 rounded-xl border border-white/5 text-white"
+            >
+              <UserIcon class="w-4 h-4" />
             </div>
             <ArrowUpRightIcon class="w-3.5 h-3.5 text-gray-800" />
           </div>
           <div>
-            <p class="text-[8px] text-gray-600 tracking-widest mb-1 font-black italic">TAMPILAN PUBLIK</p>
-            <p class="text-base font-[1000] text-white">PROFIL <span class="text-gray-600">PUBLIK</span></p>
+            <p
+              class="text-[8px] text-gray-600 tracking-widest mb-1 font-black italic"
+            >
+              TAMPILAN PUBLIK
+            </p>
+            <p class="text-base font-[1000] text-white">
+              PROFIL <span class="text-gray-600">PUBLIK</span>
+            </p>
           </div>
         </router-link>
       </div>
 
-      <div class="bg-white/[0.01] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl">
+      <div
+        class="bg-white/[0.01] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl"
+      >
         <router-link
           v-for="(item, index) in [
-            { name: 'Notifikasi', path: '/notifications', count: unreadNotif, type: 'notif' },
-            { name: 'Pesan Masuk', path: '/messages', count: unreadCount, type: 'message' },
-            { name: 'Status Barang', path: '/my-auctions', count: totalTx, type: 'deal' },
+            {
+              name: 'Notifikasi',
+              path: '/notifications',
+              count: unreadNotif,
+              type: 'notif',
+            },
+            {
+              name: 'Pesan Masuk',
+              path: '/messages',
+              count: unreadCount,
+              type: 'message',
+            },
+            {
+              name: 'Status Barang',
+              path: '/my-auctions',
+              count: totalTx,
+              type: 'deal',
+            },
             { name: 'Gudang Barang', path: '/vault' },
             { name: 'Pengaturan Akun', path: '/settings' },
           ]"
@@ -287,11 +416,27 @@ onMounted(() => {
           class="flex items-center justify-between p-7 active:bg-white/[0.02] transition-all border-white/5 border-b last:border-b-0"
         >
           <div class="flex items-center gap-4">
-            <span class="text-[10px] font-[1000] uppercase italic tracking-[0.2em] text-gray-400">{{ item.name }}</span>
+            <span
+              class="text-[10px] font-[1000] uppercase italic tracking-[0.2em] text-gray-400"
+              >{{ item.name }}</span
+            >
 
-            <div v-if="item.type === 'notif' && item.count > 0" class="w-1.5 h-1.5 bg-red-600 rounded-full animate-pulse shadow-[0_0_5px_red]"></div>
-            <div v-if="item.type === 'message' && item.count > 0" class="bg-white text-black text-[8px] px-2 py-0.5 rounded-lg font-black">{{ item.count }}</div>
-            <div v-if="item.type === 'deal' && item.count > 0" class="text-[8px] text-yellow-500/30 italic font-black tracking-widest">{{ item.count }} DEALS</div>
+            <div
+              v-if="item.type === 'notif' && item.count > 0"
+              class="w-1.5 h-1.5 bg-red-600 rounded-full animate-pulse shadow-[0_0_5px_red]"
+            ></div>
+            <div
+              v-if="item.type === 'message' && item.count > 0"
+              class="bg-white text-black text-[8px] px-2 py-0.5 rounded-lg font-black"
+            >
+              {{ item.count }}
+            </div>
+            <div
+              v-if="item.type === 'deal' && item.count > 0"
+              class="text-[8px] text-yellow-500/30 italic font-black tracking-widest"
+            >
+              {{ item.count }} DEALS
+            </div>
           </div>
           <ChevronRightIcon class="w-3.5 h-3.5 text-gray-800" />
         </router-link>

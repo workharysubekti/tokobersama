@@ -243,11 +243,32 @@ const updateTimer = () => {
 };
 
 const placeBid = async () => {
-  if (!props.userProfile)
+  // 1. AUTH GUARD
+  if (!props.userProfile) {
     return notify.error("Auth Required", "Login dulu bosku!");
+  }
+
+  // 2. SELF-BID GUARD (REFORMASI)
+  // Mencegah user ngebid di atas namanya sendiri agar lelang tetap kompetitif
+  // Perkecualian: System Owner (Admin) bebas ngebid kapan saja untuk testing
+  if (props.userProfile?.is_admin !== true) {
+    const isCurrentWinner =
+      recentBids.value.length > 0 &&
+      recentBids.value[0].user_id === props.userProfile.id;
+    if (isCurrentWinner) {
+      return notify.error(
+        "Top Position",
+        "Tawaranmu masih yang tertinggi. Tunggu rival lain!",
+      );
+    }
+  }
+
+  // 3. REPUTASI & RANK GUARD (SUCI)
   const rep = props.userProfile?.reputation_score || 0;
-  if (rep < 50)
+  if (rep < 50 && props.userProfile?.is_admin !== true) {
     return notify.error("Reputasi Rendah", "Minimal 50 poin buat ngebid, Mas.");
+  }
+
   if (bidAmount.value > userRank.value.limit) {
     return notify.error(
       "Limit Rank",
@@ -255,31 +276,41 @@ const placeBid = async () => {
     );
   }
 
+  // 4. TIME & STATUS GUARD
   if (isSubmitting.value || !product.value) return;
   const now = new Date().getTime();
   let end = new Date(product.value.end_time).getTime();
 
-  if (now >= end || timeLeft.value === "ENDED")
+  if (now >= end || timeLeft.value === "ENDED") {
     return notify.error("Lelang Berakhir", "Transmisi ditutup.");
+  }
 
+  // 5. PRICE VALIDATION
   const latestTopPrice =
     recentBids.value[0]?.amount || product.value.starting_bid || 0;
   if (bidAmount.value <= latestTopPrice) {
-    notify.error("Bid Low", `Harga naik ke ${formatPrice(latestTopPrice)}`);
+    notify.error(
+      "Bid Low",
+      `Harga sudah naik ke ${formatPrice(latestTopPrice)}`,
+    );
     bidAmount.value = Number(latestTopPrice) + 10000;
     return;
   }
 
   try {
     isSubmitting.value = true;
+
+    // 6. ANTI-SNIPER LOGIC (REFORMASI 60 DETIK)
     const diff = end - now;
     let newEndTime = product.value.end_time;
     if (diff <= 60000) {
-      const extension = 2 * 60 * 1000;
+      const extension = 2 * 60 * 1000; // Tambah 2 menit
       newEndTime = new Date(end + extension).toISOString();
-      notify.success("ANTI-SNIPER!", "Waktu lelang ditambah 2 menit!");
+      notify.success("ANTI-SNIPER!", "Waktu lelang diperpanjang 2 menit!");
     }
 
+    // 7. DATABASE TRANSMISSION
+    // Kirim data bid baru
     const { error: bidErr } = await supabase.from("bids").insert({
       product_id: product.value.id,
       user_id: props.userProfile.id,
@@ -287,6 +318,7 @@ const placeBid = async () => {
     });
     if (bidErr) throw bidErr;
 
+    // Update status produk (Winner & Harga Terbaru)
     await supabase
       .from("products")
       .update({
@@ -296,11 +328,14 @@ const placeBid = async () => {
       })
       .eq("id", product.value.id);
 
+    // 8. LOCAL STATE SYNC
     product.value.current_bid = bidAmount.value;
     product.value.end_time = newEndTime;
     bidAmount.value = Number(bidAmount.value) + 10000;
+
+    notify.success("GACOR!", "Tawaran transmisi berhasil dikirim.");
   } catch (err) {
-    notify.error("Error", err.message);
+    notify.error("System Error", err.message);
   } finally {
     isSubmitting.value = false;
   }
@@ -736,7 +771,21 @@ onUnmounted(() => {
                 <span
                   class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-sm italic tracking-tighter"
                   >IDR</span
-                ><input
+                >
+                <div class="flex gap-3 mb-4 overflow-x-auto no-scrollbar pb-2">
+                  <button
+                    v-for="plus in [10000, 50000, 100000, 500000]"
+                    :key="plus"
+                    @click="
+                      bidAmount =
+                        (product.current_bid || product.starting_bid) + plus
+                    "
+                    class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 hover:bg-yellow-500 hover:text-black transition-all active:scale-90"
+                  >
+                    +{{ plus / 1000 }}K
+                  </button>
+                </div>
+                <input
                   v-model.number="bidAmount"
                   type="number"
                   class="w-full bg-black border-2 border-white/10 rounded-3xl py-7 pl-20 pr-6 text-3xl font-[1000] italic focus:border-yellow-500 transition-all text-white outline-none"
@@ -760,6 +809,40 @@ onUnmounted(() => {
                     }}</span
                   >
                 </div>
+                <transition
+                  enter-active-class="animate-bounce"
+                  v-if="timeLeft === 'ENDED' && recentBids.length > 0"
+                >
+                  <div
+                    class="mt-4 p-4 bg-yellow-500 rounded-2xl flex items-center justify-between shadow-[0_0_30px_rgba(234,179,8,0.4)]"
+                  >
+                    <div class="flex items-center gap-3">
+                      <TrophyIcon class="w-6 h-6 text-black" />
+                      <div>
+                        <p
+                          class="text-[8px] font-black text-black/60 uppercase leading-none"
+                        >
+                          Final Winner
+                        </p>
+                        <p
+                          class="text-xs font-[1000] text-black uppercase italic"
+                        >
+                          @{{ recentBids[0].profiles?.username }}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <p
+                        class="text-[8px] font-black text-black/60 uppercase leading-none"
+                      >
+                        Hammer Price
+                      </p>
+                      <p class="text-sm font-[1000] text-black italic">
+                        {{ formatPrice(recentBids[0].amount) }}
+                      </p>
+                    </div>
+                  </div>
+                </transition>
                 <span
                   v-if="isIntense"
                   class="text-[8px] font-black tracking-[0.2em] animate-pulse"
