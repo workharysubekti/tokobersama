@@ -396,7 +396,19 @@ onMounted(() => {
           if (product.value) {
             product.value.status = payload.new.status;
             product.value.winner_id = payload.new.winner_id;
+            product.value.current_bid = payload.new.current_bid;
             product.value.end_time = payload.new.end_time;
+            const oldTime = new Date(payload.old.end_time).getTime();
+            const newTime = new Date(payload.new.end_time).getTime();
+
+            if (newTime > oldTime) {
+              notify.success(
+                "TIME EXTENDED!",
+                "Seseorang ngebid di menit terakhir, waktu ditambah!",
+              );
+              // Reset notif intense supaya yang nonton juga dapet alert merah lagi nanti
+              hasNotifiedIntense.value = false;
+            }
           }
         },
       )
