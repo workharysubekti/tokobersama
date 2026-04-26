@@ -59,7 +59,7 @@ const isSubmittingAction = ref(false);
 // --- SYNC & THROTTLE STATES ---
 const isCooldown = ref(false);
 
-// --- REFORMASI LOGIKA RANKING (UNIQUE BIDDERS) ---
+// --- LOGIKA RANKING (UNIQUE BIDDERS) ---
 const rankedBids = computed(() => {
   if (!recentBids.value || recentBids.value.length === 0) {
     return [];
@@ -173,7 +173,7 @@ const nextImage = () => {
 
 const prevImage = () => {
   if (allImages.value.length <= 1) return;
-  activeImgIndex.value = (activeImgIndex.value - 1 + allImages.value.length) % allImages.value.length;
+  activeImgIndex.value = (allImages.value.length + activeImgIndex.value - 1) % allImages.value.length;
 };
 
 const handleTouchStart = (e) => { 
@@ -365,7 +365,7 @@ const placeBid = async () => {
   try {
     isSubmitting.value = true;
 
-    // --- PANGGIL RPC DATABASE ---
+    // PANGGIL RPC (KEBENARAN SERVER)
     const { data, error } = await supabase.rpc('execute_bid_v1', {
       p_product_id: product.value.id,
       p_user_id: props.userProfile.id,
@@ -394,7 +394,6 @@ const placeBid = async () => {
   }
 };
 
-// --- REAL-TIME LISTENERS ---
 onMounted(() => {
   fetchProductDetail();
   
@@ -412,7 +411,7 @@ onMounted(() => {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "bids", filter: `product_id=eq.${route.params.id}` },
         (payload) => {
-          fetchBids(); // REFRESH DATA BRUTAL
+          fetchBids(); 
           const minNext = Number(payload.new.amount) + 10000;
           if (bidAmount.value < minNext) bidAmount.value = minNext;
         },
@@ -427,11 +426,8 @@ onMounted(() => {
             product.value.status = payload.new.status;
             product.value.winner_id = payload.new.winner_id;
             product.value.current_bid = payload.new.current_bid;
-            
-            // Override Waktu (Mencegah Glitch antar device)
             product.value.end_time = payload.new.end_time;
 
-            // Paksa Hitung Ulang Timer Detik Ini Juga
             nextTick(() => {
               updateTimer();
             });
@@ -458,16 +454,10 @@ onUnmounted(() => {
 <template>
   <div v-if="product" class="bg-black min-h-screen text-white pb-32">
     
-    <div
-      v-if="showBannedModal"
-      id="banned-guard-overlay"
-      class="fixed inset-0 z-[999] bg-black flex flex-col items-center justify-center p-8 text-center"
-    >
-      <div class="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center mb-6 border border-red-500/40">
-        <ExclamationTriangleIcon class="w-12 h-12 text-red-500" />
-      </div>
-      <h1 class="text-4xl font-[1000] italic uppercase text-white mb-4">ASSET TERMINATED</h1>
-      <button @click="router.push('/')" class="bg-white text-black px-10 py-4 rounded-2xl font-black italic uppercase text-xs">Back Home</button>
+    <div v-if="showBannedModal" id="banned-guard-overlay" class="fixed inset-0 z-[999] bg-black flex flex-col items-center justify-center p-8 text-center">
+      <ExclamationTriangleIcon class="w-24 h-24 text-red-500 mb-6" />
+      <h1 class="text-4xl font-[1000] italic uppercase mb-4">ASSET TERMINATED</h1>
+      <button @click="router.push('/')" class="bg-white text-black px-10 py-4 rounded-2xl font-black italic text-xs uppercase">Back Home</button>
     </div>
 
     <div class="fixed top-0 inset-x-0 z-[100] bg-black/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between">
@@ -480,10 +470,7 @@ onUnmounted(() => {
     </div>
 
     <div class="lg:hidden fixed top-[64px] inset-x-0 z-[90] pointer-events-none px-5 py-3">
-      <div 
-        :class="isIntense ? 'bg-red-600 border-red-500 shadow-red-500/20' : 'bg-yellow-500 border-yellow-400 shadow-yellow-500/20'"
-        class="pointer-events-auto rounded-2xl border-2 shadow-2xl flex items-center justify-between px-6 py-2.5 transition-all duration-500"
-      >
+      <div :class="isIntense ? 'bg-red-600 border-red-500 shadow-red-500/20' : 'bg-yellow-500 border-yellow-400 shadow-yellow-500/20'" class="pointer-events-auto rounded-2xl border-2 shadow-2xl flex items-center justify-between px-6 py-2.5 transition-all duration-500">
         <div class="flex items-center gap-2">
           <ClockIcon class="w-4 h-4 text-black animate-pulse" />
           <span class="text-[8px] font-black uppercase italic text-black">Ends In</span>
@@ -530,7 +517,18 @@ onUnmounted(() => {
                 <div v-for="(bid, index) in rankedBids" :key="'rank-' + bid.id" class="flex items-center justify-between p-5 rounded-[28px] border border-white/5 bg-white/[0.02] group" :class="index === 0 ? 'border-yellow-500/30 bg-yellow-500/5 ring-1 ring-yellow-500/20 shadow-2xl' : ''">
                   <div class="flex items-center gap-5">
                     <div class="w-8 text-center font-[1000] italic text-xl" :class="index < 3 ? 'text-yellow-500' : 'text-gray-700'">#{{ index + 1 }}</div>
-                    <img :src="bid.profiles?.avatar_url" class="w-12 h-12 rounded-2xl border-2 border-white/10" />
+                    
+                    <div class="w-12 h-12 rounded-2xl overflow-hidden border-2 border-white/10">
+                      <img 
+                        v-if="bid.profiles?.avatar_url && bid.profiles.avatar_url.trim() !== ''" 
+                        :src="bid.profiles.avatar_url" 
+                        class="w-full h-full object-cover" 
+                      />
+                      <div v-else class="w-full h-full bg-gray-800 flex items-center justify-center">
+                        <UserIcon class="w-6 h-6 text-gray-500" />
+                      </div>
+                    </div>
+
                     <div>
                       <p class="text-sm font-black italic uppercase group-hover:text-yellow-500">@{{ bid.profiles?.username }}</p>
                       <p class="text-[8px] text-gray-600 font-bold uppercase tracking-widest">{{ bid.profiles?.reputation || 0 }} REP PTS</p>
@@ -571,11 +569,11 @@ onUnmounted(() => {
             <h2 class="text-4xl lg:text-7xl font-[1000] italic uppercase tracking-tighter leading-[0.8]">{{ product.name }}</h2>
             <div @click="router.push(`/user/${product.profiles?.username}`)" class="flex items-center gap-4 p-5 bg-white/[0.03] border border-white/10 rounded-[30px] cursor-pointer w-fit group">
               <div class="w-12 h-12 rounded-2xl overflow-hidden border border-white/10">
-                <img v-if="product.profiles?.avatar_url" :src="product.profiles.avatar_url" class="w-full h-full object-cover" />
+                <img v-if="product.profiles?.avatar_url && product.profiles.avatar_url.trim() !== ''" :src="product.profiles.avatar_url" class="w-full h-full object-cover" />
                 <UserCircleIcon v-else class="w-full h-full text-gray-700" />
               </div>
               <div>
-                <p class="text-[7px] font-black text-gray-500 uppercase tracking-[0.2em] italic">Contractor</p>
+                <p class="text-[7px] font-black text-gray-500 uppercase tracking-widest italic">Contractor</p>
                 <p class="text-sm font-black italic group-hover:text-yellow-500 uppercase leading-none">@{{ product.profiles?.username }}</p>
               </div>
             </div>
@@ -624,7 +622,7 @@ onUnmounted(() => {
                   <input v-model.number="bidAmount" type="number" class="w-full bg-black border-2 border-white/10 rounded-3xl py-7 pl-20 pr-6 text-3xl font-[1000] italic focus:border-yellow-500 text-white outline-none" />
                 </div>
 
-                <button @click="placeBid" :disabled="isSubmitting || isCooldown" :class="isOutbid ? 'bg-red-600 shadow-red-500/40 animate-pulse scale-[1.02]' : 'bg-yellow-500 shadow-yellow-500/20'" class="w-full text-black py-7 rounded-3xl font-[1000] italic uppercase active:scale-95 flex flex-col items-center justify-center gap-1 transition-all shadow-2xl">
+                <button @click="placeBid" :disabled="isSubmitting || isCooldown" :class="isOutbid ? 'bg-red-600 shadow-red-500/40 animate-pulse scale-[1.02]' : 'bg-yellow-500 shadow-yellow-500/20'" class="w-full text-black py-7 rounded-[35px] font-[1000] italic uppercase active:scale-95 flex flex-col items-center justify-center gap-1 transition-all shadow-2xl">
                   <div class="flex items-center gap-3">
                     <ArrowPathIcon v-if="isSubmitting" class="w-7 h-7 animate-spin" />
                     <BanknotesIcon v-else class="w-7 h-7 stroke-[2.5px]" />
@@ -638,10 +636,7 @@ onUnmounted(() => {
                 <div v-if="isWinner" class="bg-green-500/10 border-2 border-green-500/30 rounded-[45px] p-8 shadow-2xl relative overflow-hidden text-center">
                   <div class="absolute -right-4 -top-4 opacity-10 rotate-12"><TrophyIcon class="w-40 h-40 text-green-500" /></div>
                   <h2 class="text-2xl font-[1000] italic uppercase text-white mb-6">You Won This Asset!</h2>
-                  <div class="bg-black/40 p-6 rounded-3xl border border-white/5 mb-6 flex justify-between items-center">
-                    <span class="text-[10px] font-bold uppercase italic text-gray-500">Total Settlement</span>
-                    <span class="text-white font-black italic">{{ formatPrice(totalToPay) }}</span>
-                  </div>
+                  <div class="bg-black/40 p-6 rounded-3xl border border-white/5 mb-6 flex justify-between items-center"><span class="text-[10px] font-bold uppercase italic text-gray-500">Total Settlement</span><span class="text-white font-black italic">{{ formatPrice(totalToPay) }}</span></div>
                   <button v-if="!transaction || transaction.status === 'pending_payment'" @click="showPaymentModal = true" class="w-full bg-green-500 text-black py-5 rounded-[25px] font-black italic uppercase text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"><ShieldCheckIcon class="w-5 h-5" /> Pay to Escrow</button>
                   <button @click="router.push(`/chat/${product.id}`)" class="w-full mt-4 bg-white/5 border border-white/10 text-white py-4 rounded-2xl font-black italic uppercase text-[10px] flex items-center justify-center gap-3"><ChatBubbleLeftRightIcon class="w-5 h-5" /> Live Chat with Seller</button>
                 </div>
@@ -681,9 +676,15 @@ onUnmounted(() => {
                 <div v-for="(bid, index) in rankedBids.slice(0, 5)" :key="'mb-rank-' + bid.id" class="flex items-center justify-between p-4 rounded-2xl border border-white/5 bg-white/[0.02]" :class="index === 0 ? 'border-yellow-500/20 bg-yellow-500/5' : ''">
                   <div class="flex items-center gap-3">
                     <span class="font-[1000] italic text-sm text-yellow-500 w-4">#{{ index + 1 }}</span>
-                    <div class="w-10 h-10 rounded-xl overflow-hidden border border-white/10">
-                      <img v-if="bid.profiles?.avatar_url" :src="bid.profiles.avatar_url" class="w-full h-full object-cover" />
-                      <UserIcon v-else class="w-full h-full bg-gray-800 text-gray-500 p-2" />
+                    <div @click="router.push(`/user/${bid.profiles?.username}`)" class="w-10 h-10 rounded-xl overflow-hidden border border-white/10">
+                      <img 
+                        v-if="bid.profiles?.avatar_url && bid.profiles.avatar_url.trim() !== ''" 
+                        :src="bid.profiles.avatar_url" 
+                        class="w-full h-full object-cover" 
+                      />
+                      <div v-else class="w-full h-full bg-gray-800 flex items-center justify-center">
+                        <UserIcon class="w-5 h-5 text-gray-500 p-2" />
+                      </div>
                     </div>
                     <p class="text-xs font-black italic uppercase">@{{ bid.profiles?.username }}</p>
                   </div>
@@ -709,7 +710,7 @@ onUnmounted(() => {
 
     <div v-if="showReportModal" class="fixed inset-0 z-[200] flex items-center justify-center px-6">
       <div class="absolute inset-0 bg-black/90 backdrop-blur-md" @click="showReportModal = false"></div>
-      <div class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-8 lg:p-10 shadow-2xl overflow-hidden text-center">
+      <div class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-10 shadow-2xl overflow-hidden text-center">
         <ExclamationTriangleIcon class="w-16 h-16 text-red-500 mx-auto mb-4 border border-red-500/20 p-3 rounded-2xl" />
         <h3 class="text-xl font-[1000] italic uppercase tracking-tighter text-white mb-8">Report Asset</h3>
         <div class="space-y-6 text-left">
@@ -718,7 +719,7 @@ onUnmounted(() => {
               <option v-for="cat in reportCategories" :key="cat" :value="cat">{{ cat }}</option>
             </select>
           </div>
-          <div><label class="text-[9px] font-black text-gray-600 uppercase block mb-3 italic">Additional Details</label>
+          <div><label class="text-[9px] font-black text-gray-600 uppercase block mb-3 italic">Details</label>
             <textarea v-model="reportForm.details" rows="4" placeholder="Detail alasan..." class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-red-500 italic resize-none"></textarea>
           </div>
           <div class="flex gap-3">
