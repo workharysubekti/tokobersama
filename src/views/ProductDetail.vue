@@ -36,6 +36,7 @@ const showBannedModal = ref(false);
 
 // --- REFORMASI LOGIKA RANKING (UNIQUE BIDDERS) ---
 const rankedBids = computed(() => {
+  if (!recentBids.value || recentBids.value.length === 0) return [];
   const seenUsers = new Set();
   const uniqueBidders = [];
 
@@ -501,52 +502,47 @@ onUnmounted(() => {
               </div>
 
               <div
-                class="flex p-1.5 bg-white/5 border border-white/10 rounded-2xl w-full max-w-xs"
+                class="flex p-1.5 bg-white/5 border border-white/10 rounded-2xl w-full max-w-xs mb-6"
               >
                 <button
+                  type="button"
                   @click="activeBidTab = 'ranking'"
                   :class="
                     activeBidTab === 'ranking'
                       ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20'
-                      : 'text-gray-500 hover:text-white hover:bg-white/5'
+                      : 'text-gray-500 hover:text-white'
                   "
-                  class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300 cursor-pointer"
+                  class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300 cursor-pointer z-50"
                 >
-                  <TrophyIcon
-                    class="w-3 h-3"
-                    :class="
-                      activeBidTab === 'ranking'
-                        ? 'text-black'
-                        : 'text-gray-500'
-                    "
-                  />
+                  <TrophyIcon class="w-3.5 h-3.5" />
                   Ranking
                 </button>
 
                 <button
+                  type="button"
                   @click="activeBidTab = 'history'"
                   :class="
                     activeBidTab === 'history'
                       ? 'bg-white text-black shadow-lg'
-                      : 'text-gray-500 hover:text-white hover:bg-white/5'
+                      : 'text-gray-500 hover:text-white'
                   "
-                  class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300 cursor-pointer"
+                  class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black uppercase italic transition-all duration-300 cursor-pointer z-50"
                 >
-                  <ArrowPathIcon
-                    class="w-3 h-3"
-                    :class="
-                      activeBidTab === 'history'
-                        ? 'text-black'
-                        : 'text-gray-500'
-                    "
-                  />
+                  <ArrowPathIcon class="w-3.5 h-3.5" />
                   History
                 </button>
               </div>
             </div>
 
-            <div class="space-y-4">
-              <template v-if="activeBidTab === 'ranking'">
+            <div class="min-h-[300px]">
+              <div v-if="activeBidTab === 'ranking'" class="space-y-4">
+                <div
+                  v-if="rankedBids.length === 0"
+                  class="text-center py-10 text-gray-700 italic text-[10px] uppercase font-black tracking-widest"
+                >
+                  No Frequency Detected...
+                </div>
+
                 <div
                   v-for="(bid, index) in rankedBids"
                   :key="'rank-' + bid.id"
@@ -556,16 +552,102 @@ onUnmounted(() => {
                       ? 'border-yellow-500/30 bg-yellow-500/5 ring-1 ring-yellow-500/20 shadow-[0_10px_40px_rgba(234,179,8,0.1)]'
                       : ''
                   "
-                ></div>
-              </template>
+                >
+                  <div class="flex items-center gap-5">
+                    <div
+                      class="w-8 text-center font-[1000] italic text-xl"
+                      :class="index < 3 ? 'text-yellow-500' : 'text-gray-700'"
+                    >
+                      #{{ index + 1 }}
+                    </div>
+                    <div
+                      @click="router.push(`/user/${bid.profiles?.username}`)"
+                      class="w-12 h-12 rounded-2xl overflow-hidden border-2 border-white/10 cursor-pointer active:scale-90 transition-transform"
+                    >
+                      <img
+                        v-if="bid.profiles?.avatar_url"
+                        :src="bid.profiles.avatar_url"
+                        class="w-full h-full object-cover"
+                      />
+                      <div
+                        v-else
+                        class="w-full h-full bg-gray-800 flex items-center justify-center"
+                      >
+                        <UserIcon class="w-6 h-6 text-gray-500" />
+                      </div>
+                    </div>
+                    <div
+                      @click="router.push(`/user/${bid.profiles?.username}`)"
+                      class="cursor-pointer"
+                    >
+                      <p
+                        class="text-sm font-black italic uppercase group-hover:text-yellow-500 transition-colors"
+                      >
+                        @{{ bid.profiles?.username }}
+                      </p>
+                      <p
+                        class="text-[8px] text-gray-600 font-bold uppercase tracking-widest mt-0.5"
+                      >
+                        {{ bid.profiles?.reputation_score || 0 }} REP PTS
+                      </p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p
+                      class="text-xl font-[1000] italic"
+                      :class="index === 0 ? 'text-yellow-500' : 'text-white'"
+                    >
+                      {{ formatPrice(bid.amount) }}
+                    </p>
+                    <p
+                      class="text-[8px] text-gray-700 font-bold uppercase italic"
+                    >
+                      Highest Bid
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-              <template v-else>
+              <div v-if="activeBidTab === 'history'" class="space-y-3">
+                <div
+                  v-if="recentBids.length === 0"
+                  class="text-center py-10 text-gray-700 italic text-[10px] uppercase font-black tracking-widest"
+                >
+                  Empty Logs...
+                </div>
+
                 <div
                   v-for="bid in recentBids"
                   :key="'hist-' + bid.id"
                   class="flex items-center justify-between p-4 rounded-2xl border border-white/5 bg-black/40 hover:bg-white/[0.03] transition-all"
-                ></div>
-              </template>
+                >
+                  <div class="flex items-center gap-4">
+                    <div
+                      class="w-2 h-2 rounded-full bg-yellow-500/40 animate-pulse"
+                    ></div>
+                    <div>
+                      <p
+                        class="text-[10px] font-black italic uppercase text-white"
+                      >
+                        @{{ bid.profiles?.username }}
+                        <span class="text-gray-600 font-normal"
+                          >Transmitted a bid</span
+                        >
+                      </p>
+                      <p
+                        class="text-[8px] text-gray-700 font-bold uppercase mt-0.5 tracking-tighter"
+                      >
+                        {{ new Date(bid.created_at).toLocaleTimeString() }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-black italic text-gray-400">
+                      {{ formatPrice(bid.amount) }}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
