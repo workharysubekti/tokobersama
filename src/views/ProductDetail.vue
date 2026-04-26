@@ -173,7 +173,7 @@ const fetchBids = async () => {
   if (!route.params.id) return;
   const { data } = await supabase
     .from("bids")
-    .select("*")
+    .select("*, profiles(username, full_name, avatar_url, reputation)")
     .eq("product_id", route.params.id)
     .order("amount", { ascending: false })
     .limit(10); // Ambil 10 bid terakhir
