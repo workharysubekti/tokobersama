@@ -330,10 +330,6 @@ const updateTimer = () => {
 
   if (diff > 0 && diff <= 120000) {
     isIntense.value = true;
-    if (!hasNotifiedIntense.value) {
-      notify.error("WAR ZONE!", "Waktu kritis 2 menit lagi!");
-      hasNotifiedIntense.value = true;
-    }
   } else {
     if (diff > 120000) {
       isIntense.value = false;
