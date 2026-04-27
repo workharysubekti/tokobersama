@@ -86,15 +86,15 @@ const handleAction = async (user) => {
   if (!currentUser.value) return router.push("/login");
   if (user.id === currentUser.value.id) return;
 
-  // Pastikan kita membandingkan ID dengan tipe data yang sama (String)
+  // Cek status berdasarkan data asli yang ada di state
   const isAlreadyFollowing = myFollowings.value.some(
     (id) => String(id) === String(user.id),
   );
 
   try {
     if (isAlreadyFollowing) {
-      // --- LOGIKA UNFOLLOW (DELETE) ---
-      const { error } = await supabase
+      // --- LOGIKA UNFOLLOW ---
+      const { error, count } = await supabase
         .from("follows")
         .delete()
         .eq("follower_id", currentUser.value.id)
@@ -102,49 +102,48 @@ const handleAction = async (user) => {
 
       if (error) throw error;
 
-      // Update state lokal biar UI langsung berubah
+      // UPDATE STATE HANYA JIKA SUKSES DI DB
       myFollowings.value = myFollowings.value.filter(
         (id) => String(id) !== String(user.id),
       );
       notify.success("Berhenti Mengikuti");
     } else {
-      // --- LOGIKA FOLLOW (INSERT) ---
-      const { error: followError } = await supabase
+      // --- LOGIKA FOLLOW ---
+      const { error: insertError } = await supabase
         .from("follows")
         .insert({ follower_id: currentUser.value.id, following_id: user.id });
 
-      if (followError) throw followError;
+      if (insertError) {
+        // Jika ternyata datanya masih ada (Error Duplicate), paksa state jadi true
+        if (insertError.code === "23505") {
+          if (!myFollowings.value.includes(user.id))
+            myFollowings.value.push(user.id);
+          return;
+        }
+        throw insertError;
+      }
 
       myFollowings.value.push(user.id);
 
-      // --- KIRIM NOTIFIKASI (FIXED LOGIC) ---
-      const { data: checkFollback } = await supabase
-        .from("follows")
-        .select("id")
-        .eq("follower_id", user.id)
-        .eq("following_id", currentUser.value.id)
-        .maybeSingle();
+      // Logika Notifikasi (Gunakan metadata username Mas yang benar)
+      const senderName =
+        currentUser.value.user_metadata?.username || "Seseorang";
 
-      const isFollback = !!checkFollback;
+      await supabase.from("notifications").insert({
+        user_id: user.id,
+        from_user_id: currentUser.value.id,
+        title: "NEW TRANSMISSION!",
+        message: `@${senderName} mulai mengikuti Anda.`,
+        type: "activity",
+      });
 
-      // Gunakan try-catch kecil di sini biar kalau notif gagal, follow tetep sukses
-      try {
-        await supabase.from("notifications").insert({
-          user_id: user.id,
-          from_user_id: currentUser.value.id, // Kolom yang baru kita bikin di SQL
-          title: isFollback ? "FOLLBACK TRANSMISSION!" : "NEW FOLLOWER!",
-          message: `@${currentUser.value.user_metadata.username || "User"} ${isFollback ? "mengikuti balik Anda" : "mulai mengikuti Anda"}`,
-          type: "activity",
-        });
-      } catch (notifErr) {
-        console.error("Gagal kirim notif tapi follow sukses:", notifErr);
-      }
-
-      notify.success(isFollback ? "Berhasil Follback!" : "Berhasil Mengikuti");
+      notify.success("Berhasil Mengikuti");
     }
   } catch (e) {
-    console.error("Critical Error:", e.message);
-    notify.error("Aksi Gagal", e.message);
+    console.error("Mekanik Error:", e.message);
+    notify.error("Gagal Sinkronasi", "Periksa koneksi atau database RLS.");
+    // Tarik ulang data biar UI balik ke status asli di database
+    fetchData();
   }
 };
 // Cek Status Hubungan
