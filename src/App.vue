@@ -24,13 +24,53 @@ let presenceChannel = null;
 let notificationChannel = null;
 
 // FUNGSI UNTUK MEMUNCULKAN NOTIFIKASI INTERNAL
-const showToast = (title, message, productId) => {
-  customToast.value = { title, message, productId };
+// 1. Fungsi showToast yang sudah diupgrade
+const showToast = (title, message, targetPath) => {
+  customToast.value = { title, message, targetPath }; // Ganti productId jadi targetPath
+
   // Hilang otomatis setelah 6 detik
   setTimeout(() => {
     customToast.value = null;
   }, 6000);
 };
+
+// 2. Di dalam listenToNotifications (Bagian Realtime)
+notificationChannel = supabase
+  .channel("global-alerts")
+  .on(
+    "postgres_changes",
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "notifications",
+      filter: `user_id=eq.${user.id}`,
+    },
+    async (payload) => {
+      const notif = payload.new;
+      let pathTujuan = "/notifications"; // Alamat cadangan
+
+      // LOGIKA GPS: Tentukan kemana arah klik
+      if (notif.title.includes("FOLLOW") || notif.title.includes("FOLLBACK")) {
+        // Tarik username pengirim kilat agar bisa nuju profil
+        const { data: sender } = await supabase
+          .from("profiles")
+          .select("username")
+          .eq("id", notif.from_user_id)
+          .single();
+
+        if (sender) {
+          pathTujuan = `/user/${sender.username}`;
+        }
+      } else if (notif.related_id) {
+        // Jika urusan barang, arahkan ke produk
+        pathTujuan = `/product/${notif.related_id}`;
+      }
+
+      // Tampilkan toast dengan alamat yang sudah cerdas
+      showToast(notif.title, notif.message, pathTujuan);
+    },
+  )
+  .subscribe();
 
 const triggerGlobalNotif = (message) => {
   globalNotification.value = { message };
@@ -74,15 +114,34 @@ const listenToNotifications = async () => {
         table: "notifications",
         filter: `user_id=eq.${user.id}`,
       },
-      (payload) => {
+      async (payload) => {
+        // Tambahkan async di sini
         const notif = payload.new;
+        let finalPath = null;
 
-        // Cukup satu pemicu saja: Custom Toast (Kuning)
-        // Ini sudah mencakup INCOME ALERT maupun OUTBID!
-        showToast(notif.title, notif.message, notif.related_id);
+        // 🎯 LOGIKA GPS: Tentukan kemana arah klik pop-up
+        if (
+          notif.title.includes("FOLLOW") ||
+          notif.title.includes("FOLLBACK")
+        ) {
+          // Tarik username pengirim kilat
+          const { data: sender } = await supabase
+            .from("profiles")
+            .select("username")
+            .eq("id", notif.from_user_id)
+            .single();
 
-        // Pemicu triggerGlobalNotif (Merah) dihapus dari sini
-        // supaya tidak muncul double atas-bawah.
+          if (sender) {
+            finalPath = `/user/${sender.username}`;
+          }
+        } else if (notif.related_id) {
+          // Jika urusan bid/outbid, arahkan ke produk
+          finalPath = `/product/${notif.related_id}`;
+        }
+
+        // 🚀 Tampilkan Toast dengan 'finalPath' yang sudah cerdas
+        // Pastikan fungsi showToast Mas menerima path ini untuk router.push
+        showToast(notif.title, notif.message, finalPath);
       },
     )
     .subscribe();
@@ -234,10 +293,7 @@ onMounted(async () => {
     <transition name="notif-pop">
       <div
         v-if="customToast"
-        @click="
-          router.push(`/product/${customToast.productId}`);
-          customToast = null;
-        "
+        @click="router.push(customToast.targetPath)"
         class="fixed top-6 left-4 right-4 z-[9999] bg-[#111]/90 backdrop-blur-xl border border-yellow-500/50 p-4 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,1)] flex items-center gap-4 active:scale-95 transition-all cursor-pointer max-w-md mx-auto"
       >
         <div
