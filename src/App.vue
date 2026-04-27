@@ -24,9 +24,8 @@ let presenceChannel = null;
 let notificationChannel = null;
 
 // FUNGSI UNTUK MEMUNCULKAN NOTIFIKASI INTERNAL
-// 1. Fungsi showToast yang sudah diupgrade
 const showToast = (title, message, targetPath) => {
-  customToast.value = { title, message, targetPath }; // Ganti productId jadi targetPath
+  customToast.value = { title, message, targetPath };
 
   // Hilang otomatis setelah 6 detik
   setTimeout(() => {
@@ -34,43 +33,7 @@ const showToast = (title, message, targetPath) => {
   }, 6000);
 };
 
-// 2. Di dalam listenToNotifications (Bagian Realtime)
-notificationChannel = supabase
-  .channel("global-alerts")
-  .on(
-    "postgres_changes",
-    {
-      event: "INSERT",
-      schema: "public",
-      table: "notifications",
-      filter: `user_id=eq.${user.id}`,
-    },
-    async (payload) => {
-      const notif = payload.new;
-      let pathTujuan = "/notifications"; // Alamat cadangan
-
-      // LOGIKA GPS: Tentukan kemana arah klik
-      if (notif.title.includes("FOLLOW") || notif.title.includes("FOLLBACK")) {
-        // Tarik username pengirim kilat agar bisa nuju profil
-        const { data: sender } = await supabase
-          .from("profiles")
-          .select("username")
-          .eq("id", notif.from_user_id)
-          .single();
-
-        if (sender) {
-          pathTujuan = `/user/${sender.username}`;
-        }
-      } else if (notif.related_id) {
-        // Jika urusan barang, arahkan ke produk
-        pathTujuan = `/product/${notif.related_id}`;
-      }
-
-      // Tampilkan toast dengan alamat yang sudah cerdas
-      showToast(notif.title, notif.message, pathTujuan);
-    },
-  )
-  .subscribe();
+// --- BLOK NYASAR YANG BIKIN BLANK SUDAH DICABUT ---
 
 const triggerGlobalNotif = (message) => {
   globalNotification.value = { message };
@@ -94,21 +57,18 @@ const setupGlobalPresence = (userId) => {
   });
 };
 
-// --- FIX ANTI DOUBLE NOTIF ---
-// Sekarang dengerin tabel 'notifications', bukan 'bids'
+// --- LOGIKA NOTIFIKASI (YANG BENAR & AMAN) ---
 const listenToNotifications = async () => {
   if (notificationChannel) supabase.removeChannel(notificationChannel);
 
-  // 1. Tarik session user secara akurat
   const {
     data: { user: authUser },
     error,
   } = await supabase.auth.getUser();
 
-  // Jika tidak ada user login, berhenti di sini agar tidak error
   if (error || !authUser) return;
 
-  const myId = authUser.id; // Pegang ID user di variabel yang jelas
+  const myId = authUser.id;
 
   notificationChannel = supabase
     .channel("global-alerts")
@@ -118,19 +78,17 @@ const listenToNotifications = async () => {
         event: "INSERT",
         schema: "public",
         table: "notifications",
-        filter: `user_id=eq.${myId}`, // Pakai myId yang sudah pasti ada
+        filter: `user_id=eq.${myId}`,
       },
       async (payload) => {
         const notif = payload.new;
-        let pathTujuan = "/notifications"; // Alamat default
+        let pathTujuan = "/notifications";
 
         try {
-          // LOGIKA GPS: Tentukan kemana arah klik
           if (
             notif.title.includes("FOLLOW") ||
             notif.title.includes("FOLLBACK")
           ) {
-            // Ambil username si pengirim secara kilat
             const { data: sender } = await supabase
               .from("profiles")
               .select("username")
@@ -141,14 +99,12 @@ const listenToNotifications = async () => {
               pathTujuan = `/user/${sender.username}`;
             }
           } else if (notif.related_id) {
-            // Jika notif barang (outbid/ditawar), arahkan ke produk
             pathTujuan = `/product/${notif.related_id}`;
           }
         } catch (err) {
           console.error("GPS Error:", err);
         }
 
-        // Tampilkan pop-up dengan alamat yang sudah cerdas
         showToast(notif.title, notif.message, pathTujuan);
       },
     )
