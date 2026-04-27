@@ -228,7 +228,10 @@ const executeUpload = async () => {
 // --- LOGIKA FOLLOW & RATING ---
 const toggleFollow = async () => {
   if (!currentUser.value) return router.push("/login");
+
+  // Proteksi mutlak
   if (isOwnProfile.value) return;
+
   try {
     if (isFollowing.value) {
       await supabase
@@ -242,6 +245,26 @@ const toggleFollow = async () => {
         follower_id: currentUser.value.id,
         following_id: profile.value.id,
       });
+
+      // CEK STATUS UNTUK NOTIFIKASI
+      const { data: checkFollback } = await supabase
+        .from("follows")
+        .select("id")
+        .eq("follower_id", profile.value.id)
+        .eq("following_id", currentUser.value.id)
+        .maybeSingle();
+
+      const isFollback = !!checkFollback;
+
+      // INSERT NOTIFIKASI
+      await supabase.from("notifications").insert({
+        user_id: profile.value.id,
+        from_user_id: currentUser.value.id,
+        title: isFollback ? "FOLLBACK DETECTED!" : "NEW TRANSMISSION FOLLOWER!",
+        message: `@${currentUser.value.user_metadata.username || "User"} ${isFollback ? "mengikuti balik Anda." : "mulai mengikuti Anda."}`,
+        type: "activity",
+      });
+
       followersCount.value++;
     }
     isFollowing.value = !isFollowing.value;

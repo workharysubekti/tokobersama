@@ -84,27 +84,61 @@ const switchTab = (newType) => {
 // --- LOGIKA FOLLOW/UNFOLLOW DIRECT ---
 const handleAction = async (user) => {
   if (!currentUser.value) return router.push("/login");
-  if (user.id === currentUser.value.id) return;
+
+  // Gembok 1: Cegah follow diri sendiri di level UI
+  if (user.id === currentUser.value.id) {
+    return notify.error(
+      "Sistem Error",
+      "Anda tidak bisa mengikuti diri sendiri.",
+    );
+  }
 
   const isAlreadyFollowing = myFollowings.value.includes(user.id);
 
   try {
     if (isAlreadyFollowing) {
+      // LOGIKA UNFOLLOW
       await supabase
         .from("follows")
         .delete()
         .eq("follower_id", currentUser.value.id)
         .eq("following_id", user.id);
+
       myFollowings.value = myFollowings.value.filter((id) => id !== user.id);
       notify.success("Hubungan Terputus");
     } else {
+      // LOGIKA FOLLOW
       await supabase
         .from("follows")
         .insert({ follower_id: currentUser.value.id, following_id: user.id });
+
       myFollowings.value.push(user.id);
-      notify.success("Berhasil Mengikuti");
+
+      // --- LOGIKA NOTIFIKASI (SIHIR DIMULAI) ---
+
+      // A. Cek apakah ini FOLLBACK (Apakah dia sudah follow saya duluan?)
+      const { data: checkFollback } = await supabase
+        .from("follows")
+        .select("id")
+        .eq("follower_id", user.id) // Dia follow...
+        .eq("following_id", currentUser.value.id) // ...saya
+        .maybeSingle();
+
+      const isFollback = !!checkFollback;
+
+      // B. Masukkan ke tabel Notifikasi
+      await supabase.from("notifications").insert({
+        user_id: user.id, // Penerima (Si target)
+        from_user_id: currentUser.value.id, // Pengirim (Saya)
+        title: isFollback ? "FOLLBACK TRANSMISSION!" : "NEW FOLLOWER!",
+        message: `@${currentUser.value.user_metadata.username || "Seseorang"} ${isFollback ? "telah mengikuti balik Anda." : "mulai mengikuti Anda."}`,
+        type: "activity",
+      });
+
+      notify.success(isFollback ? "Berhasil Follback!" : "Berhasil Mengikuti");
     }
   } catch (e) {
+    console.error("Notif Error:", e.message);
     notify.error("Gagal melakukan aksi");
   }
 };
