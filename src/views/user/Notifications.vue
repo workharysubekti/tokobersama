@@ -6,6 +6,7 @@ import {
   BellIcon,
   ChatBubbleLeftRightIcon,
   MegaphoneIcon,
+  UserIcon, // Tambahkan ini
 } from "@heroicons/vue/24/outline";
 
 const router = useRouter();
@@ -27,15 +28,20 @@ const fetchNotifications = async () => {
 
   loading.value = true;
   try {
+    // MODIFIKASI: Tambahkan select profil si pengirim (from_user_id)
     const { data, error } = await supabase
       .from("notifications")
-      .select("*")
+      .select(
+        `
+        *,
+        sender:profiles!from_user_id (username, avatar_url)
+      `,
+      )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
-    // Kelompokkan data ke masing-masing tab
     notifications.value.activity = data.filter((n) => n.type === "activity");
     notifications.value.support = data.filter((n) => n.type === "support");
     notifications.value.broadcast = data.filter((n) => n.type === "broadcast");
@@ -47,30 +53,27 @@ const fetchNotifications = async () => {
 };
 
 const handleAction = async (notif) => {
-  // 1. Tandai sudah dibaca di DB
   if (!notif.is_read) {
     await supabase
       .from("notifications")
       .update({ is_read: true })
       .eq("id", notif.id);
+    notif.is_read = true; // Update lokal biar langsung pudar warnanya
   }
 
-  // 2. Arahkan ke link terkait (misal ke halaman produk)
-  if (notif.related_id) {
+  // Arahkan sesuai konteks
+  if (notif.title.includes("FOLLOW") || notif.title.includes("FOLLBACK")) {
+    router.push(`/user/${notif.sender?.username}`);
+  } else if (notif.related_id) {
     router.push(`/product/${notif.related_id}`);
   }
 };
 
-// Fungsi format waktu simpel (biar mirip UI Mas "2 mins ago")
 const timeAgo = (date) => {
   const seconds = Math.floor((new Date() - new Date(date)) / 1000);
-  let interval = seconds / 31536000;
-  if (interval > 1) return Math.floor(interval) + " years ago";
-  interval = seconds / 2592000;
-  if (interval > 1) return Math.floor(interval) + " months ago";
-  interval = seconds / 86400;
-  if (interval > 1) return Math.floor(interval) + " days ago";
-  interval = seconds / 3600;
+  if (seconds < 60) return "just now";
+  let interval = seconds / 3600;
+  if (interval > 24) return Math.floor(interval / 24) + " days ago";
   if (interval > 1) return Math.floor(interval) + " hours ago";
   interval = seconds / 60;
   if (interval > 1) return Math.floor(interval) + " mins ago";
@@ -79,8 +82,6 @@ const timeAgo = (date) => {
 
 onMounted(() => {
   fetchNotifications();
-
-  // REALTIME: Dengerin kalau ada notif baru masuk atau ada yang di-update
   notifSubscription = supabase
     .channel("realtime-notif-page")
     .on(
@@ -108,35 +109,27 @@ onUnmounted(() => {
 
     <div class="flex gap-2 bg-white/5 p-1 rounded-2xl w-full md:w-fit">
       <button
-        @click="activeTab = 'activity'"
+        v-for="tab in ['activity', 'support', 'broadcast']"
+        :key="tab"
+        @click="activeTab = tab"
         :class="
-          activeTab === 'activity'
-            ? 'bg-yellow-500 text-black'
+          activeTab === tab
+            ? 'bg-yellow-500 text-black shadow-lg'
             : 'text-gray-500'
         "
-        class="flex-1 md:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase italic transition-all flex items-center gap-2"
+        class="flex-1 md:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase italic transition-all flex items-center gap-2"
       >
-        <BellIcon class="w-3 h-3" /> Activity
-      </button>
-      <button
-        @click="activeTab = 'support'"
-        :class="
-          activeTab === 'support' ? 'bg-yellow-500 text-black' : 'text-gray-500'
-        "
-        class="flex-1 md:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase italic transition-all flex items-center gap-2"
-      >
-        <ChatBubbleLeftRightIcon class="w-3 h-3" /> Support
-      </button>
-      <button
-        @click="activeTab = 'broadcast'"
-        :class="
-          activeTab === 'broadcast'
-            ? 'bg-yellow-500 text-black'
-            : 'text-gray-500'
-        "
-        class="flex-1 md:flex-none px-6 py-2 rounded-xl text-[10px] font-black uppercase italic transition-all flex items-center gap-2"
-      >
-        <MegaphoneIcon class="w-3 h-3" /> Updates
+        <component
+          :is="
+            tab === 'activity'
+              ? BellIcon
+              : tab === 'support'
+                ? ChatBubbleLeftRightIcon
+                : MegaphoneIcon
+          "
+          class="w-3.5 h-3.5"
+        />
+        {{ tab }}
       </button>
     </div>
 
@@ -158,31 +151,52 @@ onUnmounted(() => {
         @click="handleAction(notif)"
         :class="[
           notif.is_read
-            ? 'border-white/5'
-            : 'border-yellow-500/30 bg-yellow-500/5',
+            ? 'border-white/5 opacity-60'
+            : 'border-yellow-500/30 bg-yellow-500/[0.02] shadow-[0_0_20px_rgba(234,179,8,0.05)]',
         ]"
-        class="bg-[#0d0d0d] border p-4 rounded-[24px] hover:border-yellow-500/50 transition-all cursor-pointer"
+        class="bg-[#0d0d0d] border p-5 rounded-[28px] hover:border-yellow-500/50 transition-all cursor-pointer group"
       >
-        <div class="flex justify-between items-start">
-          <div>
-            <p
-              class="text-[10px] font-black text-yellow-500 uppercase italic tracking-widest flex items-center gap-2"
+        <div class="flex gap-4 items-center">
+          <div
+            class="w-12 h-12 rounded-2xl overflow-hidden border border-white/10 bg-black flex-shrink-0"
+          >
+            <img
+              v-if="notif.sender?.avatar_url"
+              :src="notif.sender.avatar_url"
+              class="w-full h-full object-cover"
+            />
+            <div
+              v-else
+              class="w-full h-full flex items-center justify-center bg-gray-900"
             >
+              <UserIcon class="w-5 h-5 text-gray-700" />
+            </div>
+          </div>
+
+          <div class="flex-1 min-w-0">
+            <div class="flex justify-between items-start mb-1">
+              <p
+                class="text-[10px] font-black text-yellow-500 uppercase italic tracking-widest truncate"
+              >
+                {{ notif.title }}
+              </p>
               <span
-                v-if="!notif.is_read"
-                class="w-1 h-1 bg-yellow-500 rounded-full"
-              ></span>
-              {{ notif.title }}
-            </p>
-            <p class="text-xs text-gray-300 font-bold mt-1 uppercase italic">
+                class="text-[8px] text-gray-600 font-bold italic uppercase whitespace-nowrap ml-4"
+              >
+                {{ timeAgo(notif.created_at) }}
+              </span>
+            </div>
+            <p
+              class="text-xs text-gray-300 font-bold uppercase italic leading-snug"
+            >
               {{ notif.message }}
             </p>
           </div>
-          <span
-            class="text-[8px] text-gray-600 font-bold italic uppercase whitespace-nowrap ml-4"
-          >
-            {{ timeAgo(notif.created_at) }}
-          </span>
+
+          <div
+            v-if="!notif.is_read"
+            class="w-2 h-2 bg-yellow-500 rounded-full animate-pulse shadow-[0_0_10px_yellow]"
+          ></div>
         </div>
       </div>
 
