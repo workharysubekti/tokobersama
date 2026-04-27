@@ -59,7 +59,7 @@ const isOwnProfile = computed(() => {
   return currentUser.value?.id === profile.value?.id;
 });
 
-// --- KODE SUCI: FETCH DATA (TIDAK DISENTUH) ---
+// --- KODE SUCI: FETCH DATA ---
 const fetchData = async () => {
   if (!profile.value) loading.value = true;
   try {
@@ -132,7 +132,7 @@ const fetchData = async () => {
 
     reviews.value = reviewsRes.data || [];
     soldItems.value = soldRes.data || [];
-    wonItems.value = wonItems.value = wonRes.data || [];
+    wonItems.value = wonRes.data || [];
     archivedItems.value = archRes.data || [];
     followersCount.value = followersRes.count || 0;
     followingCount.value = followingRes.count || 0;
@@ -289,6 +289,10 @@ const userRank = computed(() => {
   };
 });
 
+const showReviewModal = ref(false);
+const submittingReview = ref(false);
+const newReview = ref({ rating: 5, comment: "" });
+
 const submitReview = async () => {
   if (!newReview.value.comment.trim())
     return notify.error("Log entry required");
@@ -309,6 +313,33 @@ const submitReview = async () => {
     notify.error("Sync failed");
   } finally {
     submittingReview.value = false;
+  }
+};
+
+const showReportModal = ref(false);
+const isSubmittingReport = ref(false);
+const reportForm = ref({ category: "Lainnya", details: "" });
+
+const submitReport = async () => {
+  if (!currentUser.value) return router.push("/login");
+  if (reportForm.value.details.length < 5) return notify.error("Need details");
+  isSubmittingReport.value = true;
+  try {
+    const { error } = await supabase.from("reports").insert({
+      reporter_id: currentUser.value.id,
+      target_user_id: profile.value.id,
+      reason_category: reportForm.value.category,
+      reason: reportForm.value.details,
+      status: "pending",
+    });
+    if (error) throw error;
+    notify.success("Report Transmission Sent");
+    showReportModal.value = false;
+    reportForm.value.details = "";
+  } catch (e) {
+    notify.error("Report failed");
+  } finally {
+    isSubmittingReport.value = false;
   }
 };
 
@@ -366,7 +397,7 @@ onUnmounted(() => {
 
         <label
           v-if="isOwnProfile"
-          class="absolute bottom-6 right-8 p-3 bg-black/60 border border-white/10 rounded-2xl cursor-pointer hover:bg-yellow-500 hover:text-black transition-all"
+          class="absolute bottom-4 right-4 lg:bottom-6 lg:right-8 p-3 bg-black/60 border border-white/10 rounded-2xl cursor-pointer hover:bg-yellow-500 hover:text-black transition-all z-20"
         >
           <PhotoIcon class="w-5 h-5" />
           <input
@@ -390,20 +421,20 @@ onUnmounted(() => {
                 :src="profile.avatar_url || 'https://via.placeholder.com/150'"
                 class="w-full h-full object-cover"
               />
-
-              <label
-                v-if="isOwnProfile"
-                class="absolute bottom-2 right-2 bg-yellow-500 p-2 lg:p-2.5 rounded-xl text-black shadow-2xl cursor-pointer active:scale-110 transition-all border-[3px] border-black z-20"
-              >
-                <CameraIcon class="w-3.5 h-3.5 lg:w-4.5 lg:h-4.5" />
-                <input
-                  type="file"
-                  class="hidden"
-                  @change="handleFileSelect($event, 'avatar')"
-                  accept="image/*"
-                />
-              </label>
             </div>
+
+            <label
+              v-if="isOwnProfile"
+              class="absolute -bottom-1 -right-1 lg:bottom-2 lg:right-2 bg-yellow-500 p-2 lg:p-2.5 rounded-xl text-black shadow-2xl cursor-pointer active:scale-110 transition-all border-4 border-black z-[30]"
+            >
+              <CameraIcon class="w-3.5 h-3.5 lg:w-4.5 lg:h-4.5" />
+              <input
+                type="file"
+                class="hidden"
+                @change="handleFileSelect($event, 'avatar')"
+                accept="image/*"
+              />
+            </label>
           </div>
 
           <div
@@ -720,6 +751,14 @@ onUnmounted(() => {
                       "{{ review.comment }}"
                     </p>
                   </div>
+
+                  <button
+                    v-if="currentUser && !isOwnProfile"
+                    @click="showReviewModal = true"
+                    class="w-full py-6 bg-white/5 border border-dashed border-white/10 rounded-[32px] text-[11px] tracking-widest text-gray-500 hover:text-yellow-500 italic font-black transition-all"
+                  >
+                    + LOG NEW OBSERVATION TRANSMISSION
+                  </button>
                 </div>
               </div>
             </div>
@@ -772,6 +811,98 @@ onUnmounted(() => {
               v-if="isUploading"
               class="w-5 h-5 animate-spin"
             /><span v-else>SYNC & UPLOAD ASSET</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="showReportModal"
+      class="fixed inset-0 z-[200] flex items-center justify-center px-6"
+    >
+      <div
+        class="absolute inset-0 bg-black/95 backdrop-blur-lg"
+        @click="showReportModal = false"
+      ></div>
+      <div
+        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-10 shadow-2xl"
+      >
+        <div class="text-center mb-8">
+          <div
+            class="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-red-500/20"
+          >
+            <ExclamationTriangleIcon class="w-8 h-8 text-red-500" />
+          </div>
+          <h3 class="text-xl font-black italic uppercase text-white">
+            Report Profil
+          </h3>
+        </div>
+        <div class="space-y-6">
+          <textarea
+            v-model="reportForm.details"
+            rows="4"
+            placeholder="Alasan pelaporan..."
+            class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-red-500 italic font-bold"
+          ></textarea>
+          <div class="flex gap-3">
+            <button
+              @click="showReportModal = false"
+              class="flex-1 py-5 bg-white/5 rounded-3xl text-[10px] font-black italic uppercase"
+            >
+              CANCEL
+            </button>
+            <button
+              @click="submitReport"
+              :disabled="isSubmittingReport"
+              class="flex-[2] bg-red-600 text-white py-5 rounded-3xl font-black text-[10px] italic uppercase"
+            >
+              {{ isSubmittingReport ? "TRANSMITTING..." : "CONFIRM REPORT" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="showReviewModal"
+      class="fixed inset-0 z-[200] flex items-center justify-center px-6"
+    >
+      <div
+        class="absolute inset-0 bg-black/95 backdrop-blur-lg"
+        @click="showReviewModal = false"
+      ></div>
+      <div
+        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-10 shadow-2xl"
+      >
+        <div class="text-center mb-8">
+          <h3 class="text-xl font-black italic uppercase text-white">
+            Log Observation
+          </h3>
+        </div>
+        <div class="space-y-6">
+          <div class="flex justify-center gap-2">
+            <StarIconSolid
+              v-for="i in 5"
+              :key="i"
+              @click="newReview.rating = i"
+              :class="
+                i <= newReview.rating ? 'text-yellow-500' : 'text-gray-800'
+              "
+              class="w-8 h-8 cursor-pointer"
+            />
+          </div>
+          <textarea
+            v-model="newReview.comment"
+            rows="4"
+            placeholder="Describe quality..."
+            class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-yellow-500 italic font-bold"
+          ></textarea>
+          <button
+            @click="submitReview"
+            :disabled="submittingReview"
+            class="w-full bg-yellow-500 text-black py-5 rounded-3xl font-black text-[10px] italic uppercase"
+          >
+            {{ submittingReview ? "SYNCING..." : "CONFIRM LOG" }}
           </button>
         </div>
       </div>
