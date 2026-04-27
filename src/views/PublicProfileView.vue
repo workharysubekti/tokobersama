@@ -50,9 +50,8 @@ const fileToUpload = ref(null);
 const followersCount = ref(0);
 const followingCount = ref(0);
 
-// --- NEW STATES FOR CROP & UPLOAD ---
 const showCropModal = ref(false);
-const cropType = ref(""); // 'avatar' or 'cover'
+const cropType = ref("");
 const selectedFile = ref(null);
 const isUploading = ref(false);
 
@@ -133,7 +132,7 @@ const fetchData = async () => {
 
     reviews.value = reviewsRes.data || [];
     soldItems.value = soldRes.data || [];
-    wonItems.value = wonItems.value = wonRes.data || [];
+    wonItems.value = wonRes.data || [];
     archivedItems.value = archRes.data || [];
     followersCount.value = followersRes.count || 0;
     followingCount.value = followingRes.count || 0;
@@ -175,7 +174,7 @@ const fetchData = async () => {
   }
 };
 
-// --- UPLOAD & CROP LOGIC ---
+// --- LOGIKA UPLOAD & CROP (TIDAK DISENTUH) ---
 const handleFileSelect = (event, type) => {
   const file = event.target.files[0];
   if (file) {
@@ -188,53 +187,38 @@ const handleFileSelect = (event, type) => {
 
 const executeUpload = async () => {
   if (!fileToUpload.value || !currentUser.value) return;
-
   isUploading.value = true;
   try {
     const file = fileToUpload.value;
     const fileExt = file.name.split(".").pop();
     const fileName = `${currentUser.value.id}-${Math.random()}.${fileExt}`;
-
-    // Kita simpan di folder sesuai tipenya: 'avatars/...' atau 'covers/...'
     const filePath = `${currentUser.value.id}/${fileName}`;
-
-    // 1. Upload ke Supabase Storage
-    // Pastikan Mas sudah buat bucket bernama 'avatars' (atau sesuaikan namanya)
     const { error: uploadError } = await supabase.storage
       .from(cropType.value === "avatar" ? "avatars" : "covers")
       .upload(filePath, file);
-
     if (uploadError) throw uploadError;
-
-    // 2. Ambil Public URL hasil upload
     const {
       data: { publicUrl },
-    } = supabase.storage.from("avatars").getPublicUrl(filePath);
-
-    // 3. Update Database Profiles secara Dinamis
+    } = supabase.storage
+      .from(cropType.value === "avatar" ? "avatars" : "covers")
+      .getPublicUrl(filePath);
     const updateData = {};
     const columnName = cropType.value === "avatar" ? "avatar_url" : "cover_url";
     updateData[columnName] = publicUrl;
-
     const { error: updateError } = await supabase
       .from("profiles")
       .update(updateData)
       .eq("id", currentUser.value.id);
-
     if (updateError) throw updateError;
-
-    // 4. Update State lokal agar tampilan langsung berubah tanpa reload
     if (profile.value) {
       profile.value[columnName] = publicUrl;
     }
-
     notify.success(
       `${cropType.value === "avatar" ? "Foto Profil" : "Sampul"} Berhasil Diperbarui!`,
     );
     showCropModal.value = false;
-    fileToUpload.value = null; // Reset file
+    fileToUpload.value = null;
   } catch (err) {
-    console.error("Upload Error:", err);
     notify.error("Upload Gagal", err.message);
   } finally {
     isUploading.value = false;
@@ -360,37 +344,29 @@ onUnmounted(() => {
   >
     <div v-if="profile" class="relative">
       <div
-        class="flex items-center justify-between px-6 py-6 border-b border-white/5 bg-black/80 backdrop-blur-xl sticky top-0 z-[100]"
-      >
-        <button
-          @click="router.back()"
-          class="p-2 bg-white/5 rounded-xl border border-white/10 active:scale-90 transition-all"
-        >
-          <ArrowLeftIcon class="w-5 h-5" />
-        </button>
-        <p class="text-[10px] tracking-[0.3em] text-yellow-500 uppercase">
-          Profile Transmission
-        </p>
-        <div class="w-10"></div>
-      </div>
-
-      <div
-        class="relative w-full h-48 lg:h-80 bg-[#0a0a0a] overflow-hidden group"
+        class="relative w-full h-56 lg:h-96 bg-[#0a0a0a] overflow-hidden group"
       >
         <img
           :src="
             profile.cover_url ||
             'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=2070&auto=format&fit=crop'
           "
-          class="w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-all duration-700"
+          class="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-all duration-700"
         />
         <div
           class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"
         ></div>
 
+        <button
+          @click="router.back()"
+          class="absolute top-6 left-6 p-2.5 bg-black/40 backdrop-blur-md rounded-xl border border-white/10 active:scale-90 transition-all z-[50]"
+        >
+          <ArrowLeftIcon class="w-5 h-5 text-white" />
+        </button>
+
         <label
           v-if="isOwnProfile"
-          class="absolute bottom-4 right-6 p-3 bg-black/60 border border-white/10 rounded-2xl cursor-pointer hover:bg-yellow-500 hover:text-black transition-all"
+          class="absolute bottom-6 right-8 p-3 bg-black/60 border border-white/10 rounded-2xl cursor-pointer hover:bg-yellow-500 hover:text-black transition-all"
         >
           <PhotoIcon class="w-5 h-5" />
           <input
@@ -402,15 +378,13 @@ onUnmounted(() => {
         </label>
       </div>
 
-      <div
-        class="max-w-6xl mx-auto px-6 lg:flex lg:gap-12 relative -mt-16 lg:-mt-24 z-10 items-start"
-      >
-        <div
-          class="lg:w-1/3 flex flex-col items-center lg:items-start text-center lg:text-left"
-        >
-          <div class="relative mb-6">
+      <div class="max-w-6xl mx-auto px-6 relative -mt-20 lg:-mt-28 z-10">
+        <div class="flex flex-col lg:flex-row lg:items-end lg:gap-10">
+          <div
+            class="relative flex flex-col items-center lg:items-start flex-shrink-0"
+          >
             <div
-              class="w-32 h-32 lg:w-44 lg:h-44 rounded-[40px] border-[6px] border-black overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)] bg-black relative ring-1 ring-white/5"
+              class="w-36 h-36 lg:w-52 lg:h-52 rounded-[45px] border-[8px] border-black overflow-hidden shadow-2xl bg-black relative ring-1 ring-white/5"
             >
               <img
                 :src="profile.avatar_url || 'https://via.placeholder.com/150'"
@@ -419,9 +393,9 @@ onUnmounted(() => {
             </div>
             <label
               v-if="isOwnProfile"
-              class="absolute bottom-2 right-2 bg-yellow-500 p-3 rounded-2xl text-black shadow-2xl cursor-pointer active:scale-110 transition-all border-4 border-black"
+              class="absolute bottom-1 right-1 lg:bottom-2 lg:right-2 bg-yellow-500 p-2 lg:p-2.5 rounded-xl text-black shadow-2xl cursor-pointer active:scale-110 transition-all border-4 border-black"
             >
-              <CameraIcon class="w-5 h-5" />
+              <CameraIcon class="w-4 h-4 lg:w-5 lg:h-5" />
               <input
                 type="file"
                 class="hidden"
@@ -431,305 +405,322 @@ onUnmounted(() => {
             </label>
           </div>
 
-          <h1 class="text-3xl lg:text-5xl tracking-tighter mb-1 text-white">
-            {{ profile.full_name }}
-          </h1>
-          <p
-            class="text-[10px] lg:text-xs text-yellow-500/50 tracking-[0.4em] mb-8"
-          >
-            @{{ profile.username }}
-          </p>
-
           <div
-            class="flex items-center gap-4 lg:gap-8 mb-10 text-[10px] lg:text-xs tracking-[0.2em] text-gray-500"
+            class="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left mt-6 lg:mb-4"
           >
-            <div
-              @click="router.push(`/user/${profile.username}/followers`)"
-              class="text-center lg:text-left cursor-pointer hover:opacity-70 transition-all"
-            >
-              <p class="text-white text-xl lg:text-2xl mb-0.5">
-                {{ followersCount }}
-              </p>
-              <p>PENGIKUT</p>
+            <div class="lg:flex lg:items-center lg:gap-6">
+              <h1 class="text-4xl lg:text-6xl tracking-tighter text-white">
+                {{ profile.full_name }}
+              </h1>
+
+              <div class="hidden lg:flex items-center gap-4">
+                <div
+                  :class="[userRank.bg, userRank.color]"
+                  class="px-5 py-1.5 rounded-full border border-white/5 text-[9px] flex items-center gap-2"
+                >
+                  <component :is="userRank.icon" class="w-3.5 h-3.5" />
+                  <span>{{ userRank.name }}</span>
+                </div>
+                <div
+                  class="flex items-center gap-1.5 text-yellow-500 bg-yellow-500/5 px-4 py-1.5 rounded-full border border-yellow-500/10"
+                >
+                  <StarIconSolid class="w-3.5 h-3.5" />
+                  <span class="text-xs font-black italic"
+                    >{{ averageRating }}/5.0</span
+                  >
+                </div>
+              </div>
             </div>
-            <div class="w-px h-8 bg-white/10"></div>
-            <div
-              @click="router.push(`/user/${profile.username}/following`)"
-              class="text-center lg:text-left cursor-pointer hover:opacity-70 transition-all"
-            >
-              <p class="text-white text-xl lg:text-2xl mb-0.5">
-                {{ followingCount }}
-              </p>
-              <p>MENGIKUTI</p>
-            </div>
-            <div class="w-px h-8 bg-white/10"></div>
-            <div class="text-center lg:text-left">
-              <p class="text-white text-xl lg:text-2xl mb-0.5">
-                {{ profile.reputation || 0 }}
-              </p>
-              <p>REPUTASI</p>
-            </div>
-          </div>
 
-          <div class="flex items-center gap-3 w-full mb-10">
-            <button
-              v-if="!isOwnProfile"
-              @click="toggleFollow"
-              :class="
-                isFollowing
-                  ? 'bg-white/5 text-white border-white/10'
-                  : 'bg-yellow-500 text-black'
-              "
-              class="flex-[3] py-4 lg:py-5 rounded-[24px] text-[10px] lg:text-xs font-black tracking-widest border transition-all active:scale-95"
-            >
-              {{ isFollowing ? "BERHENTI MENGIKUTI" : "IKUTI USER" }}
-            </button>
-            <button
-              v-else
-              @click="router.push('/profile')"
-              class="flex-1 py-4 lg:py-5 bg-white/5 border border-white/10 rounded-[24px] text-[10px] lg:text-xs font-black tracking-widest text-yellow-500 active:scale-95 transition-all"
-            >
-              MODIFIKASI PROFIL SAYA
-            </button>
-
-            <button
-              v-if="!isOwnProfile"
-              @click="router.push(`/messages/${profile.id}`)"
-              class="flex-1 p-4 lg:p-5 bg-white/5 border border-white/10 rounded-[24px] flex items-center justify-center hover:bg-white/10 transition-all"
-            >
-              <ChatBubbleLeftEllipsisIcon class="w-6 h-6 text-yellow-500" />
-            </button>
-
-            <button
-              v-if="currentUser && !isOwnProfile"
-              @click="showReportModal = true"
-              class="flex-1 p-4 lg:p-5 bg-red-500/10 border border-red-500/20 rounded-[24px] flex items-center justify-center text-red-500"
-            >
-              <ExclamationTriangleIcon class="w-6 h-6" />
-            </button>
-          </div>
-
-          <div class="space-y-6 w-full max-w-sm lg:max-w-none">
             <p
-              class="text-gray-400 text-[12px] lg:text-[14px] leading-relaxed normal-case italic font-bold"
+              class="text-[10px] lg:text-xs text-yellow-500/50 tracking-[0.4em] mb-6 lg:mb-4"
+            >
+              @{{ profile.username }}
+            </p>
+
+            <div
+              class="flex items-center gap-6 lg:gap-10 text-[10px] lg:text-xs tracking-[0.2em] text-gray-500 mb-8 lg:mb-0"
+            >
+              <div
+                @click="router.push(`/user/${profile.username}/followers`)"
+                class="cursor-pointer hover:text-white transition-all text-center lg:text-left"
+              >
+                <p class="text-white text-xl lg:text-3xl mb-0.5 leading-none">
+                  {{ followersCount }}
+                </p>
+                <p>PENGIKUT</p>
+              </div>
+              <div class="w-px h-8 bg-white/10"></div>
+              <div
+                @click="router.push(`/user/${profile.username}/following`)"
+                class="cursor-pointer hover:text-white transition-all text-center lg:text-left"
+              >
+                <p class="text-white text-xl lg:text-3xl mb-0.5 leading-none">
+                  {{ followingCount }}
+                </p>
+                <p>MENGIKUTI</p>
+              </div>
+              <div class="w-px h-8 bg-white/10"></div>
+              <div class="text-center lg:text-left">
+                <p class="text-white text-xl lg:text-3xl mb-0.5 leading-none">
+                  {{ profile.reputation || 0 }}
+                </p>
+                <p>REPUTASI</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-8 lg:mt-12 lg:flex lg:items-start lg:gap-16">
+          <div class="w-full lg:w-1/3 flex flex-col gap-6">
+            <div class="flex items-center gap-3 w-full">
+              <button
+                v-if="!isOwnProfile"
+                @click="toggleFollow"
+                :class="
+                  isFollowing
+                    ? 'bg-white/5 text-white border-white/10'
+                    : 'bg-yellow-500 text-black'
+                "
+                class="flex-[3] py-4 rounded-[22px] text-[10px] lg:text-xs font-black tracking-widest border transition-all active:scale-95"
+              >
+                {{ isFollowing ? "UNFOLLOW" : "IKUTI USER" }}
+              </button>
+              <button
+                v-else
+                @click="router.push('/profile')"
+                class="flex-1 py-4 bg-white/5 border border-white/10 rounded-[22px] text-[10px] lg:text-xs font-black tracking-widest text-yellow-500 active:scale-95 transition-all"
+              >
+                MODIFIKASI PROFIL SAYA
+              </button>
+              <button
+                v-if="!isOwnProfile"
+                @click="router.push(`/messages/${profile.id}`)"
+                class="flex-1 p-4 bg-white/5 border border-white/10 rounded-[22px] flex items-center justify-center hover:bg-white/10 transition-all"
+              >
+                <ChatBubbleLeftEllipsisIcon class="w-6 h-6 text-yellow-500" />
+              </button>
+              <button
+                v-if="currentUser && !isOwnProfile"
+                @click="showReportModal = true"
+                class="flex-1 p-4 bg-red-500/10 border border-red-500/20 rounded-[22px] flex items-center justify-center text-red-500"
+              >
+                <ExclamationTriangleIcon class="w-6 h-6" />
+              </button>
+            </div>
+
+            <p
+              class="text-gray-400 text-[13px] leading-relaxed normal-case italic font-bold"
             >
               "{{ profile.bio || "NO BIOGRAPHICAL DATA TRANSMITTED." }}"
             </p>
 
-            <div
-              class="flex items-center justify-center lg:justify-start gap-4"
-            >
+            <div class="lg:hidden flex items-center justify-center gap-4">
               <div
                 :class="[userRank.bg, userRank.color]"
-                class="px-8 py-3 rounded-full border border-white/5 text-[10px] flex items-center gap-3"
+                class="px-6 py-2 rounded-full border border-white/5 text-[10px] flex items-center gap-2"
               >
                 <component :is="userRank.icon" class="w-4 h-4" />
                 <span>{{ userRank.name }}</span>
               </div>
-              <div class="flex items-center gap-2 text-yellow-500">
-                <StarIconSolid class="w-4 h-4" />
+              <div
+                class="flex items-center gap-2 text-yellow-500 bg-yellow-500/5 px-4 py-2 rounded-full border border-yellow-500/10"
+              >
+                <StarIconSolid class="w-3.5 h-3.5" />
                 <span class="text-sm font-black italic"
                   >{{ averageRating }}/5.0</span
                 >
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="lg:w-2/3 mt-12 lg:mt-0">
-          <div
-            class="flex border-b border-white/5 mb-8 bg-black sticky top-20 lg:top-24 z-40 backdrop-blur-md"
-          >
-            <button
-              v-for="tab in ['live', 'records', 'reviews']"
-              :key="tab"
-              @click="activeTab = tab"
-              :class="
-                activeTab === tab
-                  ? 'text-yellow-500 border-b-4 border-yellow-500'
-                  : 'text-gray-600'
-              "
-              class="flex-1 py-5 text-[11px] tracking-[0.4em] font-black uppercase italic transition-all"
-            >
-              {{ tab }}
-            </button>
-          </div>
-
-          <div class="min-h-[500px]">
+          <div class="w-full lg:flex-1 mt-12 lg:mt-0">
             <div
-              v-if="activeTab === 'live'"
-              class="grid grid-cols-2 sm:grid-cols-3 gap-4"
+              class="bg-[#0a0a0a] border border-white/5 rounded-[40px] lg:rounded-[50px] overflow-hidden p-6 lg:p-10 shadow-2xl"
             >
-              <div
-                v-for="item in listings"
-                :key="item.id"
-                @click="router.push(`/product/${item.id}`)"
-                class="bg-white/[0.02] border border-white/5 rounded-[32px] overflow-hidden aspect-square relative group cursor-pointer shadow-xl"
-              >
-                <img
-                  :src="item.image_url"
-                  class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-500 group-hover:scale-110"
-                />
-                <div
-                  v-if="item.is_priority"
-                  class="absolute top-3 right-3 bg-yellow-500 p-2 rounded-full shadow-xl border-2 border-black z-10"
-                >
-                  <StarIconSolid class="w-3 h-3 text-black" />
-                </div>
-                <div
-                  class="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black to-transparent"
-                >
-                  <p class="text-[10px] truncate mb-1 text-white">
-                    {{ item.name }}
-                  </p>
-                  <p class="text-yellow-500 text-xs font-black italic">
-                    IDR {{ item.display_price?.toLocaleString() }}
-                  </p>
-                </div>
-              </div>
-              <div
-                v-if="listings.length === 0"
-                class="col-span-full py-20 text-center opacity-20"
-              >
-                <ArchiveBoxIcon class="w-16 h-16 mx-auto mb-4" />
-                <p class="text-[10px] tracking-[0.5em]">
-                  NO LIVE TRANSMISSIONS
-                </p>
-              </div>
-            </div>
-
-            <div v-if="activeTab === 'records'" class="space-y-6">
-              <div
-                class="flex gap-3 p-1.5 bg-white/[0.03] border border-white/5 rounded-[24px]"
-              >
+              <div class="flex border-b border-white/5 mb-10">
                 <button
-                  v-for="sub in [
-                    { id: 'sold', name: 'SOLD' },
-                    { id: 'bought', name: 'BOUGHT' },
-                    { id: 'archived', name: 'ARCHIVE' },
-                  ]"
-                  :key="sub.id"
-                  @click="activeRecordTab = sub.id"
+                  v-for="tab in ['live', 'records', 'reviews']"
+                  :key="tab"
+                  @click="activeTab = tab"
                   :class="
-                    activeRecordTab === sub.id
-                      ? 'bg-white/10 text-white shadow-lg'
+                    activeTab === tab
+                      ? 'text-yellow-500 border-b-4 border-yellow-500'
                       : 'text-gray-600'
                   "
-                  class="flex-1 py-3 rounded-[18px] text-[9px] font-black tracking-widest transition-all italic"
+                  class="flex-1 py-5 text-[11px] lg:text-xs tracking-[0.4em] font-black uppercase italic transition-all"
                 >
-                  {{ sub.name }}
+                  {{ tab }}
                 </button>
               </div>
-              <div
-                v-if="activeRecordTab === 'sold'"
-                class="grid grid-cols-2 sm:grid-cols-3 gap-4"
-              >
-                <div
-                  v-for="item in soldItems"
-                  :key="item.id"
-                  class="bg-white/5 border border-white/5 rounded-[32px] p-4 group transition-all"
-                >
-                  <img
-                    :src="item.image_url"
-                    class="w-full h-32 object-cover rounded-2xl mb-4 grayscale group-hover:grayscale-0 transition-all"
-                  />
-                  <p class="text-[10px] truncate font-black italic">
-                    {{ item.name }}
-                  </p>
-                </div>
-              </div>
-              <div
-                v-if="activeRecordTab === 'bought'"
-                class="grid grid-cols-2 sm:grid-cols-3 gap-4"
-              >
-                <div
-                  v-for="item in wonItems"
-                  :key="item.id"
-                  class="bg-white/5 border border-white/5 rounded-[32px] p-4 relative group transition-all"
-                >
-                  <img
-                    :src="item.image_url"
-                    class="w-full h-32 object-cover rounded-2xl mb-4 grayscale group-hover:grayscale-0 transition-all"
-                  />
-                  <p class="text-[10px] truncate font-black italic">
-                    {{ item.name }}
-                  </p>
-                  <CheckBadgeIcon
-                    class="absolute top-4 right-4 w-6 h-6 text-green-500 drop-shadow-xl"
-                  />
-                </div>
-              </div>
 
-              <div
-                v-if="activeRecordTab === 'archived'"
-                class="grid grid-cols-2 sm:grid-cols-3 gap-4"
-              >
+              <div class="min-h-[400px]">
                 <div
-                  v-for="item in archivedItems"
-                  :key="item.id"
-                  class="bg-white/5 border border-white/5 rounded-[32px] p-4 flex flex-col"
+                  v-if="activeTab === 'live'"
+                  class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4"
                 >
-                  <img
-                    :src="item.image_url"
-                    class="w-full h-32 object-cover rounded-2xl mb-4 opacity-40 grayscale"
-                  />
-                  <div class="flex justify-between items-center">
-                    <p class="text-[10px] truncate font-black italic flex-1">
-                      {{ item.name }}
-                    </p>
-                    <span class="text-[8px] text-gray-500">ENDED</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="activeTab === 'reviews'" class="space-y-6">
-              <div
-                v-for="review in reviews"
-                :key="review.id"
-                class="bg-white/[0.02] border border-white/5 rounded-[32px] p-8"
-              >
-                <div class="flex justify-between items-start mb-6">
-                  <div class="flex items-center gap-4">
+                  <div
+                    v-for="item in listings"
+                    :key="item.id"
+                    @click="router.push(`/product/${item.id}`)"
+                    class="bg-white/[0.02] border border-white/5 rounded-[32px] overflow-hidden aspect-square relative group cursor-pointer shadow-xl"
+                  >
                     <img
-                      :src="review.reviewer?.avatar_url"
-                      class="w-12 h-12 rounded-2xl border border-white/10"
+                      :src="item.image_url"
+                      class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-500 group-hover:scale-110"
                     />
-                    <div>
-                      <p class="text-xs text-white">
-                        @{{ review.reviewer?.username }}
+                    <div
+                      v-if="item.is_priority"
+                      class="absolute top-3 right-3 bg-yellow-500 p-2 rounded-full shadow-xl border-2 border-black z-10"
+                    >
+                      <StarIconSolid class="w-3 h-3 text-black" />
+                    </div>
+                    <div
+                      class="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black to-transparent"
+                    >
+                      <p class="text-[10px] truncate mb-1 text-white">
+                        {{ item.name }}
                       </p>
-                      <div class="flex gap-1 mt-1.5">
-                        <StarIconSolid
-                          v-for="i in 5"
-                          :key="i"
-                          :class="
-                            i <= review.rating
-                              ? 'text-yellow-500'
-                              : 'text-gray-900'
-                          "
-                          class="w-3 h-3"
-                        />
-                      </div>
+                      <p class="text-yellow-500 text-xs font-black italic">
+                        IDR {{ item.display_price?.toLocaleString() }}
+                      </p>
                     </div>
                   </div>
-                  <span class="text-[9px] text-gray-700 italic font-black">{{
-                    new Date(review.created_at).toLocaleDateString()
-                  }}</span>
+                  <div
+                    v-if="listings.length === 0"
+                    class="col-span-full py-20 text-center opacity-20"
+                  >
+                    <ArchiveBoxIcon class="w-16 h-16 mx-auto mb-4" />
+                    <p class="text-[10px] tracking-[0.5em]">
+                      NO LIVE TRANSMISSIONS
+                    </p>
+                  </div>
                 </div>
-                <p
-                  class="text-[13px] leading-relaxed text-gray-400 normal-case italic font-bold"
-                >
-                  "{{ review.comment }}"
-                </p>
+
+                <div v-if="activeTab === 'records'" class="space-y-6">
+                  <div
+                    class="flex gap-3 p-1.5 bg-white/[0.03] border border-white/5 rounded-[24px]"
+                  >
+                    <button
+                      v-for="sub in [
+                        { id: 'sold', name: 'SOLD' },
+                        { id: 'bought', name: 'BOUGHT' },
+                        { id: 'archived', name: 'ARCHIVE' },
+                      ]"
+                      :key="sub.id"
+                      @click="activeRecordTab = sub.id"
+                      :class="
+                        activeRecordTab === sub.id
+                          ? 'bg-white/10 text-white shadow-lg'
+                          : 'text-gray-600'
+                      "
+                      class="flex-1 py-3 rounded-[18px] text-[9px] font-black tracking-widest transition-all italic uppercase"
+                    >
+                      {{ sub.name }}
+                    </button>
+                  </div>
+                  <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                    <template v-if="activeRecordTab === 'sold'">
+                      <div
+                        v-for="item in soldItems"
+                        :key="item.id"
+                        class="bg-white/5 border border-white/5 rounded-[32px] p-4 group transition-all"
+                      >
+                        <img
+                          :src="item.image_url"
+                          class="w-full h-32 object-cover rounded-2xl mb-4 grayscale group-hover:grayscale-0 transition-all"
+                        />
+                        <p class="text-[10px] truncate font-black italic">
+                          {{ item.name }}
+                        </p>
+                      </div>
+                    </template>
+                    <template v-if="activeRecordTab === 'bought'">
+                      <div
+                        v-for="item in wonItems"
+                        :key="item.id"
+                        class="bg-white/5 border border-white/5 rounded-[32px] p-4 relative group transition-all"
+                      >
+                        <img
+                          :src="item.image_url"
+                          class="w-full h-32 object-cover rounded-2xl mb-4 grayscale group-hover:grayscale-0 transition-all"
+                        />
+                        <p class="text-[10px] truncate font-black italic">
+                          {{ item.name }}
+                        </p>
+                        <CheckBadgeIcon
+                          class="absolute top-4 right-4 w-6 h-6 text-green-500 drop-shadow-xl"
+                        />
+                      </div>
+                    </template>
+                    <template v-if="activeRecordTab === 'archived'">
+                      <div
+                        v-for="item in archivedItems"
+                        :key="item.id"
+                        class="bg-white/5 border border-white/5 rounded-[32px] p-4 flex flex-col"
+                      >
+                        <img
+                          :src="item.image_url"
+                          class="w-full h-32 object-cover rounded-2xl mb-4 opacity-40 grayscale"
+                        />
+                        <div class="flex justify-between items-center">
+                          <p
+                            class="text-[10px] truncate font-black italic flex-1"
+                          >
+                            {{ item.name }}
+                          </p>
+                          <span class="text-[8px] text-gray-500">ENDED</span>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+                <div v-if="activeTab === 'reviews'" class="space-y-6">
+                  <div
+                    v-for="review in reviews"
+                    :key="review.id"
+                    class="bg-white/[0.02] border border-white/5 rounded-[32px] p-8"
+                  >
+                    <div class="flex justify-between items-start mb-6">
+                      <div class="flex items-center gap-4">
+                        <img
+                          :src="review.reviewer?.avatar_url"
+                          class="w-12 h-12 rounded-2xl border border-white/10"
+                        />
+                        <div>
+                          <p class="text-xs text-white">
+                            @{{ review.reviewer?.username }}
+                          </p>
+                          <div class="flex gap-1 mt-1.5">
+                            <StarIconSolid
+                              v-for="i in 5"
+                              :key="i"
+                              :class="
+                                i <= review.rating
+                                  ? 'text-yellow-500'
+                                  : 'text-gray-900'
+                              "
+                              class="w-3 h-3"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <span
+                        class="text-[9px] text-gray-700 italic font-black uppercase"
+                        >{{
+                          new Date(review.created_at).toLocaleDateString()
+                        }}</span
+                      >
+                    </div>
+                    <p
+                      class="text-[13px] leading-relaxed text-gray-400 normal-case italic font-bold"
+                    >
+                      "{{ review.comment }}"
+                    </p>
+                  </div>
+                </div>
               </div>
-              <button
-                v-if="currentUser && !isOwnProfile"
-                @click="showReviewModal = true"
-                class="w-full py-6 bg-white/5 border border-dashed border-white/10 rounded-[32px] text-[11px] tracking-widest text-gray-500 hover:text-yellow-500 italic font-black transition-all"
-              >
-                + LOG NEW OBSERVATION TRANSMISSION
-              </button>
             </div>
           </div>
         </div>
@@ -776,100 +767,10 @@ onUnmounted(() => {
             :disabled="isUploading"
             class="w-full bg-yellow-500 text-black py-5 rounded-[25px] font-black italic uppercase text-xs flex items-center justify-center gap-3"
           >
-            <ArrowPathIcon v-if="isUploading" class="w-5 h-5 animate-spin" />
-            <span v-else>SYNC & UPLOAD ASSET</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div
-      v-if="showReportModal"
-      class="fixed inset-0 z-[200] flex items-center justify-center px-6"
-    >
-      <div
-        class="absolute inset-0 bg-black/95 backdrop-blur-lg"
-        @click="showReportModal = false"
-      ></div>
-      <div
-        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-10 shadow-2xl"
-      >
-        <div class="text-center mb-8">
-          <div
-            class="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-red-500/20"
-          >
-            <ExclamationTriangleIcon class="w-8 h-8 text-red-500" />
-          </div>
-          <h3 class="text-xl font-black italic uppercase text-white">
-            Report Profil
-          </h3>
-        </div>
-        <div class="space-y-6">
-          <textarea
-            v-model="reportForm.details"
-            rows="4"
-            placeholder="Alasan pelaporan..."
-            class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-red-500 italic font-bold"
-          ></textarea>
-          <div class="flex gap-3">
-            <button
-              @click="showReportModal = false"
-              class="flex-1 py-5 bg-white/5 rounded-3xl text-[10px] font-black italic uppercase"
-            >
-              CANCEL
-            </button>
-            <button
-              @click="submitReport"
-              :disabled="isSubmittingReport"
-              class="flex-[2] bg-red-600 text-white py-5 rounded-3xl font-black text-[10px] italic uppercase"
-            >
-              {{ isSubmittingReport ? "TRANSMITTING..." : "CONFIRM REPORT" }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div
-      v-if="showReviewModal"
-      class="fixed inset-0 z-[200] flex items-center justify-center px-6"
-    >
-      <div
-        class="absolute inset-0 bg-black/95 backdrop-blur-lg"
-        @click="showReviewModal = false"
-      ></div>
-      <div
-        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-10 shadow-2xl"
-      >
-        <div class="text-center mb-8">
-          <h3 class="text-xl font-black italic uppercase text-white">
-            Log Observation
-          </h3>
-        </div>
-        <div class="space-y-6">
-          <div class="flex justify-center gap-2">
-            <StarIconSolid
-              v-for="i in 5"
-              :key="i"
-              @click="newReview.rating = i"
-              :class="
-                i <= newReview.rating ? 'text-yellow-500' : 'text-gray-800'
-              "
-              class="w-8 h-8 cursor-pointer"
-            />
-          </div>
-          <textarea
-            v-model="newReview.comment"
-            rows="4"
-            placeholder="Describe quality..."
-            class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-yellow-500 italic font-bold"
-          ></textarea>
-          <button
-            @click="submitReview"
-            :disabled="submittingReview"
-            class="w-full bg-yellow-500 text-black py-5 rounded-3xl font-black text-[10px] italic uppercase"
-          >
-            {{ submittingReview ? "SYNCING..." : "CONFIRM LOG" }}
+            <ArrowPathIcon
+              v-if="isUploading"
+              class="w-5 h-5 animate-spin"
+            /><span v-else>SYNC & UPLOAD ASSET</span>
           </button>
         </div>
       </div>
