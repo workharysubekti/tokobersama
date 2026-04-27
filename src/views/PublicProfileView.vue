@@ -132,7 +132,7 @@ const fetchData = async () => {
 
     reviews.value = reviewsRes.data || [];
     soldItems.value = soldRes.data || [];
-    wonItems.value = wonRes.data || [];
+    wonItems.value = wonItems.value = wonRes.data || [];
     archivedItems.value = archRes.data || [];
     followersCount.value = followersRes.count || 0;
     followingCount.value = followingRes.count || 0;
@@ -174,7 +174,7 @@ const fetchData = async () => {
   }
 };
 
-// --- LOGIKA UPLOAD & CROP (TIDAK DISENTUH) ---
+// --- LOGIKA UPLOAD & CROP ---
 const handleFileSelect = (event, type) => {
   const file = event.target.files[0];
   if (file) {
@@ -225,7 +225,7 @@ const executeUpload = async () => {
   }
 };
 
-// --- LOGIKA FOLLOW & RATING (TIDAK DISENTUH) ---
+// --- LOGIKA FOLLOW & RATING ---
 const toggleFollow = async () => {
   if (!currentUser.value) return router.push("/login");
   if (isOwnProfile.value) return;
@@ -381,7 +381,7 @@ onUnmounted(() => {
       <div class="max-w-6xl mx-auto px-6 relative -mt-20 lg:-mt-28 z-10">
         <div class="flex flex-col lg:flex-row lg:items-end lg:gap-10">
           <div
-            class="relative flex flex-col items-center lg:items-start flex-shrink-0"
+            class="relative flex flex-col items-center lg:items-start flex-shrink-0 self-center lg:self-end"
           >
             <div
               class="w-36 h-36 lg:w-52 lg:h-52 rounded-[45px] border-[8px] border-black overflow-hidden shadow-2xl bg-black relative ring-1 ring-white/5"
@@ -390,19 +390,20 @@ onUnmounted(() => {
                 :src="profile.avatar_url || 'https://via.placeholder.com/150'"
                 class="w-full h-full object-cover"
               />
+
+              <label
+                v-if="isOwnProfile"
+                class="absolute bottom-2 right-2 bg-yellow-500 p-2 lg:p-2.5 rounded-xl text-black shadow-2xl cursor-pointer active:scale-110 transition-all border-[3px] border-black z-20"
+              >
+                <CameraIcon class="w-3.5 h-3.5 lg:w-4.5 lg:h-4.5" />
+                <input
+                  type="file"
+                  class="hidden"
+                  @change="handleFileSelect($event, 'avatar')"
+                  accept="image/*"
+                />
+              </label>
             </div>
-            <label
-              v-if="isOwnProfile"
-              class="absolute bottom-1 right-1 lg:bottom-2 lg:right-2 bg-yellow-500 p-2 lg:p-2.5 rounded-xl text-black shadow-2xl cursor-pointer active:scale-110 transition-all border-4 border-black"
-            >
-              <CameraIcon class="w-4 h-4 lg:w-5 lg:h-5" />
-              <input
-                type="file"
-                class="hidden"
-                @change="handleFileSelect($event, 'avatar')"
-                accept="image/*"
-              />
-            </label>
           </div>
 
           <div
@@ -510,7 +511,7 @@ onUnmounted(() => {
             </div>
 
             <p
-              class="text-gray-400 text-[13px] leading-relaxed normal-case italic font-bold"
+              class="text-gray-400 text-[13px] leading-relaxed normal-case italic font-bold text-center lg:text-left"
             >
               "{{ profile.bio || "NO BIOGRAPHICAL DATA TRANSMITTED." }}"
             </p>
@@ -557,7 +558,7 @@ onUnmounted(() => {
               <div class="min-h-[400px]">
                 <div
                   v-if="activeTab === 'live'"
-                  class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                  class="grid grid-cols-2 lg:grid-cols-3 gap-4"
                 >
                   <div
                     v-for="item in listings"
@@ -777,9 +778,3 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-.pb-26 {
-  padding-bottom: 6.5rem;
-}
-</style>
