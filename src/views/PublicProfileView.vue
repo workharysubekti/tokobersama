@@ -46,6 +46,7 @@ const currentUser = ref(null);
 const activeTab = ref("live");
 const activeRecordTab = ref("sold");
 
+const fileToUpload = ref(null);
 const followersCount = ref(0);
 const followingCount = ref(0);
 
@@ -178,6 +179,7 @@ const fetchData = async () => {
 const handleFileSelect = (event, type) => {
   const file = event.target.files[0];
   if (file) {
+    fileToUpload.value = file;
     selectedFile.value = URL.createObjectURL(file);
     cropType.value = type;
     showCropModal.value = true;
@@ -185,14 +187,58 @@ const handleFileSelect = (event, type) => {
 };
 
 const executeUpload = async () => {
-  // Logic upload ke Supabase Storage & Update Profile Table
-  // (Fungsi ini bisa Mas sambungkan ke logic upload yang sudah ada)
+  if (!fileToUpload.value || !currentUser.value) return;
+
   isUploading.value = true;
-  setTimeout(() => {
-    isUploading.value = false;
+  try {
+    const file = fileToUpload.value;
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${currentUser.value.id}-${Math.random()}.${fileExt}`;
+
+    // Kita simpan di folder sesuai tipenya: 'avatars/...' atau 'covers/...'
+    const filePath = `${currentUser.value.id}/${fileName}`;
+
+    // 1. Upload ke Supabase Storage
+    // Pastikan Mas sudah buat bucket bernama 'avatars' (atau sesuaikan namanya)
+    const { error: uploadError } = await supabase.storage
+      .from(cropType.value === "avatar" ? "avatars" : "covers")
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    // 2. Ambil Public URL hasil upload
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("avatars").getPublicUrl(filePath);
+
+    // 3. Update Database Profiles secara Dinamis
+    const updateData = {};
+    const columnName = cropType.value === "avatar" ? "avatar_url" : "cover_url";
+    updateData[columnName] = publicUrl;
+
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update(updateData)
+      .eq("id", currentUser.value.id);
+
+    if (updateError) throw updateError;
+
+    // 4. Update State lokal agar tampilan langsung berubah tanpa reload
+    if (profile.value) {
+      profile.value[columnName] = publicUrl;
+    }
+
+    notify.success(
+      `${cropType.value === "avatar" ? "Foto Profil" : "Sampul"} Berhasil Diperbarui!`,
+    );
     showCropModal.value = false;
-    notify.success(`${cropType.value} berhasil diperbarui!`);
-  }, 2000);
+    fileToUpload.value = null; // Reset file
+  } catch (err) {
+    console.error("Upload Error:", err);
+    notify.error("Upload Gagal", err.message);
+  } finally {
+    isUploading.value = false;
+  }
 };
 
 // --- LOGIKA FOLLOW & RATING (TIDAK DISENTUH) ---
