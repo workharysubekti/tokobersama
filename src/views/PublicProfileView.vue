@@ -228,48 +228,73 @@ const executeUpload = async () => {
 // --- LOGIKA FOLLOW & RATING ---
 const toggleFollow = async () => {
   if (!currentUser.value) return router.push("/login");
-
-  // Proteksi mutlak
   if (isOwnProfile.value) return;
 
   try {
     if (isFollowing.value) {
-      await supabase
+      // --- LOGIKA UNFOLLOW (DELETE) ---
+      const { error: deleteError } = await supabase
         .from("follows")
         .delete()
         .eq("follower_id", currentUser.value.id)
         .eq("following_id", profile.value.id);
+
+      if (deleteError) throw deleteError;
+
+      // Jika sukses, baru kurangi angka dan ubah status
       followersCount.value--;
+      isFollowing.value = false;
+      notify.success("Berhenti Mengikuti");
     } else {
-      await supabase.from("follows").insert({
+      // --- LOGIKA FOLLOW (INSERT) ---
+      const { error: insertError } = await supabase.from("follows").insert({
         follower_id: currentUser.value.id,
         following_id: profile.value.id,
       });
 
-      // CEK STATUS UNTUK NOTIFIKASI
-      const { data: checkFollback } = await supabase
-        .from("follows")
-        .select("id")
-        .eq("follower_id", profile.value.id)
-        .eq("following_id", currentUser.value.id)
-        .maybeSingle();
+      if (insertError) {
+        // Jika error 409 (Conflict), berarti sebenarnya sudah follow
+        if (insertError.code === "23505") {
+          isFollowing.value = true;
+          return;
+        }
+        throw insertError;
+      }
 
-      const isFollback = !!checkFollback;
+      // Kirim Notifikasi (Gunakan try-catch agar tidak memutus proses follow)
+      try {
+        const { data: checkFollback } = await supabase
+          .from("follows")
+          .select("id")
+          .eq("follower_id", profile.value.id)
+          .eq("following_id", currentUser.value.id)
+          .maybeSingle();
 
-      // INSERT NOTIFIKASI
-      await supabase.from("notifications").insert({
-        user_id: profile.value.id,
-        from_user_id: currentUser.value.id,
-        title: isFollback ? "FOLLBACK DETECTED!" : "NEW TRANSMISSION FOLLOWER!",
-        message: `@${currentUser.value.user_metadata.username || "User"} ${isFollback ? "mengikuti balik Anda." : "mulai mengikuti Anda."}`,
-        type: "activity",
-      });
+        const isFollback = !!checkFollback;
 
+        await supabase.from("notifications").insert({
+          user_id: profile.value.id,
+          from_user_id: currentUser.value.id, // Kolom baru yang suci
+          title: isFollback
+            ? "FOLLBACK DETECTED!"
+            : "NEW TRANSMISSION FOLLOWER!",
+          message: `@${currentUser.value.user_metadata.username || "User"} ${isFollback ? "mengikuti balik Anda." : "mulai mengikuti Anda."}`,
+          type: "activity",
+        });
+      } catch (notifErr) {
+        console.error("Notif failed but follow success:", notifErr);
+      }
+
+      // Jika semua sukses
       followersCount.value++;
+      isFollowing.value = true;
+      notify.success("Berhasil Mengikuti");
     }
-    isFollowing.value = !isFollowing.value;
   } catch (error) {
-    notify.error("Action failed");
+    console.error("Follow/Unfollow Error:", error.message);
+    notify.error("Aksi Gagal", error.message);
+    // Kembalikan data ke asal jika gagal (Revert state)
+    fetchData();
   }
 };
 

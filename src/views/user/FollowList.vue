@@ -84,65 +84,69 @@ const switchTab = (newType) => {
 // --- LOGIKA FOLLOW/UNFOLLOW DIRECT ---
 const handleAction = async (user) => {
   if (!currentUser.value) return router.push("/login");
+  if (user.id === currentUser.value.id) return;
 
-  // Gembok 1: Cegah follow diri sendiri di level UI
-  if (user.id === currentUser.value.id) {
-    return notify.error(
-      "Sistem Error",
-      "Anda tidak bisa mengikuti diri sendiri.",
-    );
-  }
-
-  const isAlreadyFollowing = myFollowings.value.includes(user.id);
+  // Pastikan kita membandingkan ID dengan tipe data yang sama (String)
+  const isAlreadyFollowing = myFollowings.value.some(
+    (id) => String(id) === String(user.id),
+  );
 
   try {
     if (isAlreadyFollowing) {
-      // LOGIKA UNFOLLOW
-      await supabase
+      // --- LOGIKA UNFOLLOW (DELETE) ---
+      const { error } = await supabase
         .from("follows")
         .delete()
         .eq("follower_id", currentUser.value.id)
         .eq("following_id", user.id);
 
-      myFollowings.value = myFollowings.value.filter((id) => id !== user.id);
-      notify.success("Hubungan Terputus");
+      if (error) throw error;
+
+      // Update state lokal biar UI langsung berubah
+      myFollowings.value = myFollowings.value.filter(
+        (id) => String(id) !== String(user.id),
+      );
+      notify.success("Berhenti Mengikuti");
     } else {
-      // LOGIKA FOLLOW
-      await supabase
+      // --- LOGIKA FOLLOW (INSERT) ---
+      const { error: followError } = await supabase
         .from("follows")
         .insert({ follower_id: currentUser.value.id, following_id: user.id });
 
+      if (followError) throw followError;
+
       myFollowings.value.push(user.id);
 
-      // --- LOGIKA NOTIFIKASI (SIHIR DIMULAI) ---
-
-      // A. Cek apakah ini FOLLBACK (Apakah dia sudah follow saya duluan?)
+      // --- KIRIM NOTIFIKASI (FIXED LOGIC) ---
       const { data: checkFollback } = await supabase
         .from("follows")
         .select("id")
-        .eq("follower_id", user.id) // Dia follow...
-        .eq("following_id", currentUser.value.id) // ...saya
+        .eq("follower_id", user.id)
+        .eq("following_id", currentUser.value.id)
         .maybeSingle();
 
       const isFollback = !!checkFollback;
 
-      // B. Masukkan ke tabel Notifikasi
-      await supabase.from("notifications").insert({
-        user_id: user.id, // Penerima (Si target)
-        from_user_id: currentUser.value.id, // Pengirim (Saya)
-        title: isFollback ? "FOLLBACK TRANSMISSION!" : "NEW FOLLOWER!",
-        message: `@${currentUser.value.user_metadata.username || "Seseorang"} ${isFollback ? "telah mengikuti balik Anda." : "mulai mengikuti Anda."}`,
-        type: "activity",
-      });
+      // Gunakan try-catch kecil di sini biar kalau notif gagal, follow tetep sukses
+      try {
+        await supabase.from("notifications").insert({
+          user_id: user.id,
+          from_user_id: currentUser.value.id, // Kolom yang baru kita bikin di SQL
+          title: isFollback ? "FOLLBACK TRANSMISSION!" : "NEW FOLLOWER!",
+          message: `@${currentUser.value.user_metadata.username || "User"} ${isFollback ? "mengikuti balik Anda" : "mulai mengikuti Anda"}`,
+          type: "activity",
+        });
+      } catch (notifErr) {
+        console.error("Gagal kirim notif tapi follow sukses:", notifErr);
+      }
 
       notify.success(isFollback ? "Berhasil Follback!" : "Berhasil Mengikuti");
     }
   } catch (e) {
-    console.error("Notif Error:", e.message);
-    notify.error("Gagal melakukan aksi");
+    console.error("Critical Error:", e.message);
+    notify.error("Aksi Gagal", e.message);
   }
 };
-
 // Cek Status Hubungan
 const getFollowStatus = (userId) => {
   if (!currentUser.value || userId === currentUser.value.id) return "ME";

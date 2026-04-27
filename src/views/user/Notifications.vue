@@ -28,7 +28,7 @@ const fetchNotifications = async () => {
 
   loading.value = true;
   try {
-    // MODIFIKASI: Tambahkan select profil si pengirim (from_user_id)
+    // Kita panggil profil lewat foreign key fk_notifications_sender yang baru kita buat
     const { data, error } = await supabase
       .from("notifications")
       .select(
@@ -42,7 +42,10 @@ const fetchNotifications = async () => {
 
     if (error) throw error;
 
-    notifications.value.activity = data.filter((n) => n.type === "activity");
+    // Filter kembali ke tab masing-masing
+    notifications.value.activity = data.filter(
+      (n) => n.type === "activity" || !n.type,
+    );
     notifications.value.support = data.filter((n) => n.type === "support");
     notifications.value.broadcast = data.filter((n) => n.type === "broadcast");
   } catch (err) {
