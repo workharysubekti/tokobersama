@@ -56,18 +56,26 @@ const fetchNotifications = async () => {
 };
 
 const handleAction = async (notif) => {
+  // 1. Tandai sudah dibaca
   if (!notif.is_read) {
     await supabase
       .from("notifications")
       .update({ is_read: true })
       .eq("id", notif.id);
-    notif.is_read = true; // Update lokal biar langsung pudar warnanya
+    notif.is_read = true;
   }
 
-  // Arahkan sesuai konteks
+  // 2. LOGIKA REDIRECT (PENTING)
+  // Jika notifikasi tentang follow/follback, arahkan ke profil pengirim
   if (notif.title.includes("FOLLOW") || notif.title.includes("FOLLBACK")) {
-    router.push(`/user/${notif.sender?.username}`);
-  } else if (notif.related_id) {
+    if (notif.sender?.username) {
+      router.push(`/user/${notif.sender.username}`);
+    } else {
+      notify.error("User tidak ditemukan");
+    }
+  }
+  // Jika notifikasi terkait produk (bid/outbid), arahkan ke produk
+  else if (notif.related_id) {
     router.push(`/product/${notif.related_id}`);
   }
 };
