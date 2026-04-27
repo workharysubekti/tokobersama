@@ -20,36 +20,60 @@ const type = computed(() => route.params.type);
 
 const fetchUsers = async () => {
   loading.value = true;
-  const username = route.params.username;
+  const usernameParam = route.params.username;
+  const typeParam = route.params.type; // 'followers' atau 'following'
 
-  // 1. Cari dulu ID si pemilik profil berdasarkan username
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, username")
-    .eq("username", username)
-    .single();
-  if (!profile) return router.push("/");
-  targetUser.value = profile;
+  try {
+    // 1. Ambil ID user target berdasarkan username di URL
+    const { data: targetData, error: userError } = await supabase
+      .from("profiles")
+      .select("id, username")
+      .eq("username", usernameParam)
+      .single();
 
-  // 2. Tarik data followers/following
-  let query = supabase.from("follows").select(`
-    follower:follower_id (id, username, full_name, avatar_url, reputation),
-    following:following_id (id, username, full_name, avatar_url, reputation)
-  `);
+    if (userError || !targetData) throw new Error("User tidak ditemukan");
+    targetUser.value = targetData;
 
-  if (type.value === "followers") {
-    query = query.eq("following_id", profile.id);
-  } else {
-    query = query.eq("follower_id", profile.id);
+    let query;
+
+    if (typeParam === "followers") {
+      // MENCARI PENGIKUT: Orang-orang yang mem-follow ID target
+      // Kita ambil data dari kolom follower_id
+      query = supabase
+        .from("follows")
+        .select(
+          `
+          user:follower_id (id, username, full_name, avatar_url, reputation)
+        `,
+        )
+        .eq("following_id", targetData.id);
+    } else {
+      // MENCARI MENGIKUTI: Orang-orang yang di-follow oleh ID target
+      // Kita ambil data dari kolom following_id
+      query = supabase
+        .from("follows")
+        .select(
+          `
+          user:following_id (id, username, full_name, avatar_url, reputation)
+        `,
+        )
+        .eq("follower_id", targetData.id);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    // Mapping data agar lebih rapi masuk ke array users
+    if (data) {
+      users.value = data.map((item) => item.user).filter((u) => u !== null);
+    }
+  } catch (error) {
+    console.error("Gagal narik data follow:", error.message);
+    notify.error("Gagal sinkronasi data");
+  } finally {
+    loading.value = false;
   }
-
-  const { data, error } = await query;
-  if (!error && data) {
-    users.value = data.map((item) =>
-      type.value === "followers" ? item.follower : item.following,
-    );
-  }
-  loading.value = false;
 };
 
 const filteredUsers = computed(() => {
