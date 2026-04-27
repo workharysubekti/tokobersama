@@ -117,6 +117,13 @@ const routes = [
     props: true,
     meta: { showBottomNav: true },
   },
+  // Tambahkan ini di dalam array routes []
+  {
+    path: "/user/:username/:type", // :type nanti isinya 'followers' atau 'following'
+    name: "FollowList",
+    component: () => import("../src/views/FollowList.vue"), // Sesuaikan path file FollowList.vue tadi
+    meta: { showBottomNav: true },
+  },
 ];
 
 const router = createRouter({

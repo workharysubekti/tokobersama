@@ -473,26 +473,34 @@ onUnmounted(() => {
             <div
               class="flex items-center gap-6 lg:gap-10 text-[10px] lg:text-xs tracking-[0.2em] text-gray-500 mb-8 lg:mb-0"
             >
-              <div
-                @click="router.push(`/user/${profile.username}/followers`)"
-                class="cursor-pointer hover:text-white transition-all text-center lg:text-left"
+              <router-link
+                :to="`/user/${profile.username}/followers`"
+                class="group cursor-pointer text-center lg:text-left active:scale-95 transition-all"
               >
-                <p class="text-white text-xl lg:text-3xl mb-0.5 leading-none">
+                <p
+                  class="text-white text-xl lg:text-3xl mb-0.5 leading-none group-hover:text-yellow-500 transition-colors"
+                >
                   {{ followersCount }}
                 </p>
-                <p>PENGIKUT</p>
-              </div>
+                <p class="group-hover:text-gray-300">PENGIKUT</p>
+              </router-link>
+
               <div class="w-px h-8 bg-white/10"></div>
-              <div
-                @click="router.push(`/user/${profile.username}/following`)"
-                class="cursor-pointer hover:text-white transition-all text-center lg:text-left"
+
+              <router-link
+                :to="`/user/${profile.username}/following`"
+                class="group cursor-pointer text-center lg:text-left active:scale-95 transition-all"
               >
-                <p class="text-white text-xl lg:text-3xl mb-0.5 leading-none">
+                <p
+                  class="text-white text-xl lg:text-3xl mb-0.5 leading-none group-hover:text-blue-500 transition-colors"
+                >
                   {{ followingCount }}
                 </p>
-                <p>MENGIKUTI</p>
-              </div>
+                <p class="group-hover:text-gray-300">MENGIKUTI</p>
+              </router-link>
+
               <div class="w-px h-8 bg-white/10"></div>
+
               <div class="text-center lg:text-left">
                 <p class="text-white text-xl lg:text-3xl mb-0.5 leading-none">
                   {{ profile.reputation || 0 }}
