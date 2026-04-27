@@ -121,7 +121,7 @@ const routes = [
   {
     path: "/user/:username/:type", // :type nanti isinya 'followers' atau 'following'
     name: "FollowList",
-    component: () => import("../src/views/FollowList.vue"), // Sesuaikan path file FollowList.vue tadi
+    component: () => import("../src/views/user/FollowList.vue"), // Sesuaikan path file FollowList.vue tadi
     meta: { showBottomNav: true },
   },
 ];
