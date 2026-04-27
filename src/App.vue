@@ -99,10 +99,16 @@ const setupGlobalPresence = (userId) => {
 const listenToNotifications = async () => {
   if (notificationChannel) supabase.removeChannel(notificationChannel);
 
+  // 1. Tarik session user secara akurat
   const {
-    data: { user },
+    data: { user: authUser },
+    error,
   } = await supabase.auth.getUser();
-  if (!user) return;
+
+  // Jika tidak ada user login, berhenti di sini agar tidak error
+  if (error || !authUser) return;
+
+  const myId = authUser.id; // Pegang ID user di variabel yang jelas
 
   notificationChannel = supabase
     .channel("global-alerts")
@@ -112,36 +118,38 @@ const listenToNotifications = async () => {
         event: "INSERT",
         schema: "public",
         table: "notifications",
-        filter: `user_id=eq.${user.id}`,
+        filter: `user_id=eq.${myId}`, // Pakai myId yang sudah pasti ada
       },
       async (payload) => {
-        // Tambahkan async di sini
         const notif = payload.new;
-        let finalPath = null;
+        let pathTujuan = "/notifications"; // Alamat default
 
-        // 🎯 LOGIKA GPS: Tentukan kemana arah klik pop-up
-        if (
-          notif.title.includes("FOLLOW") ||
-          notif.title.includes("FOLLBACK")
-        ) {
-          // Tarik username pengirim kilat
-          const { data: sender } = await supabase
-            .from("profiles")
-            .select("username")
-            .eq("id", notif.from_user_id)
-            .single();
+        try {
+          // LOGIKA GPS: Tentukan kemana arah klik
+          if (
+            notif.title.includes("FOLLOW") ||
+            notif.title.includes("FOLLBACK")
+          ) {
+            // Ambil username si pengirim secara kilat
+            const { data: sender } = await supabase
+              .from("profiles")
+              .select("username")
+              .eq("id", notif.from_user_id)
+              .single();
 
-          if (sender) {
-            finalPath = `/user/${sender.username}`;
+            if (sender) {
+              pathTujuan = `/user/${sender.username}`;
+            }
+          } else if (notif.related_id) {
+            // Jika notif barang (outbid/ditawar), arahkan ke produk
+            pathTujuan = `/product/${notif.related_id}`;
           }
-        } else if (notif.related_id) {
-          // Jika urusan bid/outbid, arahkan ke produk
-          finalPath = `/product/${notif.related_id}`;
+        } catch (err) {
+          console.error("GPS Error:", err);
         }
 
-        // 🚀 Tampilkan Toast dengan 'finalPath' yang sudah cerdas
-        // Pastikan fungsi showToast Mas menerima path ini untuk router.push
-        showToast(notif.title, notif.message, finalPath);
+        // Tampilkan pop-up dengan alamat yang sudah cerdas
+        showToast(notif.title, notif.message, pathTujuan);
       },
     )
     .subscribe();
