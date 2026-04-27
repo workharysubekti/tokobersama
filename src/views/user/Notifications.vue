@@ -6,7 +6,7 @@ import {
   BellIcon,
   ChatBubbleLeftRightIcon,
   MegaphoneIcon,
-  UserIcon, // Tambahkan ini
+  UserIcon,
 } from "@heroicons/vue/24/outline";
 
 const router = useRouter();
@@ -28,21 +28,14 @@ const fetchNotifications = async () => {
 
   loading.value = true;
   try {
-    // Kita panggil profil lewat foreign key fk_notifications_sender yang baru kita buat
     const { data, error } = await supabase
       .from("notifications")
-      .select(
-        `
-        *,
-        sender:profiles!from_user_id (username, avatar_url)
-      `,
-      )
+      .select(`*, sender:profiles!from_user_id (username, avatar_url)`)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
-    // Filter kembali ke tab masing-masing
     notifications.value.activity = data.filter(
       (n) => n.type === "activity" || !n.type,
     );
@@ -56,7 +49,6 @@ const fetchNotifications = async () => {
 };
 
 const handleAction = async (notif) => {
-  // 1. Tandai sudah dibaca
   if (!notif.is_read) {
     await supabase
       .from("notifications")
@@ -65,17 +57,11 @@ const handleAction = async (notif) => {
     notif.is_read = true;
   }
 
-  // 2. LOGIKA REDIRECT (PENTING)
-  // Jika notifikasi tentang follow/follback, arahkan ke profil pengirim
   if (notif.title.includes("FOLLOW") || notif.title.includes("FOLLBACK")) {
     if (notif.sender?.username) {
       router.push(`/user/${notif.sender.username}`);
-    } else {
-      notify.error("User tidak ditemukan");
     }
-  }
-  // Jika notifikasi terkait produk (bid/outbid), arahkan ke produk
-  else if (notif.related_id) {
+  } else if (notif.related_id) {
     router.push(`/product/${notif.related_id}`);
   }
 };
@@ -118,7 +104,9 @@ onUnmounted(() => {
       </h2>
     </div>
 
-    <div class="flex gap-2 bg-white/5 p-1 rounded-2xl w-full md:w-fit">
+    <div
+      class="flex gap-1.5 bg-white/5 p-1 rounded-2xl w-full md:w-fit overflow-x-auto no-scrollbar"
+    >
       <button
         v-for="tab in ['activity', 'support', 'broadcast']"
         :key="tab"
@@ -128,7 +116,7 @@ onUnmounted(() => {
             ? 'bg-yellow-500 text-black shadow-lg'
             : 'text-gray-500'
         "
-        class="flex-1 md:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase italic transition-all flex items-center gap-2"
+        class="flex-1 md:flex-none px-3 md:px-6 py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase italic transition-all flex items-center justify-center gap-2 whitespace-nowrap min-w-fit"
       >
         <component
           :is="
@@ -140,7 +128,7 @@ onUnmounted(() => {
           "
           class="w-3.5 h-3.5"
         />
-        {{ tab }}
+        {{ tab === "broadcast" ? "Updates" : tab }}
       </button>
     </div>
 
@@ -222,3 +210,14 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Menghilangkan scrollbar tapi tetap bisa scroll di mobile */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+</style>
