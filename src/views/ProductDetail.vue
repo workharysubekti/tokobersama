@@ -45,6 +45,7 @@ const showExtensionBadge = ref(false); // Indikator waktu bertambah
 const isIntense = ref(false);
 const hasNotifiedIntense = ref(false);
 const showBannedModal = ref(false);
+const showDepositModal = ref(false); // FIXED: Deklarasi State Modal
 
 // --- OUTBID & ESCROW STATES ---
 const isOutbid = ref(false);
@@ -87,7 +88,7 @@ const rankedBids = computed(() => {
 // --- LOGIKA DEPOSIT PROGRESIF (TAHAP 2 - MASTER TABLE) ---
 const depositPercentage = computed(() => {
   const rep = props.userProfile?.reputation || 0;
-  const isAdmin = props.userProfile?.is_admin === true;
+  const isAdmin = !!props.userProfile?.is_admin; // FIXED: Flexible Boolean Check
 
   if (isAdmin) return 0; // OWNER bebas jaminan
 
@@ -108,7 +109,7 @@ const requiredDeposit = computed(() => {
 
 const needsDeposit = computed(() => {
   const rep = props.userProfile?.reputation || 0;
-  const isAdmin = props.userProfile?.is_admin === true;
+  const isAdmin = !!props.userProfile?.is_admin; // FIXED: Flexible Boolean Check
 
   if (isAdmin) return false;
 
@@ -146,14 +147,11 @@ const userRank = computed(() => {
   // Langsung panggil utility, berikan reputasi dan status admin
   const details = getRankDetails(
     props.userProfile?.reputation || 0,
-    props.userProfile?.is_admin === true,
+    !!props.userProfile?.is_admin, // FIXED: Flexible Boolean Check
   );
 
-  // Kita sesuaikan sedikit return-nya agar template Mas tidak error
-  // dan menambahkan efek glow untuk lencana OWNER
   return {
     ...details,
-    // Jika OWNER, tambahkan kelas drop-shadow premium
     extraClass:
       details.name === "OWNER"
         ? "font-[1000] drop-shadow-[0_0_10px_#EF4444aa]"
@@ -168,7 +166,6 @@ watch(recentBids, (newVal, oldVal) => {
     const isNowOutbid = newVal[0].user_id !== props.userProfile.id;
     if (wasTop && isNowOutbid && product.value?.status !== "closed") {
       isOutbid.value = true;
-      // SILENT VIBRATION
       if (window.navigator.vibrate) window.navigator.vibrate(200);
     }
   }
@@ -391,6 +388,7 @@ const updateTimer = () => {
 // --- FUNGSI UTAMA PLACE BID (PENYARING) ---
 const placeBid = async () => {
   if (!props.userProfile || isCooldown.value) return;
+  const isAdmin = !!props.userProfile?.is_admin; // FIXED: Flexible Boolean Check
 
   // 1. Cek Status Produk (KODE SUCI MAS)
   if (product.value.status !== "active" || timeLeft.value === "VALIDATING...") {
@@ -398,7 +396,7 @@ const placeBid = async () => {
   }
 
   // 2. Cek Posisi (KODE SUCI MAS)
-  if (props.userProfile?.is_admin !== true) {
+  if (!isAdmin) {
     const isCurrentWinner =
       recentBids.value.length > 0 &&
       recentBids.value[0].user_id === props.userProfile.id;
@@ -408,20 +406,7 @@ const placeBid = async () => {
 
   // 3. LOGIKA BARU: CEK APAKAH BUTUH DEPOSIT?
   if (needsDeposit.value) {
-    if (!hasEnoughBalanceForDeposit.value) {
-      const rep = props.userProfile?.reputation || 0;
-      const alasan =
-        rep < 50
-          ? "Wajib jaminan 30% karena reputasi di bawah standar."
-          : `Bid melampaui limit rank ${userRank.value.name}.`;
-
-      return notify.error(
-        "Saldo Jaminan Kurang",
-        `${alasan} Butuh: ${formatPrice(requiredDeposit.value)}`,
-      );
-    }
-
-    // Munculkan Modal, eksekusi dipindah ke konfirmasi modal
+    // FIXED: Langsung buka modal saja, biarkan modal yang mengatur tombol Bayar/Topup
     showDepositModal.value = true;
     return;
   }
@@ -446,12 +431,11 @@ const executeBidTransaction = async () => {
       return;
     }
 
-    // UPDATE STATE (KODE SUCI MAS)
     product.value.end_time = data.new_end_time;
     product.value.current_bid = data.new_bid;
     bidAmount.value = Number(data.new_bid) + 10000;
 
-    showDepositModal.value = false; // Tutup modal jika tadi lewat jalur deposit
+    showDepositModal.value = false;
     nextTick(() => updateTimer());
 
     isCooldown.value = true;
@@ -464,8 +448,9 @@ const executeBidTransaction = async () => {
     isSubmitting.value = false;
   }
 };
+
 onMounted(async () => {
-  await syncServerTime(); // Sync server time first
+  await syncServerTime();
   await fetchProductDetail();
   timerInterval = setInterval(updateTimer, 1000);
 
@@ -520,7 +505,6 @@ onMounted(async () => {
 
             nextTick(() => updateTimer());
 
-            // SILENT EXTENSION BADGE INTEGRATION
             if (newEnd > oldEnd + 2000) {
               showExtensionBadge.value = true;
               setTimeout(() => {
@@ -1275,6 +1259,7 @@ onUnmounted(() => {
         </button>
       </div>
     </div>
+
     <div
       v-if="showDepositModal"
       class="fixed inset-0 z-[600] flex items-center justify-center p-6"
@@ -1284,7 +1269,7 @@ onUnmounted(() => {
         @click="showDepositModal = false"
       ></div>
       <div
-        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/5 rounded-[45px] p-10 text-center shadow-2xl"
+        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[45px] p-10 text-center shadow-2xl"
       >
         <div
           class="w-20 h-20 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-yellow-500/20"
@@ -1302,7 +1287,7 @@ onUnmounted(() => {
           {{
             props.userProfile?.reputation < 50
               ? "Wajib jaminan 30% karena reputasi di bawah standar (Probation)."
-              : `Jaminan diperlukan untuk bid di luar limit rank ${userRank.value.name}.`
+              : `Jaminan diperlukan untuk bid di luar limit rank ${userRank.name}.`
           }}
         </p>
 
@@ -1311,38 +1296,47 @@ onUnmounted(() => {
         >
           <div class="flex justify-between items-center">
             <span class="text-[10px] font-black text-gray-500 uppercase italic"
-              >Your Bid</span
+              >Requirement</span
             >
             <span class="text-sm font-black text-white italic">{{
-              formatPrice(bidAmount)
+              formatPrice(requiredDeposit)
             }}</span>
           </div>
           <div
             class="flex justify-between items-center pt-4 border-t border-white/5"
           >
-            <div class="text-left">
-              <span
-                class="text-[10px] font-black text-yellow-500 uppercase italic block leading-none"
-                >Security Bond</span
-              >
-              <span class="text-[8px] text-gray-600 uppercase font-bold italic"
-                >Progressive rate: {{ depositPercentage }}%</span
-              >
-            </div>
-            <span class="text-lg font-[1000] text-yellow-500 italic">{{
-              formatPrice(requiredDeposit)
-            }}</span>
+            <span class="text-[10px] font-black text-gray-500 uppercase italic"
+              >Your Balance</span
+            >
+            <span
+              :class="
+                hasEnoughBalanceForDeposit ? 'text-white' : 'text-red-500'
+              "
+              class="text-sm font-black italic"
+            >
+              {{ formatPrice(props.userProfile?.balance || 0) }}
+            </span>
           </div>
         </div>
 
         <div class="flex flex-col gap-3">
           <button
+            v-if="hasEnoughBalanceForDeposit"
             @click="executeBidTransaction"
             :disabled="isSubmitting"
             class="w-full bg-yellow-500 text-black py-5 rounded-[25px] font-[1000] italic uppercase text-xs shadow-xl active:scale-95 transition-all"
           >
-            {{ isSubmitting ? "PROCESSING..." : "CONFIRM & DEPOSIT" }}
+            {{ isSubmitting ? "PROCESSING..." : "PAY DEPOSIT & BID" }}
           </button>
+
+          <button
+            v-else
+            @click="router.push('/wallet')"
+            class="w-full bg-red-600 text-white py-5 rounded-[25px] font-[1000] italic uppercase text-xs shadow-xl active:scale-95 transition-all"
+          >
+            INSUFFICIENT BALANCE - TOP UP NOW
+          </button>
+
           <button
             @click="showDepositModal = false"
             class="py-4 text-[9px] font-black text-gray-600 uppercase italic hover:text-white transition-colors"
