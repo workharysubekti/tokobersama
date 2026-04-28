@@ -14,20 +14,27 @@ import {
   ClockIcon,
   ChevronRightIcon,
   StarIcon as StarIconOutline,
-  ShieldCheckIcon,
-  BoltIcon,
-  FireIcon,
-  TrophyIcon,
+  ShieldCheckIcon as ShieldOutline,
+  BoltIcon as BoltOutline,
+  FireIcon as FireOutline,
+  TrophyIcon as TrophyOutline,
   XMarkIcon,
   ExclamationTriangleIcon,
   ArchiveBoxIcon,
   ShoppingBagIcon,
-  CheckBadgeIcon,
+  CheckBadgeIcon as CheckBadgeOutline,
   InboxStackIcon,
   CameraIcon,
   PhotoIcon,
 } from "@heroicons/vue/24/outline";
-import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
+import {
+  StarIcon as StarIconSolid,
+  BoltIcon,
+  FireIcon,
+  ShieldCheckIcon,
+  TrophyIcon,
+  CheckBadgeIcon,
+} from "@heroicons/vue/24/solid";
 import { getRankDetails } from "../utils/rankUtils.js";
 
 const route = useRoute();
@@ -55,6 +62,19 @@ const showCropModal = ref(false);
 const cropType = ref("");
 const selectedFile = ref(null);
 const isUploading = ref(false);
+
+// --- HELPER ICON RANK ---
+const getIconComponent = (iconName) => {
+  const map = {
+    BoltIcon,
+    FireIcon,
+    ShieldCheckIcon,
+    TrophyIcon,
+    CheckBadgeIcon,
+    StarIconSolid,
+  };
+  return map[iconName] || BoltIcon;
+};
 
 const isOwnProfile = computed(() => {
   return currentUser.value?.id === profile.value?.id;
@@ -203,22 +223,17 @@ const executeUpload = async () => {
     } = supabase.storage
       .from(cropType.value === "avatar" ? "avatars" : "covers")
       .getPublicUrl(filePath);
-    const updateData = {};
     const columnName = cropType.value === "avatar" ? "avatar_url" : "cover_url";
-    updateData[columnName] = publicUrl;
     const { error: updateError } = await supabase
       .from("profiles")
-      .update(updateData)
+      .update({ [columnName]: publicUrl })
       .eq("id", currentUser.value.id);
     if (updateError) throw updateError;
-    if (profile.value) {
-      profile.value[columnName] = publicUrl;
-    }
+    if (profile.value) profile.value[columnName] = publicUrl;
     notify.success(
-      `${cropType.value === "avatar" ? "Foto Profil" : "Sampul"} Berhasil Diperbarui!`,
+      `${cropType.value === "avatar" ? "Foto Profil" : "Sampul"} Diperbarui!`,
     );
     showCropModal.value = false;
-    fileToUpload.value = null;
   } catch (err) {
     notify.error("Upload Gagal", err.message);
   } finally {
@@ -226,81 +241,45 @@ const executeUpload = async () => {
   }
 };
 
-// --- LOGIKA FOLLOW & RATING ---
+// --- LOGIKA FOLLOW ---
 const toggleFollow = async () => {
   if (!currentUser.value) return router.push("/login");
   if (isOwnProfile.value) return;
-
   try {
     if (isFollowing.value) {
-      // --- LOGIKA UNFOLLOW (DELETE) ---
-      const { error: deleteError } = await supabase
+      await supabase
         .from("follows")
         .delete()
         .eq("follower_id", currentUser.value.id)
         .eq("following_id", profile.value.id);
-
-      if (deleteError) throw deleteError;
-
       followersCount.value--;
       isFollowing.value = false;
       notify.success("Berhenti Mengikuti");
     } else {
-      // --- LOGIKA FOLLOW (INSERT) ---
-      const { error: insertError } = await supabase.from("follows").insert({
+      await supabase.from("follows").insert({
         follower_id: currentUser.value.id,
         following_id: profile.value.id,
       });
-
-      if (insertError) {
-        if (insertError.code === "23505") {
-          isFollowing.value = true;
-          return;
-        }
-        throw insertError;
-      }
-
-      // --- LOGIKA NOTIFIKASI (BIAR GAK JADI @SESEORANG) ---
       try {
-        // Ambil data profil SAYA (Pengirim) biar dapet username asli
-        const { data: myProfile } = await supabase
+        const { data: me } = await supabase
           .from("profiles")
           .select("username")
           .eq("id", currentUser.value.id)
           .single();
-
-        const senderUsername = myProfile?.username || "User";
-
-        const { data: checkFollback } = await supabase
-          .from("follows")
-          .select("id")
-          .eq("follower_id", profile.value.id)
-          .eq("following_id", currentUser.value.id)
-          .maybeSingle();
-
-        const isFollback = !!checkFollback;
-
         await supabase.from("notifications").insert({
           user_id: profile.value.id,
           from_user_id: currentUser.value.id,
-          title: isFollback
-            ? "FOLLBACK DETECTED!"
-            : "NEW TRANSMISSION FOLLOWER!",
-          message: `@${senderUsername} ${isFollback ? "mengikuti balik Anda." : "mulai mengikuti Anda."}`,
+          title: "NEW FOLLOWER!",
+          message: `@${me?.username} mengikuti Anda.`,
           type: "activity",
         });
-      } catch (notifErr) {
-        console.error("Notif failed:", notifErr);
-      }
-
+      } catch (e) {}
       followersCount.value++;
       isFollowing.value = true;
       notify.success("Berhasil Mengikuti");
     }
   } catch (error) {
-    console.error("Follow/Unfollow Error:", error.message);
-    notify.error("Aksi Gagal", error.message);
-    fetchData();
+    notify.error("Aksi Gagal");
   }
 };
 
@@ -312,42 +291,36 @@ const averageRating = computed(() => {
   return base;
 });
 
+// --- LOGIKA RANK (DIPERBAIKI) ---
 const myRank = computed(() => {
-  // 1. Satpam: Kalau data profile belum masuk, kasih status loading
-  if (!profile.value) {
-    return { name: "LOADING", color: "#666", icon: BoltIcon };
-  }
-
-  // 2. Eksekusi: Masukkan reputasi dan cek role
-  // Pastikan profile.value.role isinya beneran "admin" (huruf kecil semua)
+  if (!profile.value)
+    return { name: "LOADING", color: "#666", icon: "BoltIcon" };
   return getRankDetails(
     profile.value.reputation || 0,
     profile.value.is_admin === true,
   );
 });
 
+// --- LOGIKA REVIEW & REPORT ---
 const showReviewModal = ref(false);
 const submittingReview = ref(false);
 const newReview = ref({ rating: 5, comment: "" });
 
 const submitReview = async () => {
-  if (!newReview.value.comment.trim())
-    return notify.error("Log entry required");
+  if (!newReview.value.comment.trim()) return notify.error("Entry required");
   submittingReview.value = true;
   try {
-    const { error } = await supabase.from("reviews").insert({
+    await supabase.from("reviews").insert({
       target_user_id: profile.value.id,
       reviewer_id: currentUser.value.id,
       rating: newReview.value.rating,
       comment: newReview.value.comment,
     });
-    if (error) throw error;
-    notify.success("Transmission logged");
+    notify.success("Logged");
     showReviewModal.value = false;
-    newReview.value = { rating: 5, comment: "" };
     fetchData();
-  } catch (error) {
-    notify.error("Sync failed");
+  } catch (e) {
+    notify.error("Failed");
   } finally {
     submittingReview.value = false;
   }
@@ -359,22 +332,19 @@ const reportForm = ref({ category: "Lainnya", details: "" });
 
 const submitReport = async () => {
   if (!currentUser.value) return router.push("/login");
-  if (reportForm.value.details.length < 5) return notify.error("Need details");
   isSubmittingReport.value = true;
   try {
-    const { error } = await supabase.from("reports").insert({
+    await supabase.from("reports").insert({
       reporter_id: currentUser.value.id,
       target_user_id: profile.value.id,
       reason_category: reportForm.value.category,
       reason: reportForm.value.details,
       status: "pending",
     });
-    if (error) throw error;
-    notify.success("Report Transmission Sent");
+    notify.success("Report Sent");
     showReportModal.value = false;
-    reportForm.value.details = "";
   } catch (e) {
-    notify.error("Report failed");
+    notify.error("Failed");
   } finally {
     isSubmittingReport.value = false;
   }
@@ -390,9 +360,7 @@ watch(
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "bids" },
-          async () => {
-            await fetchData();
-          },
+          fetchData,
         )
         .subscribe();
     }
@@ -424,20 +392,17 @@ onUnmounted(() => {
         <div
           class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"
         ></div>
-
         <button
           @click="router.back()"
           class="absolute top-6 left-6 p-2.5 bg-black/40 backdrop-blur-md rounded-xl border border-white/10 active:scale-90 transition-all z-[50]"
         >
           <ArrowLeftIcon class="w-5 h-5 text-white" />
         </button>
-
         <label
           v-if="isOwnProfile"
           class="absolute bottom-4 right-4 lg:bottom-6 lg:right-8 p-3 bg-black/60 border border-white/10 rounded-2xl cursor-pointer hover:bg-yellow-500 hover:text-black transition-all z-20"
         >
-          <PhotoIcon class="w-5 h-5" />
-          <input
+          <PhotoIcon class="w-5 h-5" /><input
             type="file"
             class="hidden"
             @change="handleFileSelect($event, 'cover')"
@@ -459,13 +424,11 @@ onUnmounted(() => {
                 class="w-full h-full object-cover"
               />
             </div>
-
             <label
               v-if="isOwnProfile"
               class="absolute -bottom-1 -right-1 lg:bottom-2 lg:right-2 bg-yellow-500 p-2 lg:p-2.5 rounded-xl text-black shadow-2xl cursor-pointer active:scale-110 transition-all border-4 border-black z-[30]"
             >
-              <CameraIcon class="w-3.5 h-3.5 lg:w-4.5 lg:h-4.5" />
-              <input
+              <CameraIcon class="w-3.5 h-3.5 lg:w-4.5 lg:h-4.5" /><input
                 type="file"
                 class="hidden"
                 @change="handleFileSelect($event, 'avatar')"
@@ -484,71 +447,79 @@ onUnmounted(() => {
 
               <div class="hidden lg:flex items-center gap-4">
                 <div
-                  :class="[myRank.bg, myRank.color]"
-                  class="px-5 py-1.5 rounded-full border border-white/5 text-[9px] flex items-center gap-2"
+                  :style="{
+                    borderColor: myRank.color + '44',
+                    backgroundColor: myRank.color + '15',
+                  }"
+                  class="flex items-center gap-3 px-5 py-2 rounded-2xl border backdrop-blur-sm shadow-xl"
                 >
-                  <component :is="myRank.icon" class="w-3.5 h-3.5" />
-                  <span
-                    v-if="myRank"
-                    :style="{
-                      color: myRank.color,
-                      textShadow: `0 0 10px ${myRank.color}66`,
-                    }"
-                    class="text-xs font-black italic tracking-tighter border border-current px-2 py-0.5 rounded"
+                  <div
+                    :style="{ backgroundColor: myRank.color + '22' }"
+                    class="p-1.5 rounded-lg border border-white/5"
                   >
-                    {{ myRank.name }}
-                  </span>
+                    <component
+                      :is="getIconComponent(myRank.icon)"
+                      :style="{ color: myRank.color }"
+                      class="w-5 h-5 drop-shadow-[0_0_8px_rgba(0,0,0,0.5)]"
+                    />
+                  </div>
+                  <div class="text-left">
+                    <p
+                      class="text-[8px] text-gray-500 tracking-[0.3em] font-black leading-none mb-1"
+                    >
+                      RANK STATUS
+                    </p>
+                    <span
+                      :style="{
+                        color: myRank.color,
+                        textShadow: `0 0 12px ${myRank.color}88`,
+                      }"
+                      class="text-sm font-[1000] italic tracking-tighter leading-none"
+                      >{{ myRank.name }}</span
+                    >
+                  </div>
                 </div>
                 <div
                   class="flex items-center gap-1.5 text-yellow-500 bg-yellow-500/5 px-4 py-1.5 rounded-full border border-yellow-500/10"
                 >
-                  <StarIconSolid class="w-3.5 h-3.5" />
-                  <span class="text-xs font-black italic"
+                  <StarIconSolid class="w-3.5 h-3.5" /><span
+                    class="text-xs font-black italic"
                     >{{ averageRating }}/5.0</span
                   >
                 </div>
               </div>
             </div>
-
             <p
-              class="text-[10px] lg:text-xs text-yellow-500/50 tracking-[0.4em] mb-6 lg:mb-4"
+              class="text-[10px] lg:text-xs text-yellow-500/50 tracking-[0.4em] mb-6"
             >
               @{{ profile.username }}
             </p>
 
             <div
-              class="flex items-center gap-6 lg:gap-10 text-[10px] lg:text-xs tracking-[0.2em] text-gray-500 mb-8 lg:mb-0"
+              class="flex items-center gap-6 lg:gap-10 text-[10px] lg:text-xs tracking-[0.2em] text-gray-500"
             >
               <router-link
                 :to="`/user/${profile.username}/followers`"
-                class="group cursor-pointer text-center lg:text-left active:scale-95 transition-all"
+                class="active:scale-95 transition-all text-center lg:text-left"
               >
-                <p
-                  class="text-white text-xl lg:text-3xl mb-0.5 leading-none group-hover:text-yellow-500 transition-colors"
-                >
+                <p class="text-white text-xl lg:text-3xl mb-0.5">
                   {{ followersCount }}
                 </p>
-                <p class="group-hover:text-gray-300">PENGIKUT</p>
+                <p>PENGIKUT</p>
               </router-link>
-
               <div class="w-px h-8 bg-white/10"></div>
-
               <router-link
                 :to="`/user/${profile.username}/following`"
-                class="group cursor-pointer text-center lg:text-left active:scale-95 transition-all"
+                class="active:scale-95 transition-all text-center lg:text-left"
               >
-                <p
-                  class="text-white text-xl lg:text-3xl mb-0.5 leading-none group-hover:text-blue-500 transition-colors"
-                >
+                <p class="text-white text-xl lg:text-3xl mb-0.5">
                   {{ followingCount }}
                 </p>
-                <p class="group-hover:text-gray-300">MENGIKUTI</p>
+                <p>MENGIKUTI</p>
               </router-link>
-
               <div class="w-px h-8 bg-white/10"></div>
-
               <div class="text-center lg:text-left">
-                <p class="text-white text-xl lg:text-3xl mb-0.5 leading-none">
+                <p class="text-white text-xl lg:text-3xl mb-0.5">
                   {{ profile.reputation || 0 }}
                 </p>
                 <p>REPUTASI</p>
@@ -565,24 +536,17 @@ onUnmounted(() => {
                 @click="toggleFollow"
                 :class="
                   isFollowing
-                    ? 'bg-white/5 text-white border-white/10'
+                    ? 'bg-white/5 border-white/10'
                     : 'bg-yellow-500 text-black'
                 "
-                class="flex-[3] py-4 rounded-[22px] text-[10px] lg:text-xs font-black tracking-widest border transition-all active:scale-95"
+                class="flex-[3] py-4 rounded-[22px] text-[10px] font-black border transition-all active:scale-95"
               >
                 {{ isFollowing ? "UNFOLLOW" : "IKUTI USER" }}
               </button>
               <button
-                v-else
-                @click="router.push('/profile')"
-                class="flex-1 py-4 bg-white/5 border border-white/10 rounded-[22px] text-[10px] lg:text-xs font-black tracking-widest text-yellow-500 active:scale-95 transition-all"
-              >
-                MODIFIKASI PROFIL SAYA
-              </button>
-              <button
                 v-if="!isOwnProfile"
                 @click="router.push(`/messages/${profile.id}`)"
-                class="flex-1 p-4 bg-white/5 border border-white/10 rounded-[22px] flex items-center justify-center hover:bg-white/10 transition-all"
+                class="flex-1 p-4 bg-white/5 border border-white/10 rounded-[22px] flex items-center justify-center"
               >
                 <ChatBubbleLeftEllipsisIcon class="w-6 h-6 text-yellow-500" />
               </button>
@@ -594,36 +558,29 @@ onUnmounted(() => {
                 <ExclamationTriangleIcon class="w-6 h-6" />
               </button>
             </div>
-
             <p
-              class="text-gray-400 text-[13px] leading-relaxed normal-case italic font-bold text-center lg:text-left"
+              class="text-gray-400 text-[13px] leading-relaxed italic font-bold text-center lg:text-left"
             >
               "{{ profile.bio || "NO BIOGRAPHICAL DATA TRANSMITTED." }}"
             </p>
 
             <div class="lg:hidden flex items-center justify-center gap-4">
               <div
-                :class="[myRank.bg, myRank.color]"
-                class="px-6 py-2 rounded-full border border-white/5 text-[10px] flex items-center gap-2"
+                :style="{
+                  borderColor: myRank.color + '44',
+                  backgroundColor: myRank.color + '15',
+                }"
+                class="flex items-center gap-3 px-5 py-2 rounded-2xl border backdrop-blur-sm"
               >
-                <component :is="myRank.icon" class="w-4 h-4" />
+                <component
+                  :is="getIconComponent(myRank.icon)"
+                  :style="{ color: myRank.color }"
+                  class="w-4 h-4"
+                />
                 <span
-                  v-if="myRank"
-                  :style="{
-                    color: myRank.color,
-                    textShadow: `0 0 10px ${myRank.color}66`,
-                  }"
-                  class="text-xs font-black italic tracking-tighter border border-current px-2 py-0.5 rounded"
-                >
-                  {{ myRank.name }}
-                </span>
-              </div>
-              <div
-                class="flex items-center gap-2 text-yellow-500 bg-yellow-500/5 px-4 py-2 rounded-full border border-yellow-500/10"
-              >
-                <StarIconSolid class="w-3.5 h-3.5" />
-                <span class="text-sm font-black italic"
-                  >{{ averageRating }}/5.0</span
+                  :style="{ color: myRank.color }"
+                  class="text-xs font-black"
+                  >{{ myRank.name }}</span
                 >
               </div>
             </div>
@@ -631,7 +588,7 @@ onUnmounted(() => {
 
           <div class="w-full lg:flex-1 mt-12 lg:mt-0">
             <div
-              class="bg-[#0a0a0a] border border-white/5 rounded-[40px] lg:rounded-[50px] overflow-hidden p-6 lg:p-10 shadow-2xl"
+              class="bg-[#0a0a0a] border border-white/5 rounded-[40px] p-6 lg:p-10 shadow-2xl"
             >
               <div class="flex border-b border-white/5 mb-10">
                 <button
@@ -643,7 +600,7 @@ onUnmounted(() => {
                       ? 'text-yellow-500 border-b-4 border-yellow-500'
                       : 'text-gray-600'
                   "
-                  class="flex-1 py-5 text-[11px] lg:text-xs tracking-[0.4em] font-black uppercase italic transition-all"
+                  class="flex-1 py-5 text-[11px] font-black tracking-[0.4em]"
                 >
                   {{ tab }}
                 </button>
@@ -666,16 +623,14 @@ onUnmounted(() => {
                     />
                     <div
                       v-if="item.is_priority"
-                      class="absolute top-3 right-3 bg-yellow-500 p-2 rounded-full shadow-xl border-2 border-black z-10"
+                      class="absolute top-3 right-3 bg-yellow-500 p-2 rounded-full border-2 border-black z-10"
                     >
                       <StarIconSolid class="w-3 h-3 text-black" />
                     </div>
                     <div
                       class="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black to-transparent"
                     >
-                      <p class="text-[10px] truncate mb-1 text-white">
-                        {{ item.name }}
-                      </p>
+                      <p class="text-[10px] truncate mb-1">{{ item.name }}</p>
                       <p class="text-yellow-500 text-xs font-black italic">
                         IDR {{ item.display_price?.toLocaleString() }}
                       </p>
@@ -709,14 +664,14 @@ onUnmounted(() => {
                           ? 'bg-white/10 text-white shadow-lg'
                           : 'text-gray-600'
                       "
-                      class="flex-1 py-3 rounded-[18px] text-[9px] font-black tracking-widest transition-all italic uppercase"
+                      class="flex-1 py-3 rounded-[18px] text-[9px] font-black uppercase"
                     >
                       {{ sub.name }}
                     </button>
                   </div>
                   <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                    <template v-if="activeRecordTab === 'sold'">
-                      <div
+                    <template v-if="activeRecordTab === 'sold'"
+                      ><div
                         v-for="item in soldItems"
                         :key="item.id"
                         class="bg-white/5 border border-white/5 rounded-[32px] p-4 group transition-all"
@@ -728,10 +683,10 @@ onUnmounted(() => {
                         <p class="text-[10px] truncate font-black italic">
                           {{ item.name }}
                         </p>
-                      </div>
-                    </template>
-                    <template v-if="activeRecordTab === 'bought'">
-                      <div
+                      </div></template
+                    >
+                    <template v-if="activeRecordTab === 'bought'"
+                      ><div
                         v-for="item in wonItems"
                         :key="item.id"
                         class="bg-white/5 border border-white/5 rounded-[32px] p-4 relative group transition-all"
@@ -745,11 +700,10 @@ onUnmounted(() => {
                         </p>
                         <CheckBadgeIcon
                           class="absolute top-4 right-4 w-6 h-6 text-green-500 drop-shadow-xl"
-                        />
-                      </div>
-                    </template>
-                    <template v-if="activeRecordTab === 'archived'">
-                      <div
+                        /></div
+                    ></template>
+                    <template v-if="activeRecordTab === 'archived'"
+                      ><div
                         v-for="item in archivedItems"
                         :key="item.id"
                         class="bg-white/5 border border-white/5 rounded-[32px] p-4 flex flex-col"
@@ -759,15 +713,15 @@ onUnmounted(() => {
                           class="w-full h-32 object-cover rounded-2xl mb-4 opacity-40 grayscale"
                         />
                         <div class="flex justify-between items-center">
-                          <p
-                            class="text-[10px] truncate font-black italic flex-1"
-                          >
+                          <p class="text-[10px] truncate font-black flex-1">
                             {{ item.name }}
                           </p>
-                          <span class="text-[8px] text-gray-500">ENDED</span>
+                          <span class="text-[8px] text-gray-500 uppercase"
+                            >Ended</span
+                          >
                         </div>
-                      </div>
-                    </template>
+                      </div></template
+                    >
                   </div>
                 </div>
 
@@ -809,12 +763,11 @@ onUnmounted(() => {
                       >
                     </div>
                     <p
-                      class="text-[13px] leading-relaxed text-gray-400 normal-case italic font-bold"
+                      class="text-[13px] leading-relaxed text-gray-400 font-bold italic"
                     >
                       "{{ review.comment }}"
                     </p>
                   </div>
-
                   <button
                     v-if="currentUser && !isOwnProfile"
                     @click="showReviewModal = true"
@@ -972,3 +925,9 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+</style>

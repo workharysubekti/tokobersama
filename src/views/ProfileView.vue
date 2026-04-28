@@ -7,17 +7,38 @@ import {
   CameraIcon,
   ArrowRightOnRectangleIcon,
   ChevronRightIcon,
-  CheckBadgeIcon,
-  ShieldCheckIcon,
-  BoltIcon,
-  FireIcon,
-  TrophyIcon,
+  CheckBadgeIcon as CheckBadgeOutline,
+  ShieldCheckIcon as ShieldCheckOutline,
+  BoltIcon as BoltOutline,
+  FireIcon as FireOutline,
+  TrophyIcon as TrophyOutline,
   ArrowPathIcon,
   BanknotesIcon,
   UserIcon,
   ArrowUpRightIcon,
 } from "@heroicons/vue/24/outline";
 import { getRankDetails } from "../utils/rankUtils.js";
+import {
+  BoltIcon,
+  FireIcon,
+  ShieldCheckIcon,
+  TrophyIcon,
+  CheckBadgeIcon,
+  StarIcon as StarIconSolid,
+} from "@heroicons/vue/24/solid"; // Pakai yang SOLID biar warnanya lebih 'isi'
+
+// Fungsi pemetaan icon
+const getIconComponent = (iconName) => {
+  const map = {
+    BoltIcon,
+    FireIcon,
+    ShieldCheckIcon,
+    TrophyIcon,
+    CheckBadgeIcon,
+    StarIconSolid,
+  };
+  return map[iconName] || BoltIcon; // Default ke Bolt kalau ga ketemu
+};
 
 const props = defineProps({ userProfile: Object });
 const router = useRouter();
@@ -106,7 +127,7 @@ const fetchUserStats = async () => {
 // --- LOGIKA RANK (UPDATED LOGIC) ---
 const myRank = computed(() => {
   if (!props.userProfile)
-    return { name: "LOADING", color: "#666", icon: BoltIcon };
+    return { name: "LOADING", color: "#666", icon: "BoltIcon" };
 
   return getRankDetails(
     props.userProfile.reputation || 0,
@@ -232,35 +253,44 @@ onMounted(() => {
 
           <router-link
             to="/reputation-info"
-            class="inline-flex items-center gap-4 px-6 py-3 bg-yellow-500/5 border border-yellow-500/20 rounded-[24px] active:scale-95 transition-all w-fit"
+            class="active:scale-95 transition-all"
           >
             <div
               :style="{
-                color: myRank.color,
+                borderColor: myRank.color + '44',
                 backgroundColor: myRank.color + '15',
-                borderColor: myRank.color + '30',
               }"
-              class="p-2 rounded-xl border"
+              class="flex items-center gap-3 px-5 py-2 rounded-2xl border backdrop-blur-sm shadow-xl"
             >
-              <component :is="myRank.icon" class="w-4 h-4" />
-            </div>
-            <div class="text-left">
-              <p
-                :style="{
-                  color: myRank.color,
-                  textShadow: `0 0 10px ${myRank.color}44`,
-                }"
-                class="text-[9px] leading-none mb-1 font-black"
+              <div
+                :style="{ backgroundColor: myRank.color + '22' }"
+                class="p-1.5 rounded-lg border border-white/5"
               >
-                RANK: {{ myRank.name }}
-              </p>
-              <p
-                class="text-[7px] text-yellow-500/50 tracking-widest italic uppercase leading-none"
-              >
-                Bonus & Aturan
-              </p>
+                <component
+                  :is="getIconComponent(myRank.icon)"
+                  :style="{ color: myRank.color }"
+                  class="w-5 h-5 drop-shadow-[0_0_8px_rgba(0,0,0,0.5)]"
+                />
+              </div>
+
+              <div class="text-left">
+                <p
+                  class="text-[8px] text-gray-500 tracking-[0.3em] font-black leading-none mb-1"
+                >
+                  RANK STATUS
+                </p>
+                <span
+                  :style="{
+                    color: myRank.color,
+                    textShadow: `0 0 12px ${myRank.color}88`,
+                  }"
+                  class="text-sm font-[1000] italic tracking-tighter leading-none"
+                >
+                  {{ myRank.name }}
+                </span>
+              </div>
+              <ChevronRightIcon class="w-4 h-4 text-yellow-500/30 ml-1" />
             </div>
-            <ChevronRightIcon class="w-4 h-4 text-yellow-500/30" />
           </router-link>
 
           <div
