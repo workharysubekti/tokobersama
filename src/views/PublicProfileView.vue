@@ -313,8 +313,15 @@ const averageRating = computed(() => {
 });
 
 const myRank = computed(() => {
+  // 1. Satpam: Kalau data profile belum masuk, kasih status loading
+  if (!profile.value) {
+    return { name: "LOADING", color: "#666", icon: BoltIcon };
+  }
+
+  // 2. Eksekusi: Masukkan reputasi dan cek role
+  // Pastikan profile.value.role isinya beneran "admin" (huruf kecil semua)
   return getRankDetails(
-    profile.value.reputation,
+    profile.value.reputation || 0,
     profile.value.role === "admin",
   );
 });
@@ -481,7 +488,16 @@ onUnmounted(() => {
                   class="px-5 py-1.5 rounded-full border border-white/5 text-[9px] flex items-center gap-2"
                 >
                   <component :is="myRank.icon" class="w-3.5 h-3.5" />
-                  <span>{{ myRank.name }}</span>
+                  <span
+                    v-if="myRank"
+                    :style="{
+                      color: myRank.color,
+                      textShadow: `0 0 10px ${myRank.color}66`,
+                    }"
+                    class="text-xs font-black italic tracking-tighter border border-current px-2 py-0.5 rounded"
+                  >
+                    {{ myRank.name }}
+                  </span>
                 </div>
                 <div
                   class="flex items-center gap-1.5 text-yellow-500 bg-yellow-500/5 px-4 py-1.5 rounded-full border border-yellow-500/10"

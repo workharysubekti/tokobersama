@@ -19,6 +19,7 @@ import {
   QrCodeIcon,
   LockClosedIcon,
 } from "@heroicons/vue/24/outline";
+import { getRankDetails } from "../utils/rankUtils.js";
 
 // --- PROPS & ROUTING ---
 const props = defineProps({

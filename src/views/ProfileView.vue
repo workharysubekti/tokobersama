@@ -105,9 +105,12 @@ const fetchUserStats = async () => {
 
 // --- LOGIKA RANK ---
 const myRank = computed(() => {
+  // Tambahkan proteksi agar tidak error saat data props belum landing
+  if (!props.userProfile) return { name: "LOADING", color: "#666" };
+
   return getRankDetails(
-    userProfile.value.reputation,
-    userProfile.value.role === "admin",
+    props.userProfile.reputation || 0,
+    props.userProfile.role === "admin", // Pastikan kolom 'role' ada di tabel profiles
   );
 });
 
