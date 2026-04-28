@@ -84,6 +84,45 @@ const rankedBids = computed(() => {
   return uniqueBidders.slice(0, 8);
 });
 
+// --- LOGIKA DEPOSIT PROGRESIF (TAHAP 2 - MASTER TABLE) ---
+const depositPercentage = computed(() => {
+  const rep = props.userProfile?.reputation || 0;
+  const isAdmin = props.userProfile?.is_admin === true;
+
+  if (isAdmin) return 0; // OWNER bebas jaminan
+
+  // KHUSUS: Reputasi < 50 atau MINUS (Wajib 30% Flat untuk semua nominal)
+  if (rep < 50) return 30;
+
+  // PROGRESIF BERDASARKAN RANK
+  if (rep >= 1200) return 0; // LEGEND
+  if (rep >= 800) return 5; // MASTER
+  if (rep >= 400) return 10; // EXPERT
+  if (rep >= 200) return 15; // INTERMEDIATE
+  return 20; // MEMBER (0-199)
+});
+
+const requiredDeposit = computed(() => {
+  return (bidAmount.value * depositPercentage.value) / 100;
+});
+
+const needsDeposit = computed(() => {
+  const rep = props.userProfile?.reputation || 0;
+  const isAdmin = props.userProfile?.is_admin === true;
+
+  if (isAdmin) return false;
+
+  // 1. User "Berdosa" (Rep < 50): Wajib deposit untuk SEMUA nominal barang
+  if (rep < 50) return true;
+
+  // 2. User Normal: Wajib deposit hanya jika melampaui LIMIT RANK
+  return bidAmount.value > userRank.value.limit;
+});
+
+const hasEnoughBalanceForDeposit = computed(() => {
+  return (props.userProfile?.balance || 0) >= requiredDeposit.value;
+});
+
 // --- LOGIKA SETTLEMENT ---
 const isWinner = computed(() => {
   return (
@@ -349,14 +388,16 @@ const updateTimer = () => {
   }
 };
 
-// --- FUNGSI PLACE BID (SILENT RPC INTEGRATED) ---
+// --- FUNGSI UTAMA PLACE BID (PENYARING) ---
 const placeBid = async () => {
   if (!props.userProfile || isCooldown.value) return;
 
+  // 1. Cek Status Produk (KODE SUCI MAS)
   if (product.value.status !== "active" || timeLeft.value === "VALIDATING...") {
     return notify.error("Lelang Berakhir", "Pintu transmisi sudah ditutup.");
   }
 
+  // 2. Cek Posisi (KODE SUCI MAS)
   if (props.userProfile?.is_admin !== true) {
     const isCurrentWinner =
       recentBids.value.length > 0 &&
@@ -365,17 +406,32 @@ const placeBid = async () => {
       return notify.error("Top Position", "Tawaranmu masih tertinggi!");
   }
 
-  const rep = props.userProfile?.reputation || 0;
-  if (rep < 50 && props.userProfile?.is_admin !== true)
-    return notify.error("Reputasi Rendah", "Minimal 50 poin buat ngebid.");
+  // 3. LOGIKA BARU: CEK APAKAH BUTUH DEPOSIT?
+  if (needsDeposit.value) {
+    if (!hasEnoughBalanceForDeposit.value) {
+      const rep = props.userProfile?.reputation || 0;
+      const alasan =
+        rep < 50
+          ? "Wajib jaminan 30% karena reputasi di bawah standar."
+          : `Bid melampaui limit rank ${userRank.value.name}.`;
 
-  if (bidAmount.value > userRank.value.limit) {
-    return notify.error(
-      "Limit Rank",
-      `Maksimal bid ${formatPrice(userRank.value.limit)}`,
-    );
+      return notify.error(
+        "Saldo Jaminan Kurang",
+        `${alasan} Butuh: ${formatPrice(requiredDeposit.value)}`,
+      );
+    }
+
+    // Munculkan Modal, eksekusi dipindah ke konfirmasi modal
+    showDepositModal.value = true;
+    return;
   }
 
+  // 4. Jika lancar jaya (Tanpa Deposit), langsung eksekusi
+  await executeBidTransaction();
+};
+
+// --- FUNGSI EKSEKUSI DATABASE (KODE SUCI YANG DIPINDAH) ---
+const executeBidTransaction = async () => {
   try {
     isSubmitting.value = true;
     const { data, error } = await supabase.rpc("execute_bid_v1", {
@@ -390,13 +446,14 @@ const placeBid = async () => {
       return;
     }
 
+    // UPDATE STATE (KODE SUCI MAS)
     product.value.end_time = data.new_end_time;
     product.value.current_bid = data.new_bid;
     bidAmount.value = Number(data.new_bid) + 10000;
 
+    showDepositModal.value = false; // Tutup modal jika tadi lewat jalur deposit
     nextTick(() => updateTimer());
 
-    // SILENT SUCCESS: notify.success dihapus karena visual sudah mewakili
     isCooldown.value = true;
     setTimeout(() => {
       isCooldown.value = false;
@@ -407,7 +464,6 @@ const placeBid = async () => {
     isSubmitting.value = false;
   }
 };
-
 onMounted(async () => {
   await syncServerTime(); // Sync server time first
   await fetchProductDetail();
@@ -1217,6 +1273,83 @@ onUnmounted(() => {
         >
           Cancel Process
         </button>
+      </div>
+    </div>
+    <div
+      v-if="showDepositModal"
+      class="fixed inset-0 z-[600] flex items-center justify-center p-6"
+    >
+      <div
+        class="absolute inset-0 bg-black/95 backdrop-blur-2xl"
+        @click="showDepositModal = false"
+      ></div>
+      <div
+        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/5 rounded-[45px] p-10 text-center shadow-2xl"
+      >
+        <div
+          class="w-20 h-20 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-yellow-500/20"
+        >
+          <BanknotesIcon class="w-10 h-10 text-yellow-500" />
+        </div>
+
+        <h3 class="text-2xl font-[1000] italic uppercase text-white mb-2">
+          Security <span class="text-yellow-500">Deposit</span>
+        </h3>
+
+        <p
+          class="text-[9px] text-gray-500 uppercase tracking-widest mb-8 italic px-4"
+        >
+          {{
+            props.userProfile?.reputation < 50
+              ? "Wajib jaminan 30% karena reputasi di bawah standar (Probation)."
+              : `Jaminan diperlukan untuk bid di luar limit rank ${userRank.value.name}.`
+          }}
+        </p>
+
+        <div
+          class="bg-white/5 rounded-3xl p-6 mb-8 space-y-4 border border-white/5"
+        >
+          <div class="flex justify-between items-center">
+            <span class="text-[10px] font-black text-gray-500 uppercase italic"
+              >Your Bid</span
+            >
+            <span class="text-sm font-black text-white italic">{{
+              formatPrice(bidAmount)
+            }}</span>
+          </div>
+          <div
+            class="flex justify-between items-center pt-4 border-t border-white/5"
+          >
+            <div class="text-left">
+              <span
+                class="text-[10px] font-black text-yellow-500 uppercase italic block leading-none"
+                >Security Bond</span
+              >
+              <span class="text-[8px] text-gray-600 uppercase font-bold italic"
+                >Progressive rate: {{ depositPercentage }}%</span
+              >
+            </div>
+            <span class="text-lg font-[1000] text-yellow-500 italic">{{
+              formatPrice(requiredDeposit)
+            }}</span>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-3">
+          <button
+            @click="executeBidTransaction"
+            :disabled="isSubmitting"
+            class="w-full bg-yellow-500 text-black py-5 rounded-[25px] font-[1000] italic uppercase text-xs shadow-xl active:scale-95 transition-all"
+          >
+            {{ isSubmitting ? "PROCESSING..." : "CONFIRM & DEPOSIT" }}
+          </button>
+          <button
+            @click="showDepositModal = false"
+            class="py-4 text-[9px] font-black text-gray-600 uppercase italic hover:text-white transition-colors"
+          >
+            Decline Transmission
+          </button>
+        </div>
       </div>
     </div>
   </div>
