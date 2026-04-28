@@ -367,19 +367,35 @@ const fetchTransaction = async () => {
 };
 
 const confirmPayment = async (method) => {
-  isSubmittingAction.value = true;
-  const { error } = await supabase
-    .from("transactions")
-    .update({ status: "escrow_holding", payment_method: method })
-    .eq("id", transaction.value.id);
-  if (!error) {
-    transaction.value.status = "escrow_holding";
-    notify.success("Berhasil", "Dana ditahan di Escrow.");
-    showPaymentModal.value = false;
-  }
-  isSubmittingAction.value = false;
-};
+  if (!transaction.value) return; // Jaga-jaga kalau data tx kosong
 
+  isSubmittingAction.value = true;
+
+  try {
+    // TEMBAK RPC!
+    const { data, error } = await supabase.rpc("confirm_auction_payment", {
+      p_transaction_id: transaction.value.id,
+      p_product_id: product.value.id,
+      p_user_id: props.userProfile.id,
+      p_payment_method: method,
+      p_reputation_reward: 25, // Sesuai sistem Reputasi 5.0 lo
+    });
+
+    if (error) throw error;
+
+    // REFRESH DATA (Inilah "Nganu" yang lo maksud)
+    // Panggil fetchProductDetail biar status tombol & countdown langsung ilang
+    await fetchProductDetail();
+
+    notify.success("Berhasil!", "Dana aman di Escrow & Reputasi bertambah! 🚀");
+    showPaymentModal.value = false;
+  } catch (err) {
+    console.error("Payment Error:", err.message);
+    notify.error("Gagal", "Gagal konfirmasi, silakan coba lagi.");
+  } finally {
+    isSubmittingAction.value = false;
+  }
+};
 const fetchProductDetail = async () => {
   if (!route.params.id) return;
   loading.value = true;
@@ -393,6 +409,16 @@ const fetchProductDetail = async () => {
       .maybeSingle();
     if (error || !data) return router.push("/");
     product.value = data;
+    if (props.userProfile?.id) {
+      const { data: txData } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("product_id", data.id)
+        .eq("user_id", props.userProfile.id) // Kunci berdasarkan user yang login
+        .maybeSingle();
+
+      transaction.value = txData; // Refresh state transaksi
+    }
     await fetchBids();
     bidAmount.value =
       recentBids.value.length > 0
@@ -1264,7 +1290,10 @@ onUnmounted(() => {
                   </div>
                   <button
                     v-if="
-                      !transaction || transaction.status === 'pending_payment'
+                      product.winner_id === props.userProfile?.id &&
+                      (product.fallback_stage === 1 ||
+                        product.fallback_status === 'accepted') &&
+                      (!transaction || transaction.status === 'pending_payment')
                     "
                     @click="showPaymentModal = true"
                     class="w-full bg-green-500 text-black py-5 rounded-[25px] font-black italic uppercase text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
