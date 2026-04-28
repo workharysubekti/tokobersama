@@ -358,37 +358,26 @@ const fetchBids = async () => {
 };
 
 const fetchTransaction = async () => {
-  if (product.value?.status !== "closed" || !props.userProfile?.id) return;
-  
-  // 1. Cari transaksi milik SAYA
-  const { data } = await supabase
+  console.log("--- DEBUG FETCH TX ---");
+  console.log("Product Status:", product.value?.status);
+  console.log("User ID:", props.userProfile?.id);
+
+  // COBA KOMENTARI DULU SYARAT INI BUAT NGETES:
+  // if (product.value?.status !== "closed" || !props.userProfile?.id) return;
+
+  const { data, error } = await supabase
     .from("transactions")
     .select("*")
     .eq("product_id", route.params.id)
     .eq("buyer_id", props.userProfile.id)
     .maybeSingle();
 
-  if (data) {
-    transaction.value = data;
-  } else if (isWinner.value) {
-    // 2. Kalau gak ada, baru buat. Pake harga bid SAYA, bukan Rank #1
-    const myBid = recentBids.value.find(b => b.user_id === props.userProfile.id);
-    const myAmount = myBid ? myBid.amount : 0;
-
-    const { data: newTx } = await supabase
-      .from("transactions")
-      .insert({
-        product_id: product.value.id,
-        buyer_id: props.userProfile.id,
-        seller_id: product.value.owner_id,
-        amount_bid: myAmount,
-        total_amount: myAmount + adminFee,
-        status: 'pending_payment'
-      })
-      .select()
-      .single();
-    transaction.value = newTx;
+  if (error) {
+    console.error("SQL ERROR:", error.message); // Cek kalau ada error permission
   }
+
+  console.log("DATA TX DITEMUKAN:", data);
+  if (data) transaction.value = data;
 };
 
 const confirmPayment = async (method) => {
@@ -429,9 +418,7 @@ const fetchProductDetail = async () => {
     const { data, error } = await supabase
       .from("products")
       .select("*, profiles!owner_id(username, full_name, avatar_url, reputation), fallback_stage, fallback_status, fallback_deadline")
-      .eq("id", route.params.id)
-      .order('created_at', { ascending: false })
-      .limit (1)
+      .eq("id", parseInt(route.params.id))
       .maybeSingle();
 
     if (error || !data) return router.push("/");
