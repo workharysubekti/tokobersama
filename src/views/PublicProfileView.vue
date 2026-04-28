@@ -946,14 +946,13 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
+  <span
+    :style="{
+      color: myRank.color,
+      textShadow: `0 0 10px ${myRank.color}44`,
+    }"
+    class="font-black italic"
+  >
+    {{ myRank.name }}
+  </span>
 </template>
-
-<span
-  :style="{
-    color: myRank.color,
-    textShadow: `0 0 10px ${myRank.color}44`,
-  }"
-  class="font-black italic"
->
-  {{ myRank.name }}
-</span>
