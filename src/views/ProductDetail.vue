@@ -380,30 +380,26 @@ const fetchTransaction = async () => {
 };
 
 const confirmPayment = async (method) => {
-  if (!transaction.value) return; // Jaga-jaga kalau data tx kosong
+  if (!transaction.value) {
+    notify.error("Error", "Data transaksi tidak ditemukan.");
+    return;
+  }
 
   isSubmittingAction.value = true;
-  const { error } = await supabase
-    .from("transactions") // <--- TAMBAHKAN S DI SINI JUGA
-    .update({ status: "escrow_holding", payment_method: method })
-    .eq("id", transaction.value.id);
 
   try {
-    // TEMBAK RPC!
+    // LANGSUNG TEMBAK RPC (Gak usah pake .update() manual lagi)
     const { data, error } = await supabase.rpc("confirm_auction_payment", {
       p_transaction_id: transaction.value.id,
       p_product_id: product.value.id,
       p_user_id: props.userProfile.id,
       p_payment_method: method,
-      p_reputation_reward: 25, // Sesuai sistem Reputasi 5.0 lo
+      p_reputation_reward: 25,
     });
 
     if (error) throw error;
 
-    // REFRESH DATA (Inilah "Nganu" yang lo maksud)
-    // Panggil fetchProductDetail biar status tombol & countdown langsung ilang
-    await fetchProductDetail();
-
+    await fetchProductDetail(); // Tarik data terbaru setelah bayar
     notify.success("Berhasil!", "Dana aman di Escrow & Reputasi bertambah! 🚀");
     showPaymentModal.value = false;
   } catch (err) {
@@ -417,7 +413,6 @@ const fetchProductDetail = async () => {
   if (!route.params.id) return;
   loading.value = true;
   try {
-    // 1. Ambil Data Produk
     const { data, error } = await supabase
       .from("products")
       .select(
@@ -429,15 +424,18 @@ const fetchProductDetail = async () => {
     if (error || !data) return router.push("/");
     product.value = data;
 
-    // 2. Ambil Data Transaksi (PAKE BUYER_ID!)
+    // --- BAGIAN YANG BIKIN TxStatus KOSONG ---
     if (props.userProfile?.id) {
-      const { data: txData } = await supabase
-        .from("transactions")
+      const { data: txData, error: txError } = await supabase
+        .from("transactions") // 1. Pastikan pake S
         .select("*")
         .eq("product_id", data.id)
-        .eq("buyer_id", props.userProfile.id) // <--- KUNCI BUYER_ID
+        .eq("buyer_id", props.userProfile.id) // 2. Pastikan buyer_id, bukan user_id
         .maybeSingle();
 
+      if (txError) console.error("Error tarik transaksi:", txError.message);
+
+      // Simpan ke ref transaction agar TxStatus di kotak merah berubah
       transaction.value = txData;
     }
 
@@ -1324,11 +1322,10 @@ onUnmounted(() => {
                   <button
                     v-if="
                       product?.winner_id === props.userProfile?.id &&
-                      product?.fallback_status === 'accepted' &&
-                      (!transaction || transaction.status === 'pending_payment')
+                      product?.fallback_status === 'accepted'
                     "
                     @click="showPaymentModal = true"
-                    class="w-full bg-green-500 text-black py-5 rounded-[25px] font-[1000] italic uppercase text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
+                    class="w-full bg-green-500 text-black py-5 rounded-[25px] font-[1000] italic uppercase text-xs flex items-center justify-center gap-3 shadow-lg"
                   >
                     <ShieldCheckIcon class="w-5 h-5" /> Pay to Escrow
                   </button>
