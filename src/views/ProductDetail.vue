@@ -20,6 +20,7 @@ import {
   LockClosedIcon,
 } from "@heroicons/vue/24/outline";
 import { getRankDetails } from "../utils/rankUtils.js";
+import { p } from "vue-router/dist/router-CWoNjPRp.mjs";
 
 // --- PROPS & ROUTING ---
 const props = defineProps({
@@ -172,6 +173,37 @@ const userRank = computed(() => {
         ? "font-[1000] drop-shadow-[0_0_10px_#EF4444aa]"
         : "font-black",
   };
+});
+
+// --- FALLBACK WINNER ---
+const loadingFallback = ref(false);
+
+const handleFallback = async (choice) => {
+  loadingFallback.value = true;
+  try {
+    const { data, error } = await supabase.rpc("handle_fallback_choice", {
+      p_product_id: product.value.id,
+      p_choice: choice,
+    });
+    if (error) throw error;
+    await fetchProductDetail();
+
+    alert(data);
+  } catch (err) {
+    console.error("Fallback Error:", err.message);
+    alert("Gagal memproses pilihan.");
+  } finally {
+    loadingFallback.value = false;
+  }
+};
+
+// Logic buat nentuin UI muncul
+const showFallbackUI = computed(() => {
+  return (
+    product.value.winner_id === currentUser.id &&
+    product.value.fallback_stage > 1 &&
+    product.value.fallback_status === "pending"
+  );
 });
 
 // --- WATCHER OUTBID (SILENT INTEGRATION) ---
@@ -586,6 +618,74 @@ onUnmounted(() => {
 
 <template>
   <div v-if="product" class="bg-black min-h-screen text-white pb-32">
+    <div
+      v-if="showFallbackUI"
+      class="mb-8 overflow-hidden rounded-[32px] border-2 border-yellow-500 bg-black shadow-[0_0_40px_rgba(234,179,8,0.2)]"
+    >
+      <div class="p-6 md:p-8">
+        <div class="flex flex-col md:flex-row items-center gap-6">
+          <div
+            class="flex-shrink-0 w-16 h-16 rounded-2xl bg-yellow-500 flex items-center justify-center shadow-[0_0_20px_rgba(234,179,8,0.4)]"
+          >
+            <TrophyIcon class="w-10 h-10 text-black" />
+          </div>
+
+          <div class="flex-1 text-center md:text-left">
+            <h2
+              class="text-xl md:text-2xl font-[1000] italic text-white uppercase tracking-tighter mb-1"
+            >
+              Kesempatan <span class="text-yellow-500">Fallback!</span>
+            </h2>
+            <p
+              class="text-[10px] md:text-xs text-gray-400 font-bold italic uppercase tracking-widest leading-relaxed"
+            >
+              Pemenang sebelumnya kabur. Sebagai Rank #{{
+                product.fallback_stage
+              }}, barang ini sekarang milikmu.
+              <br class="hidden md:block" />
+              <span class="text-red-500 font-black"
+                >Pilih sebelum Jam 10:00 pagi</span
+              >
+              untuk lepas tanpa penalti.
+            </p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mt-8">
+          <button
+            @click="handleFallback('accepted')"
+            :disabled="loadingFallback"
+            class="group relative overflow-hidden py-4 rounded-2xl bg-yellow-500 text-black font-[1000] italic uppercase text-sm transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+          >
+            <span class="relative z-10">Ambil Item</span>
+            <div
+              class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform"
+            ></div>
+          </button>
+
+          <button
+            @click="handleFallback('released')"
+            :disabled="loadingFallback"
+            class="py-4 rounded-2xl bg-white/5 border border-white/10 text-gray-400 font-[1000] italic uppercase text-sm transition-all hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50 active:scale-95 disabled:opacity-50"
+          >
+            Lepaskan
+          </button>
+        </div>
+      </div>
+
+      <div
+        class="bg-yellow-500/10 py-3 px-6 border-t border-white/5 text-center"
+      >
+        <p
+          class="text-[9px] font-black italic text-yellow-500 uppercase tracking-[0.2em]"
+        >
+          *Konsekuensi Bid & Run: -{{
+            product.fallback_stage === 2 ? "100" : "50"
+          }}
+          Reputasi
+        </p>
+      </div>
+    </div>
     <div
       v-if="showBannedModal"
       id="banned-guard-overlay"
