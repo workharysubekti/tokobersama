@@ -419,7 +419,7 @@ const executeBidTransaction = async () => {
   try {
     isSubmitting.value = true;
 
-    // Backup end_time lama buat bandingin badge
+    // Backup waktu lama buat perbandingan badge
     const oldEnd = new Date(product.value.end_time).getTime();
 
     const { data, error } = await supabase.rpc("execute_bid_v1", {
@@ -434,15 +434,15 @@ const executeBidTransaction = async () => {
       return;
     }
 
-    // --- SINKRONISASI PAKSA (OTAK TOKBER) ---
+    // --- SINKRONISASI TOTAL ---
+    // Update state product DETIK INI JUGA dari data kembalian database
     const newEnd = new Date(data.new_end_time).getTime();
 
-    // Update state produk langsung tanpa nunggu broadcast
     product.value.end_time = data.new_end_time;
     product.value.current_bid = data.new_bid;
     bidAmount.value = Number(data.new_bid) + 10000;
 
-    // Trigger badge EXTENDED secara manual
+    // Trigger visual badge "EXTENDED" kalau emang nambah > 2 detik
     if (newEnd > oldEnd + 2000) {
       showExtensionBadge.value = true;
       setTimeout(() => {
@@ -452,7 +452,7 @@ const executeBidTransaction = async () => {
 
     showDepositModal.value = false;
 
-    // Paksa fungsi timer jalan sekarang juga!
+    // Paksa UI ngitung ulang sisa waktu sekarang juga!
     nextTick(() => {
       updateTimer();
     });
