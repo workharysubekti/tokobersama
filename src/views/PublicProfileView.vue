@@ -63,15 +63,15 @@ const cropType = ref("");
 const selectedFile = ref(null);
 const isUploading = ref(false);
 
-// --- HELPER ICON RANK ---
+// --- HELPER PEMETAAN IKON (FIXED) ---
 const getIconComponent = (iconName) => {
   const map = {
-    BoltIcon,
-    FireIcon,
-    ShieldCheckIcon,
-    TrophyIcon,
-    CheckBadgeIcon,
-    StarIconSolid,
+    BoltIcon: BoltIcon,
+    FireIcon: FireIcon,
+    ShieldCheckIcon: ShieldCheckIcon,
+    TrophyIcon: TrophyIcon,
+    CheckBadgeIcon: CheckBadgeIcon,
+    StarIconSolid: StarIconSolid,
   };
   return map[iconName] || BoltIcon;
 };
@@ -223,17 +223,20 @@ const executeUpload = async () => {
     } = supabase.storage
       .from(cropType.value === "avatar" ? "avatars" : "covers")
       .getPublicUrl(filePath);
+    const updateData = {};
     const columnName = cropType.value === "avatar" ? "avatar_url" : "cover_url";
+    updateData[columnName] = publicUrl;
     const { error: updateError } = await supabase
       .from("profiles")
-      .update({ [columnName]: publicUrl })
+      .update(updateData)
       .eq("id", currentUser.value.id);
     if (updateError) throw updateError;
     if (profile.value) profile.value[columnName] = publicUrl;
     notify.success(
-      `${cropType.value === "avatar" ? "Foto Profil" : "Sampul"} Diperbarui!`,
+      `${cropType.value === "avatar" ? "Foto Profil" : "Sampul"} Berhasil Diperbarui!`,
     );
     showCropModal.value = false;
+    fileToUpload.value = null;
   } catch (err) {
     notify.error("Upload Gagal", err.message);
   } finally {
@@ -245,23 +248,26 @@ const executeUpload = async () => {
 const toggleFollow = async () => {
   if (!currentUser.value) return router.push("/login");
   if (isOwnProfile.value) return;
+
   try {
     if (isFollowing.value) {
-      await supabase
+      const { error: deleteError } = await supabase
         .from("follows")
         .delete()
         .eq("follower_id", currentUser.value.id)
         .eq("following_id", profile.value.id);
+      if (deleteError) throw deleteError;
       followersCount.value--;
       isFollowing.value = false;
       notify.success("Berhenti Mengikuti");
     } else {
-      await supabase.from("follows").insert({
+      const { error: insertError } = await supabase.from("follows").insert({
         follower_id: currentUser.value.id,
         following_id: profile.value.id,
       });
+      if (insertError) throw insertError;
       try {
-        const { data: me } = await supabase
+        const { data: myProfile } = await supabase
           .from("profiles")
           .select("username")
           .eq("id", currentUser.value.id)
@@ -269,8 +275,8 @@ const toggleFollow = async () => {
         await supabase.from("notifications").insert({
           user_id: profile.value.id,
           from_user_id: currentUser.value.id,
-          title: "NEW FOLLOWER!",
-          message: `@${me?.username} mengikuti Anda.`,
+          title: "NEW TRANSMISSION!",
+          message: `@${myProfile?.username || "Seseorang"} mulai mengikuti Anda.`,
           type: "activity",
         });
       } catch (e) {}
@@ -279,7 +285,7 @@ const toggleFollow = async () => {
       notify.success("Berhasil Mengikuti");
     }
   } catch (error) {
-    notify.error("Aksi Gagal");
+    notify.error("Aksi Gagal", error.message);
   }
 };
 
@@ -307,20 +313,23 @@ const submittingReview = ref(false);
 const newReview = ref({ rating: 5, comment: "" });
 
 const submitReview = async () => {
-  if (!newReview.value.comment.trim()) return notify.error("Entry required");
+  if (!newReview.value.comment.trim())
+    return notify.error("Log entry required");
   submittingReview.value = true;
   try {
-    await supabase.from("reviews").insert({
+    const { error } = await supabase.from("reviews").insert({
       target_user_id: profile.value.id,
       reviewer_id: currentUser.value.id,
       rating: newReview.value.rating,
       comment: newReview.value.comment,
     });
-    notify.success("Logged");
+    if (error) throw error;
+    notify.success("Transmission logged");
     showReviewModal.value = false;
+    newReview.value = { rating: 5, comment: "" };
     fetchData();
-  } catch (e) {
-    notify.error("Failed");
+  } catch (error) {
+    notify.error("Sync failed");
   } finally {
     submittingReview.value = false;
   }
@@ -332,19 +341,21 @@ const reportForm = ref({ category: "Lainnya", details: "" });
 
 const submitReport = async () => {
   if (!currentUser.value) return router.push("/login");
+  if (reportForm.value.details.length < 5) return notify.error("Need details");
   isSubmittingReport.value = true;
   try {
-    await supabase.from("reports").insert({
+    const { error } = await supabase.from("reports").insert({
       reporter_id: currentUser.value.id,
       target_user_id: profile.value.id,
       reason_category: reportForm.value.category,
       reason: reportForm.value.details,
       status: "pending",
     });
+    if (error) throw error;
     notify.success("Report Sent");
     showReportModal.value = false;
   } catch (e) {
-    notify.error("Failed");
+    notify.error("Report failed");
   } finally {
     isSubmittingReport.value = false;
   }
@@ -360,7 +371,9 @@ watch(
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "bids" },
-          fetchData,
+          async () => {
+            await fetchData();
+          },
         )
         .subscribe();
     }
@@ -500,9 +513,11 @@ onUnmounted(() => {
             >
               <router-link
                 :to="`/user/${profile.username}/followers`"
-                class="active:scale-95 transition-all text-center lg:text-left"
+                class="group text-center lg:text-left active:scale-95 transition-all"
               >
-                <p class="text-white text-xl lg:text-3xl mb-0.5">
+                <p
+                  class="text-white text-xl lg:text-3xl mb-0.5 group-hover:text-yellow-500"
+                >
                   {{ followersCount }}
                 </p>
                 <p>PENGIKUT</p>
@@ -510,9 +525,11 @@ onUnmounted(() => {
               <div class="w-px h-8 bg-white/10"></div>
               <router-link
                 :to="`/user/${profile.username}/following`"
-                class="active:scale-95 transition-all text-center lg:text-left"
+                class="group text-center lg:text-left active:scale-95 transition-all"
               >
-                <p class="text-white text-xl lg:text-3xl mb-0.5">
+                <p
+                  class="text-white text-xl lg:text-3xl mb-0.5 group-hover:text-blue-500"
+                >
                   {{ followingCount }}
                 </p>
                 <p>MENGIKUTI</p>
@@ -536,13 +553,22 @@ onUnmounted(() => {
                 @click="toggleFollow"
                 :class="
                   isFollowing
-                    ? 'bg-white/5 border-white/10'
+                    ? 'bg-white/5 text-white border-white/10'
                     : 'bg-yellow-500 text-black'
                 "
                 class="flex-[3] py-4 rounded-[22px] text-[10px] font-black border transition-all active:scale-95"
               >
                 {{ isFollowing ? "UNFOLLOW" : "IKUTI USER" }}
               </button>
+
+              <button
+                v-else
+                @click="router.push('/profile')"
+                class="flex-1 py-4 bg-white/5 border border-white/10 rounded-[22px] text-[10px] font-black tracking-widest text-yellow-500 active:scale-95 transition-all"
+              >
+                MODIFIKASI PROFIL SAYA
+              </button>
+
               <button
                 v-if="!isOwnProfile"
                 @click="router.push(`/messages/${profile.id}`)"
@@ -558,6 +584,7 @@ onUnmounted(() => {
                 <ExclamationTriangleIcon class="w-6 h-6" />
               </button>
             </div>
+
             <p
               class="text-gray-400 text-[13px] leading-relaxed italic font-bold text-center lg:text-left"
             >
@@ -570,17 +597,30 @@ onUnmounted(() => {
                   borderColor: myRank.color + '44',
                   backgroundColor: myRank.color + '15',
                 }"
-                class="flex items-center gap-3 px-5 py-2 rounded-2xl border backdrop-blur-sm"
+                class="flex items-center gap-3 px-5 py-2 rounded-2xl border backdrop-blur-sm shadow-xl"
               >
-                <component
-                  :is="getIconComponent(myRank.icon)"
-                  :style="{ color: myRank.color }"
-                  class="w-4 h-4"
-                />
+                <div
+                  :style="{ backgroundColor: myRank.color + '22' }"
+                  class="p-1 rounded-lg border border-white/5"
+                >
+                  <component
+                    :is="getIconComponent(myRank.icon)"
+                    :style="{ color: myRank.color }"
+                    class="w-4 h-4"
+                  />
+                </div>
                 <span
                   :style="{ color: myRank.color }"
                   class="text-xs font-black"
                   >{{ myRank.name }}</span
+                >
+              </div>
+              <div
+                class="flex items-center gap-2 text-yellow-500 bg-yellow-500/5 px-4 py-2 rounded-full border border-yellow-500/10"
+              >
+                <StarIconSolid class="w-3.5 h-3.5" /><span
+                  class="text-sm font-black italic"
+                  >{{ averageRating }}/5.0</span
                 >
               </div>
             </div>
@@ -600,7 +640,7 @@ onUnmounted(() => {
                       ? 'text-yellow-500 border-b-4 border-yellow-500'
                       : 'text-gray-600'
                   "
-                  class="flex-1 py-5 text-[11px] font-black tracking-[0.4em]"
+                  class="flex-1 py-5 text-[11px] font-black tracking-[0.4em] uppercase transition-all"
                 >
                   {{ tab }}
                 </button>
@@ -664,7 +704,7 @@ onUnmounted(() => {
                           ? 'bg-white/10 text-white shadow-lg'
                           : 'text-gray-600'
                       "
-                      class="flex-1 py-3 rounded-[18px] text-[9px] font-black uppercase"
+                      class="flex-1 py-3 rounded-[18px] text-[9px] font-black uppercase italic"
                     >
                       {{ sub.name }}
                     </button>
@@ -716,9 +756,7 @@ onUnmounted(() => {
                           <p class="text-[10px] truncate font-black flex-1">
                             {{ item.name }}
                           </p>
-                          <span class="text-[8px] text-gray-500 uppercase"
-                            >Ended</span
-                          >
+                          <span class="text-[8px] text-gray-500">ENDED</span>
                         </div>
                       </div></template
                     >
