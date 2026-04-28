@@ -922,7 +922,7 @@ onUnmounted(() => {
             </p>
 
             <h3
-              class="text-3xl sm:text-5xl lg:text-5xl font-[1000] italic text-yellow-500 tracking-tighter mb-10 drop-shadow-[0_0_30px_rgba(234,179,8,0.3)] break-all leading-none py-2"
+              class="text-2xl sm:text-4xl md:text-5xl lg:text-4xl xl:text-5xl 2xl:text-6xl font-[1000] italic text-yellow-500 tracking-tighter mb-10 drop-shadow-[0_0_30px_rgba(234,179,8,0.3)] leading-[1.1] py-2 break-words transition-all duration-300"
             >
               {{ formatPrice(product.current_bid || product.starting_bid) }}
             </h3>
@@ -1069,14 +1069,24 @@ onUnmounted(() => {
                     Victory Achieved!
                   </h2>
                   <div
-                    class="bg-black/40 p-6 rounded-3xl border border-white/5 mb-6 flex justify-between items-center"
+                    class="bg-black/40 p-5 lg:p-6 rounded-3xl border border-white/5 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 overflow-hidden shadow-inner"
                   >
                     <span
-                      class="text-[10px] font-bold uppercase italic text-gray-500"
-                      >Total Settlement</span
-                    ><span class="text-white font-black italic">{{
-                      formatPrice(totalToPay)
-                    }}</span>
+                      class="text-[9px] lg:text-[10px] font-bold uppercase italic text-gray-500 tracking-wider whitespace-nowrap"
+                    >
+                      Total Settlement
+                    </span>
+
+                    <span
+                      class="text-white font-[1000] italic break-all sm:break-normal leading-tight transition-all duration-300"
+                      :class="
+                        totalToPay.toString().length > 9
+                          ? 'text-sm lg:text-base'
+                          : 'text-base lg:text-lg'
+                      "
+                    >
+                      {{ formatPrice(totalToPay) }}
+                    </span>
                   </div>
                   <button
                     v-if="
