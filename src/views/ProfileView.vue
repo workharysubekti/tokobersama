@@ -27,17 +27,19 @@ import {
   StarIcon as StarIconSolid,
 } from "@heroicons/vue/24/solid"; // Pakai yang SOLID biar warnanya lebih 'isi'
 
-// Fungsi pemetaan icon
+// --- HELPER PEMETAAN IKON (FIXED) ---
 const getIconComponent = (iconName) => {
   const map = {
-    BoltIcon,
-    FireIcon,
-    ShieldCheckIcon,
-    TrophyIcon,
-    CheckBadgeIcon,
-    StarIconSolid,
+    BoltIcon: BoltIcon,
+    FireIcon: FireIcon,
+    ShieldCheckIcon: ShieldCheckIcon,
+    TrophyIcon: TrophyIcon,
+    CheckBadgeIcon: CheckBadgeIcon,
+    StarIconSolid: StarIconSolid,
+    StarIcon: StarIconSolid, // Fallback jika rankUtils mengirim 'StarIcon'
   };
-  return map[iconName] || BoltIcon; // Default ke Bolt kalau ga ketemu
+  // Mengambil ikon berdasarkan string dari rankUtils, jika tidak ketemu baru ke Bolt
+  return map[iconName] || BoltIcon;
 };
 
 const props = defineProps({ userProfile: Object });

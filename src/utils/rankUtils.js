@@ -4,22 +4,45 @@
  */
 
 export const RANKS = [
-  { name: "MEMBER", min: 0, max: 199, limit: 5000000, color: "#22C55E" }, // Hijau (Fresh Start)
+  {
+    name: "MEMBER",
+    min: 0,
+    max: 199,
+    limit: 5000000,
+    color: "#22C55E",
+    icon: "BoltIcon",
+  }, // Hijau (Fresh Start)
   {
     name: "INTERMEDIATE",
     min: 200,
     max: 399,
     limit: 40000000,
     color: "#3B82F6",
+    icon: "FireIcon",
   }, // Biru (Established)
-  { name: "EXPERT", min: 400, max: 799, limit: 100000000, color: "#06B6D4" }, // Cyan/Diamond (High Tier)
-  { name: "MASTER", min: 800, max: 1199, limit: 500000000, color: "#F97316" }, // Elegant Orange (Pro)
+  {
+    name: "EXPERT",
+    min: 400,
+    max: 799,
+    limit: 100000000,
+    color: "#06B6D4",
+    icon: "ShieldCheckIcon",
+  }, // Cyan/Diamond (High Tier)
+  {
+    name: "MASTER",
+    min: 800,
+    max: 1199,
+    limit: 500000000,
+    color: "#F97316",
+    icon: "TrophyIcon",
+  }, // Elegant Orange (Pro)
   {
     name: "LEGEND",
     min: 1200,
     max: Infinity,
     limit: Infinity,
     color: "#FACC15",
+    icon: "CheckBadgeIcon",
   }, // Shining Gold (Top Tier)
 ];
 
@@ -30,6 +53,8 @@ export const getRankDetails = (reputation, isAdmin = false) => {
       name: "OWNER",
       limit: Infinity,
       color: "#EF4444",
+      icon: "ShieldCheckIcon",
+      bg: "bg-red-500/10",
       nextRank: null,
       progress: 100,
     };
