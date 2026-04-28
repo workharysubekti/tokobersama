@@ -408,6 +408,7 @@ const fetchProductDetail = async () => {
   if (!route.params.id) return;
   loading.value = true;
   try {
+    // 1. Ambil Data Produk
     const { data, error } = await supabase
       .from("products")
       .select(
@@ -415,23 +416,30 @@ const fetchProductDetail = async () => {
       )
       .eq("id", route.params.id)
       .maybeSingle();
+
     if (error || !data) return router.push("/");
     product.value = data;
+
+    // 2. Ambil Data Transaksi (PAKE BUYER_ID!)
     if (props.userProfile?.id) {
       const { data: txData } = await supabase
         .from("transactions")
         .select("*")
-        .eq("product_id", product.value.id)
-        .eq("buyer_id", props.userProfile.id) // Kunci berdasarkan user yang login
+        .eq("product_id", data.id)
+        .eq("buyer_id", props.userProfile.id) // <--- KUNCI BUYER_ID
         .maybeSingle();
 
-      transaction.value = txData; // Refresh state transaksi
+      transaction.value = txData;
     }
+
     await fetchBids();
+
     bidAmount.value =
       recentBids.value.length > 0
         ? Number(recentBids.value[0].amount) + 10000
         : Number(data.starting_bid) + 10000;
+  } catch (err) {
+    console.error("Fetch Error:", err);
   } finally {
     loading.value = false;
   }
@@ -1298,12 +1306,11 @@ onUnmounted(() => {
                   <button
                     v-if="
                       product.winner_id === props.userProfile?.id &&
-                      (product.fallback_stage === 1 ||
-                        product.fallback_status === 'accepted') &&
-                      (!transaction || transaction.status === 'pending_payment')
+                      (product.fallback_status === 'accepted' ||
+                        product.fallback_stage === 1)
                     "
                     @click="showPaymentModal = true"
-                    class="w-full bg-green-500 text-black py-5 rounded-[25px] font-black italic uppercase text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
+                    class="w-full bg-green-500 text-black py-5 rounded-[25px] font-[1000] italic uppercase text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
                   >
                     <ShieldCheckIcon class="w-5 h-5" /> Pay to Escrow
                   </button>
