@@ -17,6 +17,7 @@ import {
   UserIcon,
   ArrowUpRightIcon,
 } from "@heroicons/vue/24/outline";
+import { getRankDetails } from "../utils/rankUtils.js";
 
 const props = defineProps({ userProfile: Object });
 const router = useRouter();
@@ -103,36 +104,11 @@ const fetchUserStats = async () => {
 };
 
 // --- LOGIKA RANK ---
-const userRank = computed(() => {
-  if (props.userProfile?.is_admin === true) {
-    return {
-      name: "OWNER",
-      color: "text-red-600",
-      bg: "bg-red-600/10",
-      icon: ShieldCheckIcon,
-    };
-  }
-  const count = followersCount.value;
-  if (count >= 100)
-    return {
-      name: "LEGEND",
-      color: "text-yellow-500",
-      bg: "bg-yellow-500/10",
-      icon: TrophyIcon,
-    };
-  if (count >= 30)
-    return {
-      name: "EXPERT",
-      color: "text-red-500",
-      bg: "bg-red-600/10",
-      icon: FireIcon,
-    };
-  return {
-    name: "NEWBIE",
-    color: "text-blue-500",
-    bg: "bg-blue-500/10",
-    icon: ShieldCheckIcon,
-  };
+const myRank = computed(() => {
+  return getRankDetails(
+    userProfile.value.reputation,
+    userProfile.value.role === "admin",
+  );
 });
 
 const editData = ref({
@@ -256,14 +232,14 @@ onMounted(() => {
             class="inline-flex items-center gap-4 px-6 py-3 bg-yellow-500/5 border border-yellow-500/20 rounded-[24px] active:scale-95 transition-all w-fit"
           >
             <div
-              :class="[userRank.bg, userRank.color]"
+              :class="[myRank.bg, myRank.color]"
               class="p-2 rounded-xl border border-white/5"
             >
-              <component :is="userRank.icon" class="w-4 h-4" />
+              <component :is="myRank.icon" class="w-4 h-4" />
             </div>
             <div class="text-left">
               <p class="text-[9px] text-white leading-none mb-1 font-black">
-                RANK: {{ userRank.name }}
+                RANK: {{ myRank.name }}
               </p>
               <p
                 class="text-[7px] text-yellow-500/50 tracking-widest italic uppercase leading-none"
@@ -459,6 +435,15 @@ onMounted(() => {
     </div>
   </div>
 </template>
+<span
+  :style="{
+    color: myRank.color,
+    textShadow: `0 0 10px ${myRank.color}44`,
+  }"
+  class="font-black italic"
+>
+  {{ myRank.name }}
+</span>
 
 <style scoped>
 .no-scrollbar::-webkit-scrollbar {

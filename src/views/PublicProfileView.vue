@@ -970,3 +970,13 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+<span
+  :style="{
+    color: userRank.color,
+    textShadow: `0 0 10px ${userRank.color}44`,
+  }"
+  class="font-black italic"
+>
+  {{ userRank.name }}
+</span>
