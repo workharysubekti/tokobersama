@@ -419,8 +419,8 @@ const executeBidTransaction = async () => {
   try {
     isSubmitting.value = true;
 
-    // Simpan waktu akhir lama buat perbandingan badge
-    const oldEndTime = new Date(product.value.end_time).getTime();
+    // Backup end_time lama buat bandingin badge
+    const oldEnd = new Date(product.value.end_time).getTime();
 
     const { data, error } = await supabase.rpc("execute_bid_v1", {
       p_product_id: product.value.id,
@@ -434,16 +434,16 @@ const executeBidTransaction = async () => {
       return;
     }
 
-    // UPDATE STATE LOKAL (BIAR INSTAN)
-    const newEndTime = new Date(data.new_end_time).getTime();
+    // --- SINKRONISASI PAKSA (OTAK TOKBER) ---
+    const newEnd = new Date(data.new_end_time).getTime();
+
+    // Update state produk langsung tanpa nunggu broadcast
     product.value.end_time = data.new_end_time;
     product.value.current_bid = data.new_bid;
-
-    // Prediksi inputan selanjutnya
     bidAmount.value = Number(data.new_bid) + 10000;
 
-    // CEK APAKAH WAKTU BERTAMBAH (ANTI-SNIPER CHECK)
-    if (newEndTime > oldEndTime + 1000) {
+    // Trigger badge EXTENDED secara manual
+    if (newEnd > oldEnd + 2000) {
       showExtensionBadge.value = true;
       setTimeout(() => {
         showExtensionBadge.value = false;
@@ -451,7 +451,11 @@ const executeBidTransaction = async () => {
     }
 
     showDepositModal.value = false;
-    nextTick(() => updateTimer());
+
+    // Paksa fungsi timer jalan sekarang juga!
+    nextTick(() => {
+      updateTimer();
+    });
 
     isCooldown.value = true;
     setTimeout(() => {
