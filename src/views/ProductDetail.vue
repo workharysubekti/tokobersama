@@ -108,15 +108,13 @@ const requiredDeposit = computed(() => {
 });
 
 const needsDeposit = computed(() => {
+  const isAdmin = !!props.userProfile?.is_admin;
+  if (isAdmin) return false; // OWNER KEBAL ATURAN
+
   const rep = props.userProfile?.reputation || 0;
-  const isAdmin = !!props.userProfile?.is_admin; // FIXED: Flexible Boolean Check
+  if (rep < 50) return true; // User berdosa wajib depo
 
-  if (isAdmin) return false;
-
-  // 1. User "Berdosa" (Rep < 50): Wajib deposit untuk SEMUA nominal barang
-  if (rep < 50) return true;
-
-  // 2. User Normal: Wajib deposit hanya jika melampaui LIMIT RANK
+  // User normal depo jika lewat limit kasta
   return bidAmount.value > userRank.value.limit;
 });
 
@@ -144,6 +142,7 @@ const totalToPay = computed(() => {
 
 // --- LOGIKA USER RANK & LIMIT (SINKRON DENGAN RANKUTILS) ---
 const userRank = computed(() => {
+  const isAdmin = !!props.userProfile?.is_admin; // FIXED: Flexible Boolean Check
   // Langsung panggil utility, berikan reputasi dan status admin
   const details = getRankDetails(
     props.userProfile?.reputation || 0,
