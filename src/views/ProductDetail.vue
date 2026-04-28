@@ -1,5 +1,13 @@
 <script setup>
-import { ref, onMounted, computed, onUnmounted, watch, nextTick } from "vue";
+import {
+  ref,
+  onMounted,
+  computed,
+  onUnmounted,
+  watch,
+  nextTick,
+  watchEffect,
+} from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { supabase } from "../lib/supabase.js";
 import { notify } from "../utils/notify.js";
@@ -595,15 +603,26 @@ watch(
   },
   { immediate: true }, // Langsung cek pas halaman dibuka
 );
+
+// --- KODE CCTV DEBUGGING ---
 watchEffect(() => {
   if (product.value) {
-    console.log("=== CEK TOMBOL PAY ===");
-    console.log("Match ID:", product.value.winner_id === props.userProfile?.id);
-    console.log("Fallback Status:", product.value.fallback_status);
-    console.log("Transaction Exist:", !!transaction.value);
-    console.log("Transaction Status:", transaction.value?.status);
+    console.log("=== DIAGNOSA TOMBOL BAYAR ===");
+    console.log(
+      "1. Akun Cocok?",
+      product.value.winner_id === props.userProfile?.id,
+    );
+    console.log("2. Status Produk:", product.value.status);
+    console.log("3. Stage Fallback:", product.value.fallback_stage);
+    console.log("4. Status Fallback:", product.value.fallback_status);
+    console.log("5. Data Transaksi Ada?", !!transaction.value);
+    if (transaction.value) {
+      console.log("6. Status Transaksi:", transaction.value.status);
+    }
+    console.log("=============================");
   }
 });
+// --- END DEBUG --
 
 onMounted(async () => {
   await syncServerTime();
