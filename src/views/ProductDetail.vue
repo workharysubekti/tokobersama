@@ -1112,6 +1112,8 @@ onUnmounted(() => {
   Status: {{ product?.fallback_status }}
   WinnerID: {{ product?.winner_id }}
   UserID: {{ props.userProfile?.id }}
+  TxStatus: {{ transaction?.status || "KOSONG/NULL" }}
+  IsMatch: {{ product?.winner_id === props.userProfile?.id }}
 </pre
             >
             <div
@@ -1316,11 +1318,14 @@ onUnmounted(() => {
                     </span>
                   </div>
                   <button
-                    v-if="product?.fallback_status === 'accepted'"
+                    v-if="
+                      product?.winner_id === props.userProfile?.id &&
+                      product?.fallback_status === 'accepted'
+                    "
                     @click="showPaymentModal = true"
-                    class="w-full bg-green-500 ..."
+                    class="w-full bg-green-500 text-black py-5 rounded-[25px] font-[1000] italic uppercase text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
                   >
-                    TEST TOMBOL MUNCUL
+                    <ShieldCheckIcon class="w-5 h-5" /> Pay to Escrow
                   </button>
                 </div>
                 <div
