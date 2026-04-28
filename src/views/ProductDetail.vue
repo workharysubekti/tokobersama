@@ -102,24 +102,24 @@ const totalToPay = computed(() => {
   return winningBid + adminFee;
 });
 
-// --- LOGIKA USER RANK & LIMIT ---
+// --- LOGIKA USER RANK & LIMIT (SINKRON DENGAN RANKUTILS) ---
 const userRank = computed(() => {
-  if (props.userProfile?.is_admin === true) {
-    return {
-      name: "OWNER",
-      limit: Infinity,
-      color:
-        "text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.8)] font-black",
-    };
-  }
-  const rep = props.userProfile?.reputation || 0;
-  if (rep >= 600)
-    return { name: "LEGEND", limit: Infinity, color: "text-purple-500" };
-  if (rep >= 400)
-    return { name: "EXPERT", limit: 100000000, color: "text-red-500" };
-  if (rep >= 200)
-    return { name: "INTERMEDIATE", limit: 20000000, color: "text-blue-500" };
-  return { name: "NEWBIE", limit: 5000000, color: "text-green-500" };
+  // Langsung panggil utility, berikan reputasi dan status admin
+  const details = getRankDetails(
+    props.userProfile?.reputation || 0,
+    props.userProfile?.is_admin === true,
+  );
+
+  // Kita sesuaikan sedikit return-nya agar template Mas tidak error
+  // dan menambahkan efek glow untuk lencana OWNER
+  return {
+    ...details,
+    // Jika OWNER, tambahkan kelas drop-shadow premium
+    extraClass:
+      details.name === "OWNER"
+        ? "font-[1000] drop-shadow-[0_0_10px_#EF4444aa]"
+        : "font-black",
+  };
 });
 
 // --- WATCHER OUTBID (SILENT INTEGRATION) ---
@@ -870,10 +870,13 @@ onUnmounted(() => {
                   class="flex items-center justify-between px-2 text-[9px] font-black uppercase italic"
                 >
                   <span class="text-gray-600">Your Rank Status:</span>
-                  <span :class="userRank.color"
-                    >{{ userRank.name }} (Limit:
-                    {{ formatPrice(userRank.limit) }})</span
+                  <span
+                    :style="{ color: userRank.color }"
+                    :class="userRank.extraClass"
                   >
+                    {{ userRank.name }} (Limit:
+                    {{ formatPrice(userRank.limit) }})
+                  </span>
                 </div>
 
                 <div class="relative group">
