@@ -383,6 +383,10 @@ const confirmPayment = async (method) => {
   if (!transaction.value) return; // Jaga-jaga kalau data tx kosong
 
   isSubmittingAction.value = true;
+  const { error } = await supabase
+    .from("transactions") // <--- TAMBAHKAN S DI SINI JUGA
+    .update({ status: "escrow_holding", payment_method: method })
+    .eq("id", transaction.value.id);
 
   try {
     // TEMBAK RPC!
@@ -1112,7 +1116,7 @@ onUnmounted(() => {
   Status: {{ product?.fallback_status }}
   WinnerID: {{ product?.winner_id }}
   UserID: {{ props.userProfile?.id }}
-  TxStatus: {{ transaction?.status || "KOSONG/NULL" }}
+  TxStatus: {{ transactions?.status || "KOSONG/NULL" }}
   IsMatch: {{ product?.winner_id === props.userProfile?.id }}
 </pre
             >
@@ -1320,7 +1324,8 @@ onUnmounted(() => {
                   <button
                     v-if="
                       product?.winner_id === props.userProfile?.id &&
-                      product?.fallback_status === 'accepted'
+                      product?.fallback_status === 'accepted' &&
+                      (!transaction || transaction.status === 'pending_payment')
                     "
                     @click="showPaymentModal = true"
                     class="w-full bg-green-500 text-black py-5 rounded-[25px] font-[1000] italic uppercase text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
