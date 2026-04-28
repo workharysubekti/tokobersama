@@ -419,7 +419,7 @@ const executeBidTransaction = async () => {
   try {
     isSubmitting.value = true;
 
-    // Backup end_time lama buat bandingin
+    // Backup waktu lama buat perbandingan badge visual
     const oldEnd = new Date(product.value.end_time).getTime();
 
     const { data, error } = await supabase.rpc("execute_bid_v1", {
@@ -430,32 +430,30 @@ const executeBidTransaction = async () => {
 
     if (error) {
       notify.error("Gagal", error.message);
-      await fetchBids();
+      await fetchBids(); // Refresh jika harga di layar ternyata sudah basi
       return;
     }
 
-    // --- SINKRONISASI INSTAN (BIAR GAK CONFLICT SAMA MODAL) ---
-    // Update state product DETIK INI JUGA dari data kembalian database
+    // --- INSTANT VISUAL SYNC ---
+    // Update data di layar detik ini juga pake data dari database
     product.value.end_time = data.new_end_time;
     product.value.current_bid = data.new_bid;
     bidAmount.value = Number(data.new_bid) + 10000;
 
     const newEnd = new Date(data.new_end_time).getTime();
 
-    // Trigger visual badge "EXTENDED" secara manual
-    if (newEnd > oldEnd + 2000) {
+    // Trigger badge "EXTENDED!" secara manual jika waktu nambah
+    if (newEnd > oldEnd + 1000) {
       showExtensionBadge.value = true;
       setTimeout(() => {
         showExtensionBadge.value = false;
       }, 3000);
-
-      // HP Bergetar tanda perang (Optional tapi mantap)
       if (window.navigator.vibrate) window.navigator.vibrate([100, 50, 100]);
     }
 
     showDepositModal.value = false;
 
-    // Paksa UI ngitung ulang sisa waktu sekarang juga!
+    // Paksa UI ngitung ulang countdown SEKARANG
     nextTick(() => {
       updateTimer();
     });
@@ -477,8 +475,16 @@ onMounted(async () => {
   timerInterval = setInterval(updateTimer, 1000);
 
   if (route.params.id) {
+    // 1. PEMBERSIHAN MUTLAK (Obat Error Console)
+    // Hapus channel lama jika sudah ada (mencegah double subscribe saat hot-reload/navigasi)
+    if (bidSubscription) {
+      supabase.removeChannel(bidSubscription);
+    }
+
+    // 2. SETUP DATA TRANSMISSION
     bidSubscription = supabase
       .channel(`live-auction-${route.params.id}`)
+      // LISTENER BID BARU
       .on(
         "postgres_changes",
         {
@@ -491,6 +497,7 @@ onMounted(async () => {
           fetchBids();
         },
       )
+      // LISTENER UPDATE PRODUK (ANTI-SNIPER DETECTOR)
       .on(
         "postgres_changes",
         {
@@ -504,10 +511,13 @@ onMounted(async () => {
             showBannedModal.value = true;
             return;
           }
+
           if (product.value) {
+            // Deteksi penambahan waktu untuk badge visual
             const oldEnd = new Date(product.value.end_time).getTime();
             const newEnd = new Date(payload.new.end_time).getTime();
 
+            // Logika REBIRTH (Status balik jadi Active)
             if (
               payload.new.status === "active" &&
               product.value.status === "closed"
@@ -515,29 +525,40 @@ onMounted(async () => {
               transaction.value = null;
               notify.success("REBIRTH!", "Lelang diaktifkan kembali!");
             }
+
+            // --- UPDATE STATE UTAMA ---
             product.value.status = payload.new.status;
             product.value.winner_id = payload.new.winner_id;
             product.value.current_bid = payload.new.current_bid;
             product.value.end_time = payload.new.end_time;
 
+            // Update nominal input bid selanjutnya
             const nextMinBid = Number(payload.new.current_bid) + 10000;
             if (bidAmount.value < nextMinBid) {
               bidAmount.value = nextMinBid;
             }
 
-            nextTick(() => updateTimer());
-
-            if (newEnd > oldEnd + 2000) {
+            // --- TRIGGER VISUAL ANTI-SNIPER ---
+            // Jika waktu akhir bergeser lebih dari 1 detik, munculkan badge
+            if (newEnd > oldEnd + 1000) {
               showExtensionBadge.value = true;
               setTimeout(() => {
                 showExtensionBadge.value = false;
               }, 3000);
-              hasNotifiedIntense.value = false;
+              hasNotifiedIntense.value = false; // Reset notifikasi intense
             }
+
+            // Paksa timer refresh detik ini juga
+            nextTick(() => updateTimer());
           }
         },
       )
-      .subscribe();
+      // 3. PANGGIL SUBSCRIBE PALING TERAKHIR
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          console.log("AUCTION TRANSMISSION CONNECTED");
+        }
+      });
   }
 });
 
