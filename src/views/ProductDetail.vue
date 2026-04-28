@@ -1,8 +1,12 @@
 <script setup>
 import { ref, onMounted, computed, onUnmounted, watch, nextTick } from "vue";
+
 import { useRoute, useRouter } from "vue-router";
+
 import { supabase } from "../lib/supabase.js";
+
 import { notify } from "../utils/notify.js";
+
 import {
   ClockIcon,
   ArrowLeftIcon,
@@ -19,52 +23,79 @@ import {
   QrCodeIcon,
   LockClosedIcon,
 } from "@heroicons/vue/24/outline";
+
 import { getRankDetails } from "../utils/rankUtils.js";
 
 // --- PROPS & ROUTING ---
+
 const props = defineProps({
   userProfile: Object,
 });
+
 const route = useRoute();
+
 const router = useRouter();
 
 // --- DATA STATES ---
+
 const product = ref(null);
+
 const recentBids = ref([]);
+
 const loading = ref(true);
+
 const bidAmount = ref(0);
+
 const isSubmitting = ref(false);
+
 const timeLeft = ref("");
+
 const activeBidTab = ref("ranking");
 
 // --- SILENT WAR INTEGRATION STATES ---
+
 const serverOffset = ref(0); // Offset jam server
+
 const showExtensionBadge = ref(false); // Indikator waktu bertambah
 
 // --- AUCTION BEHAVIOR STATES ---
+
 const isIntense = ref(false);
+
 const hasNotifiedIntense = ref(false);
+
 const showBannedModal = ref(false);
-const showDepositModal = ref(false); // FIXED: Deklarasi State Modal
 
 // --- OUTBID & ESCROW STATES ---
+
 const isOutbid = ref(false);
+
 const transaction = ref(null);
+
 const showPaymentModal = ref(false);
+
 const adminFee = 5000;
+
 const isSubmittingAction = ref(false);
 
 // --- SYNC & THROTTLE STATES ---
+
 const isCooldown = ref(false);
 
 // --- FUNGSI SYNC JAM (SILENT WAR) ---
+
 const syncServerTime = async () => {
   try {
     const start = Date.now();
+
     const { data } = await supabase.rpc("get_server_time");
+
     const serverTime = data ? new Date(data).getTime() : Date.now();
+
     const end = Date.now();
+
     const latency = (end - start) / 2;
+
     serverOffset.value = serverTime - (end - latency);
   } catch (e) {
     serverOffset.value = 0;
@@ -72,34 +103,48 @@ const syncServerTime = async () => {
 };
 
 // --- LOGIKA RANKING (UNIQUE BIDDERS) ---
+
 const rankedBids = computed(() => {
   if (!recentBids.value || recentBids.value.length === 0) return [];
+
   const seenUsers = new Set();
+
   const uniqueBidders = [];
+
   for (const bid of recentBids.value) {
     if (!seenUsers.has(bid.user_id)) {
       seenUsers.add(bid.user_id);
+
       uniqueBidders.push(bid);
     }
   }
+
   return uniqueBidders.slice(0, 8);
 });
 
 // --- LOGIKA DEPOSIT PROGRESIF (TAHAP 2 - MASTER TABLE) ---
+
 const depositPercentage = computed(() => {
   const rep = props.userProfile?.reputation || 0;
-  const isAdmin = !!props.userProfile?.is_admin; // FIXED: Flexible Boolean Check
+
+  const isAdmin = props.userProfile?.is_admin === true;
 
   if (isAdmin) return 0; // OWNER bebas jaminan
 
   // KHUSUS: Reputasi < 50 atau MINUS (Wajib 30% Flat untuk semua nominal)
+
   if (rep < 50) return 30;
 
   // PROGRESIF BERDASARKAN RANK
+
   if (rep >= 1200) return 0; // LEGEND
+
   if (rep >= 800) return 5; // MASTER
+
   if (rep >= 400) return 10; // EXPERT
+
   if (rep >= 200) return 15; // INTERMEDIATE
+
   return 20; // MEMBER (0-199)
 });
 
@@ -108,13 +153,18 @@ const requiredDeposit = computed(() => {
 });
 
 const needsDeposit = computed(() => {
-  const isAdmin = !!props.userProfile?.is_admin;
-  if (isAdmin) return false; // OWNER KEBAL ATURAN
-
   const rep = props.userProfile?.reputation || 0;
-  if (rep < 50) return true; // User berdosa wajib depo
 
-  // User normal depo jika lewat limit kasta
+  const isAdmin = props.userProfile?.is_admin === true;
+
+  if (isAdmin) return false;
+
+  // 1. User "Berdosa" (Rep < 50): Wajib deposit untuk SEMUA nominal barang
+
+  if (rep < 50) return true;
+
+  // 2. User Normal: Wajib deposit hanya jika melampaui LIMIT RANK
+
   return bidAmount.value > userRank.value.limit;
 });
 
@@ -123,6 +173,7 @@ const hasEnoughBalanceForDeposit = computed(() => {
 });
 
 // --- LOGIKA SETTLEMENT ---
+
 const isWinner = computed(() => {
   return (
     product.value?.status === "closed" &&
@@ -137,20 +188,30 @@ const isSeller = computed(() => {
 
 const totalToPay = computed(() => {
   const winningBid = recentBids.value[0]?.amount || 0;
+
   return winningBid + adminFee;
 });
 
 // --- LOGIKA USER RANK & LIMIT (SINKRON DENGAN RANKUTILS) ---
+
 const userRank = computed(() => {
-  const isAdmin = !!props.userProfile?.is_admin; // FIXED: Flexible Boolean Check
   // Langsung panggil utility, berikan reputasi dan status admin
+
   const details = getRankDetails(
     props.userProfile?.reputation || 0,
-    !!props.userProfile?.is_admin, // FIXED: Flexible Boolean Check
+
+    props.userProfile?.is_admin === true,
   );
+
+  // Kita sesuaikan sedikit return-nya agar template Mas tidak error
+
+  // dan menambahkan efek glow untuk lencana OWNER
 
   return {
     ...details,
+
+    // Jika OWNER, tambahkan kelas drop-shadow premium
+
     extraClass:
       details.name === "OWNER"
         ? "font-[1000] drop-shadow-[0_0_10px_#EF4444aa]"
@@ -159,35 +220,50 @@ const userRank = computed(() => {
 });
 
 // --- WATCHER OUTBID (SILENT INTEGRATION) ---
+
 watch(recentBids, (newVal, oldVal) => {
   if (oldVal && oldVal.length > 0 && newVal.length > 0 && props.userProfile) {
     const wasTop = oldVal[0].user_id === props.userProfile.id;
+
     const isNowOutbid = newVal[0].user_id !== props.userProfile.id;
+
     if (wasTop && isNowOutbid && product.value?.status !== "closed") {
       isOutbid.value = true;
+
+      // SILENT VIBRATION
+
       if (window.navigator.vibrate) window.navigator.vibrate(200);
     }
   }
+
   if (newVal.length > 0 && newVal[0].user_id === props.userProfile?.id) {
     isOutbid.value = false;
   }
 });
 
 // --- LOGIKA MULTI-IMAGE STACK ---
+
 const activeImgIndex = ref(0);
+
 const touchStartX = ref(0);
+
 const touchEndX = ref(0);
 
 const allImages = computed(() => {
   if (!product.value) return [];
+
   const images = [];
+
   if (product.value.image_url) images.push(product.value.image_url);
+
   const extra = product.value.additional_images;
+
   if (extra) {
     if (Array.isArray(extra)) images.push(...extra);
     else if (typeof extra === "string") {
       try {
         const parsed = JSON.parse(extra);
+
         if (Array.isArray(parsed)) images.push(...parsed);
         else images.push(extra);
       } catch (e) {
@@ -195,6 +271,7 @@ const allImages = computed(() => {
       }
     }
   }
+
   return images.filter((url) => url && url.trim() !== "");
 });
 
@@ -202,55 +279,83 @@ const nextImage = () => {
   if (allImages.value.length > 1)
     activeImgIndex.value = (activeImgIndex.value + 1) % allImages.value.length;
 };
+
 const prevImage = () => {
   if (allImages.value.length > 1)
     activeImgIndex.value =
       (activeImgIndex.value - 1 + allImages.value.length) %
       allImages.value.length;
 };
+
 const handleTouchStart = (e) => {
   touchStartX.value = e.screenX || e.touches[0].clientX;
 };
+
 const handleTouchEnd = (e) => {
   touchEndX.value = e.screenX || e.changedTouches[0].clientX;
+
   handleSwipe();
 };
+
 const handleSwipe = () => {
   const swipeDistance = touchStartX.value - touchEndX.value;
+
   if (swipeDistance > 50) nextImage();
+
   if (swipeDistance < -50) prevImage();
 };
 
 // --- LOGIKA REPORT ---
+
 const showReportModal = ref(false);
+
 const isSubmittingReport = ref(false);
+
 const reportForm = ref({ category: "Palsu / Kw", details: "" });
+
 const reportCategories = [
   "Palsu / KW",
+
   "Penipuan Harga",
+
   "Foto Tidak Sesuai",
+
   "Kategori Salah",
+
   "Mengandung Unsur SARA/Pornografi",
+
   "Lainnya",
 ];
 
 const submitReport = async () => {
   if (!props.userProfile) return notify.error("Auth Required", "Login dulu!");
+
   if (reportForm.value.details.length < 5)
     return notify.error("Data Kurang", "Minimal 5 karakter.");
+
   try {
     isSubmittingReport.value = true;
+
     const { error } = await supabase.from("reports").insert({
       product_id: product.value.id,
+
       reporter_id: props.userProfile.id,
+
       target_user_id: product.value.owner_id,
+
       reason_category: reportForm.value.category,
+
       reason: reportForm.value.details,
+
       status: "pending",
     });
+
     if (error) throw error;
+
     notify.success("Laporan Terkirim", "Moderator akan meninjau aset ini.");
+
     showReportModal.value = false;
+
     reportForm.value.details = "";
   } catch (err) {
     notify.error("Gagal Melapor", err.message);
@@ -260,27 +365,39 @@ const submitReport = async () => {
 };
 
 // --- UTILS & FETCHING ---
+
 let timerInterval = null;
+
 let bidSubscription = null;
 
 const formatPrice = (price) => {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
+
     currency: "IDR",
+
     minimumFractionDigits: 0,
   }).format(price || 0);
 };
 
 const fetchBids = async () => {
   if (!route.params.id) return;
+
   const { data } = await supabase
+
     .from("bids")
+
     .select("*, profiles(username, full_name, avatar_url, reputation)")
+
     .eq("product_id", route.params.id)
+
     .order("amount", { ascending: false })
+
     .limit(50);
+
   if (data) {
     recentBids.value = data;
+
     if (data.length > 0 && product.value)
       product.value.current_bid = data[0].amount;
   }
@@ -288,56 +405,89 @@ const fetchBids = async () => {
 
 const fetchTransaction = async () => {
   if (product.value?.status !== "closed") return;
+
   const { data } = await supabase
+
     .from("transactions")
+
     .select("*")
+
     .eq("product_id", route.params.id)
+
     .maybeSingle();
+
   if (data) transaction.value = data;
   else if (isWinner.value) {
     const { data: newTx } = await supabase
+
       .from("transactions")
+
       .insert({
         product_id: product.value.id,
+
         buyer_id: props.userProfile.id,
+
         seller_id: product.value.owner_id,
+
         amount_bid: recentBids.value[0].amount,
+
         total_amount: totalToPay.value,
       })
+
       .select()
+
       .single();
+
     transaction.value = newTx;
   }
 };
 
 const confirmPayment = async (method) => {
   isSubmittingAction.value = true;
+
   const { error } = await supabase
+
     .from("transactions")
+
     .update({ status: "escrow_holding", payment_method: method })
+
     .eq("id", transaction.value.id);
+
   if (!error) {
     transaction.value.status = "escrow_holding";
+
     notify.success("Berhasil", "Dana ditahan di Escrow.");
+
     showPaymentModal.value = false;
   }
+
   isSubmittingAction.value = false;
 };
 
 const fetchProductDetail = async () => {
   if (!route.params.id) return;
+
   loading.value = true;
+
   try {
     const { data, error } = await supabase
+
       .from("products")
+
       .select(
         "*, profiles!owner_id(username, full_name, avatar_url, reputation)",
       )
+
       .eq("id", route.params.id)
+
       .maybeSingle();
+
     if (error || !data) return router.push("/");
+
     product.value = data;
+
     await fetchBids();
+
     bidAmount.value =
       recentBids.value.length > 0
         ? Number(recentBids.value[0].amount) + 10000
@@ -348,10 +498,14 @@ const fetchProductDetail = async () => {
 };
 
 // --- LOGIKA TIMER (SILENT & OFFSET INTEGRATED) ---
+
 const updateTimer = () => {
   if (!product.value?.end_time) return;
+
   const end = new Date(product.value.end_time).getTime();
+
   const now = Date.now() + serverOffset.value; // SYNCED
+
   const diff = end - now;
 
   if (diff <= 0) {
@@ -360,7 +514,9 @@ const updateTimer = () => {
     } else {
       timeLeft.value = "ENDED";
     }
+
     isIntense.value = false;
+
     return;
   }
 
@@ -369,14 +525,19 @@ const updateTimer = () => {
   } else {
     if (diff > 120000) {
       isIntense.value = false;
+
       hasNotifiedIntense.value = false;
     }
   }
 
   const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+
   const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
   const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
   const s = Math.floor((diff % (1000 * 60)) / 1000);
+
   if (d > 0) {
     timeLeft.value = `${d}d ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   } else {
@@ -385,59 +546,93 @@ const updateTimer = () => {
 };
 
 // --- FUNGSI UTAMA PLACE BID (PENYARING) ---
+
 const placeBid = async () => {
   if (!props.userProfile || isCooldown.value) return;
-  const isAdmin = !!props.userProfile?.is_admin; // FIXED: Flexible Boolean Check
 
   // 1. Cek Status Produk (KODE SUCI MAS)
+
   if (product.value.status !== "active" || timeLeft.value === "VALIDATING...") {
     return notify.error("Lelang Berakhir", "Pintu transmisi sudah ditutup.");
   }
 
   // 2. Cek Posisi (KODE SUCI MAS)
-  if (!isAdmin) {
+
+  if (props.userProfile?.is_admin !== true) {
     const isCurrentWinner =
       recentBids.value.length > 0 &&
       recentBids.value[0].user_id === props.userProfile.id;
+
     if (isCurrentWinner)
       return notify.error("Top Position", "Tawaranmu masih tertinggi!");
   }
 
   // 3. LOGIKA BARU: CEK APAKAH BUTUH DEPOSIT?
+
   if (needsDeposit.value) {
-    // FIXED: Langsung buka modal saja, biarkan modal yang mengatur tombol Bayar/Topup
+    if (!hasEnoughBalanceForDeposit.value) {
+      const rep = props.userProfile?.reputation || 0;
+
+      const alasan =
+        rep < 50
+          ? "Wajib jaminan 30% karena reputasi di bawah standar."
+          : `Bid melampaui limit rank ${userRank.value.name}.`;
+
+      return notify.error(
+        "Saldo Jaminan Kurang",
+
+        `${alasan} Butuh: ${formatPrice(requiredDeposit.value)}`,
+      );
+    }
+
+    // Munculkan Modal, eksekusi dipindah ke konfirmasi modal
+
     showDepositModal.value = true;
+
     return;
   }
 
   // 4. Jika lancar jaya (Tanpa Deposit), langsung eksekusi
+
   await executeBidTransaction();
 };
 
 // --- FUNGSI EKSEKUSI DATABASE (KODE SUCI YANG DIPINDAH) ---
+
 const executeBidTransaction = async () => {
   try {
     isSubmitting.value = true;
+
     const { data, error } = await supabase.rpc("execute_bid_v1", {
       p_product_id: product.value.id,
+
       p_user_id: props.userProfile.id,
+
       p_bid_amount: bidAmount.value,
     });
 
     if (error) {
       notify.error("Gagal", error.message);
+
       await fetchBids();
+
       return;
     }
 
+    // UPDATE STATE (KODE SUCI MAS)
+
     product.value.end_time = data.new_end_time;
+
     product.value.current_bid = data.new_bid;
+
     bidAmount.value = Number(data.new_bid) + 10000;
 
-    showDepositModal.value = false;
+    showDepositModal.value = false; // Tutup modal jika tadi lewat jalur deposit
+
     nextTick(() => updateTimer());
 
     isCooldown.value = true;
+
     setTimeout(() => {
       isCooldown.value = false;
     }, 1500);
@@ -449,40 +644,58 @@ const executeBidTransaction = async () => {
 };
 
 onMounted(async () => {
-  await syncServerTime();
+  await syncServerTime(); // Sync server time first
+
   await fetchProductDetail();
+
   timerInterval = setInterval(updateTimer, 1000);
 
   if (route.params.id) {
     bidSubscription = supabase
+
       .channel(`live-auction-${route.params.id}`)
+
       .on(
         "postgres_changes",
+
         {
           event: "INSERT",
+
           schema: "public",
+
           table: "bids",
+
           filter: `product_id=eq.${route.params.id}`,
         },
+
         () => {
           fetchBids();
         },
       )
+
       .on(
         "postgres_changes",
+
         {
           event: "UPDATE",
+
           schema: "public",
+
           table: "products",
+
           filter: `id=eq.${route.params.id}`,
         },
+
         (payload) => {
           if (payload.new.status === "banned") {
             showBannedModal.value = true;
+
             return;
           }
+
           if (product.value) {
             const oldEnd = new Date(product.value.end_time).getTime();
+
             const newEnd = new Date(payload.new.end_time).getTime();
 
             if (
@@ -490,36 +703,48 @@ onMounted(async () => {
               product.value.status === "closed"
             ) {
               transaction.value = null;
+
               notify.success("REBIRTH!", "Lelang diaktifkan kembali!");
             }
+
             product.value.status = payload.new.status;
+
             product.value.winner_id = payload.new.winner_id;
+
             product.value.current_bid = payload.new.current_bid;
+
             product.value.end_time = payload.new.end_time;
 
             const nextMinBid = Number(payload.new.current_bid) + 10000;
+
             if (bidAmount.value < nextMinBid) {
               bidAmount.value = nextMinBid;
             }
 
             nextTick(() => updateTimer());
 
+            // SILENT EXTENSION BADGE INTEGRATION
+
             if (newEnd > oldEnd + 2000) {
               showExtensionBadge.value = true;
+
               setTimeout(() => {
                 showExtensionBadge.value = false;
               }, 3000);
+
               hasNotifiedIntense.value = false;
             }
           }
         },
       )
+
       .subscribe();
   }
 });
 
 onUnmounted(() => {
   clearInterval(timerInterval);
+
   if (bidSubscription) supabase.removeChannel(bidSubscription);
 });
 </script>
@@ -532,9 +757,11 @@ onUnmounted(() => {
       class="fixed inset-0 z-[999] bg-black flex flex-col items-center justify-center p-8 text-center"
     >
       <ExclamationTriangleIcon class="w-24 h-24 text-red-500 mb-6" />
+
       <h1 class="text-4xl font-[1000] italic uppercase text-white mb-4">
         ASSET TERMINATED
       </h1>
+
       <button
         @click="router.push('/')"
         class="bg-white text-black px-10 py-4 rounded-2xl font-black italic text-xs uppercase"
@@ -552,16 +779,19 @@ onUnmounted(() => {
       >
         <ArrowLeftIcon class="w-6 h-6" />
       </button>
+
       <div class="text-center">
         <p
           class="text-[8px] font-black uppercase text-yellow-500 tracking-[0.4em] italic mb-0.5"
         >
           Transmission
         </p>
+
         <h1 class="text-[10px] font-black uppercase tracking-widest italic">
           Live Auction Feed
         </h1>
       </div>
+
       <div class="w-10"></div>
     </div>
 
@@ -580,13 +810,16 @@ onUnmounted(() => {
       >
         <div class="flex items-center gap-2">
           <ClockIcon class="w-4 h-4 text-black animate-pulse" />
+
           <span class="text-[8px] font-black uppercase italic text-black"
             >Ends In</span
           >
         </div>
+
         <span class="text-lg font-[1000] italic text-black tracking-tighter">{{
           timeLeft
         }}</span>
+
         <span
           v-if="showExtensionBadge"
           class="text-[7px] font-black text-black uppercase animate-pulse"
@@ -610,7 +843,9 @@ onUnmounted(() => {
                 class="absolute inset-0 w-full h-full transition-all duration-500 ease-in-out cursor-pointer"
                 :style="{
                   zIndex: index === activeImgIndex ? 40 : 30 - index,
+
                   opacity: index < activeImgIndex ? 0 : 1,
+
                   transform:
                     index > activeImgIndex
                       ? `translateX(${(index - activeImgIndex) * 15}px) scale(${1 - (index - activeImgIndex) * 0.05})`
@@ -627,11 +862,13 @@ onUnmounted(() => {
                     class="w-full h-full object-cover lg:object-contain"
                     :class="{ 'opacity-30': index > activeImgIndex }"
                   />
+
                   <div
                     class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60"
                   ></div>
                 </div>
               </div>
+
               <div
                 v-if="allImages.length > 1"
                 class="absolute bottom-6 right-6 z-[50] bg-yellow-500 text-black px-4 py-1.5 rounded-full text-[10px] font-black italic shadow-xl"
@@ -657,9 +894,11 @@ onUnmounted(() => {
                       : 'text-yellow-500 animate-pulse'
                   "
                 />
+
                 <span class="text-xs font-[1000] italic uppercase text-white">{{
                   timeLeft
                 }}</span>
+
                 <span
                   v-if="showExtensionBadge"
                   class="text-[8px] font-black text-yellow-500 animate-bounce"
@@ -675,12 +914,14 @@ onUnmounted(() => {
                 <div
                   class="w-2 h-2 bg-yellow-500 rounded-full animate-ping"
                 ></div>
+
                 <h2
                   class="text-sm font-[1000] italic uppercase tracking-[0.3em] text-white"
                 >
                   Live <span class="text-yellow-500">Feed</span> Transmission
                 </h2>
               </div>
+
               <div
                 class="flex p-1.5 bg-white/5 border border-white/10 rounded-2xl w-full max-w-xs mb-6"
               >
@@ -695,6 +936,7 @@ onUnmounted(() => {
                 >
                   Ranking
                 </button>
+
                 <button
                   @click="activeBidTab = 'history'"
                   :class="
@@ -729,6 +971,7 @@ onUnmounted(() => {
                     >
                       #{{ index + 1 }}
                     </div>
+
                     <div
                       class="w-12 h-12 rounded-2xl overflow-hidden border-2 border-white/10 flex-shrink-0"
                     >
@@ -740,6 +983,7 @@ onUnmounted(() => {
                         :src="bid.profiles.avatar_url"
                         class="w-full h-full object-cover"
                       />
+
                       <div
                         v-else
                         class="w-full h-full bg-gray-800 flex items-center justify-center"
@@ -747,12 +991,14 @@ onUnmounted(() => {
                         <UserIcon class="w-6 h-6 text-gray-500" />
                       </div>
                     </div>
+
                     <div>
                       <p
                         class="text-sm font-black italic uppercase group-hover:text-yellow-500 transition-colors"
                       >
                         @{{ bid.profiles?.username }}
                       </p>
+
                       <p
                         class="text-[8px] text-gray-600 font-bold uppercase tracking-widest"
                       >
@@ -760,6 +1006,7 @@ onUnmounted(() => {
                       </p>
                     </div>
                   </div>
+
                   <div class="text-right">
                     <p
                       class="text-xl font-[1000] italic"
@@ -781,15 +1028,18 @@ onUnmounted(() => {
                     <div
                       class="w-2 h-2 rounded-full bg-yellow-500/40 animate-pulse"
                     ></div>
+
                     <p
                       class="text-[10px] font-black italic uppercase text-white"
                     >
                       @{{ bid.profiles?.username }}
+
                       <span class="text-gray-600 font-normal italic"
                         >transmitted a bid</span
                       >
                     </p>
                   </div>
+
                   <div
                     class="text-right font-black italic text-gray-400 text-sm"
                   >
@@ -810,6 +1060,7 @@ onUnmounted(() => {
                   >Authentic Asset</span
                 >
               </div>
+
               <button
                 @click="showReportModal = true"
                 class="flex items-center gap-2 bg-red-500/10 px-3 py-1.5 rounded-full border border-red-500/20 active:scale-95 transition-all"
@@ -822,11 +1073,13 @@ onUnmounted(() => {
                 >
               </button>
             </div>
+
             <h2
               class="text-4xl lg:text-5xl font-[1000] italic uppercase tracking-tighter leading-tight"
             >
               {{ product.name }}
             </h2>
+
             <div
               @click="router.push(`/user/${product.profiles?.username}`)"
               class="flex items-center gap-4 p-5 bg-white/[0.03] border border-white/10 rounded-[30px] cursor-pointer w-fit group"
@@ -842,8 +1095,10 @@ onUnmounted(() => {
                   :src="product.profiles.avatar_url"
                   class="w-full h-full object-cover"
                 />
+
                 <UserCircleIcon v-else class="w-full h-full text-gray-700" />
               </div>
+
               <p
                 class="text-sm font-black italic group-hover:text-yellow-500 uppercase leading-none"
               >
@@ -878,12 +1133,14 @@ onUnmounted(() => {
                   >
                     <div class="flex items-center gap-3">
                       <TrophyIcon class="w-6 h-6 text-black" />
+
                       <div>
                         <p
                           class="text-[8px] font-black text-black/60 uppercase leading-none"
                         >
                           Current Position #1
                         </p>
+
                         <p
                           class="text-xs font-[1000] text-black uppercase italic"
                         >
@@ -891,12 +1148,14 @@ onUnmounted(() => {
                         </p>
                       </div>
                     </div>
+
                     <div class="text-right">
                       <p
                         class="text-[8px] font-black text-black/60 uppercase leading-none"
                       >
                         Price
                       </p>
+
                       <p class="text-sm font-[1000] text-black italic">
                         {{ formatPrice(recentBids[0].amount) }}
                       </p>
@@ -909,11 +1168,13 @@ onUnmounted(() => {
                   class="flex items-center justify-between px-2 text-[9px] font-black uppercase italic"
                 >
                   <span class="text-gray-600">Your Rank Status:</span>
+
                   <span
                     :style="{ color: userRank.color }"
                     :class="userRank.extraClass"
                   >
                     {{ userRank.name }} (Limit:
+
                     {{ formatPrice(userRank.limit) }})
                   </span>
                 </div>
@@ -923,6 +1184,7 @@ onUnmounted(() => {
                     class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-sm italic tracking-tighter"
                     >IDR</span
                   >
+
                   <div
                     class="flex gap-3 mb-4 overflow-x-auto no-scrollbar pb-2"
                   >
@@ -938,6 +1200,7 @@ onUnmounted(() => {
                       +{{ plus / 1000 }}K
                     </button>
                   </div>
+
                   <input
                     v-model.number="bidAmount"
                     type="number"
@@ -964,7 +1227,9 @@ onUnmounted(() => {
                       v-if="isSubmitting"
                       class="w-7 h-7 animate-spin"
                     />
+
                     <BanknotesIcon v-else class="w-7 h-7 stroke-[2.5px]" />
+
                     <span class="text-xl">
                       {{
                         timeLeft === "VALIDATING..."
@@ -977,6 +1242,7 @@ onUnmounted(() => {
                       }}
                     </span>
                   </div>
+
                   <span
                     v-if="isIntense && timeLeft !== 'VALIDATING...'"
                     class="text-[8px] font-black tracking-[0.2em] animate-pulse"
@@ -993,11 +1259,13 @@ onUnmounted(() => {
                   <div class="absolute -right-4 -top-4 opacity-10 rotate-12">
                     <TrophyIcon class="w-40 h-40 text-green-500" />
                   </div>
+
                   <h2
                     class="text-2xl font-[1000] italic uppercase text-white mb-6"
                   >
                     Victory Achieved!
                   </h2>
+
                   <div
                     class="bg-black/40 p-6 rounded-3xl border border-white/5 mb-6 flex justify-between items-center"
                   >
@@ -1008,6 +1276,7 @@ onUnmounted(() => {
                       formatPrice(totalToPay)
                     }}</span>
                   </div>
+
                   <button
                     v-if="
                       !transaction || transaction.status === 'pending_payment'
@@ -1018,6 +1287,7 @@ onUnmounted(() => {
                     <ShieldCheckIcon class="w-5 h-5" /> Pay to Escrow
                   </button>
                 </div>
+
                 <div
                   v-else
                   class="bg-white/5 border border-white/10 p-10 rounded-[45px] text-center relative overflow-hidden group shadow-2xl"
@@ -1025,11 +1295,13 @@ onUnmounted(() => {
                   <div class="absolute -right-4 -top-4 opacity-5 -rotate-12">
                     <LockClosedIcon class="w-32 h-32 text-white" />
                   </div>
+
                   <h4
                     class="text-xl font-[1000] italic text-gray-500 uppercase tracking-tighter"
                   >
                     Transmission Closed
                   </h4>
+
                   <p
                     class="text-[9px] font-black text-gray-700 uppercase italic mt-2"
                   >
@@ -1049,6 +1321,7 @@ onUnmounted(() => {
               >
                 Asset Dossier
               </p>
+
               <div
                 class="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full border border-white/5"
               >
@@ -1058,6 +1331,7 @@ onUnmounted(() => {
                 >
               </div>
             </div>
+
             <p class="text-gray-400 text-sm italic leading-relaxed">
               {{ product.description }}
             </p>
@@ -1068,12 +1342,14 @@ onUnmounted(() => {
               <div
                 class="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-ping"
               ></div>
+
               <h3
                 class="text-[10px] font-[1000] italic uppercase tracking-[0.2em] text-white"
               >
                 Live <span class="text-yellow-500">Transmission</span> Feed
               </h3>
             </div>
+
             <div
               class="flex p-1 bg-white/5 border border-white/10 rounded-xl w-full mb-6"
             >
@@ -1088,6 +1364,7 @@ onUnmounted(() => {
               >
                 Ranking
               </button>
+
               <button
                 @click="activeBidTab = 'history'"
                 :class="
@@ -1116,6 +1393,7 @@ onUnmounted(() => {
                     <span class="font-[1000] italic text-sm text-yellow-500 w-4"
                       >#{{ index + 1 }}</span
                     >
+
                     <div
                       class="w-10 h-10 rounded-xl overflow-hidden border border-white/10 flex-shrink-0"
                     >
@@ -1127,6 +1405,7 @@ onUnmounted(() => {
                         :src="bid.profiles.avatar_url"
                         class="w-full h-full object-cover"
                       />
+
                       <div
                         v-else
                         class="w-full h-full bg-gray-800 flex items-center justify-center"
@@ -1134,15 +1413,18 @@ onUnmounted(() => {
                         <UserIcon class="w-6 h-6 text-gray-500 p-2" />
                       </div>
                     </div>
+
                     <p class="text-xs font-black italic uppercase">
                       @{{ bid.profiles?.username }}
                     </p>
                   </div>
+
                   <p class="text-sm font-[1000] italic">
                     {{ formatPrice(bid.amount) }}
                   </p>
                 </div>
               </div>
+
               <div v-else class="space-y-3">
                 <div
                   v-for="bid in recentBids.slice(0, 8)"
@@ -1154,6 +1436,7 @@ onUnmounted(() => {
                   >
                     @{{ bid.profiles?.username }}
                   </p>
+
                   <p class="text-[10px] font-black italic text-gray-500">
                     {{ formatPrice(bid.amount) }}
                   </p>
@@ -1173,17 +1456,20 @@ onUnmounted(() => {
         class="absolute inset-0 bg-black/90 backdrop-blur-md"
         @click="showReportModal = false"
       ></div>
+
       <div
         class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[40px] p-10 shadow-2xl overflow-hidden text-center"
       >
         <ExclamationTriangleIcon
           class="w-16 h-16 text-red-500 mx-auto mb-4 border border-red-500/20 p-3 rounded-2xl"
         />
+
         <h3
           class="text-xl font-[1000] italic uppercase tracking-tighter text-white mb-8"
         >
           Report Asset
         </h3>
+
         <div class="space-y-6 text-left">
           <select
             v-model="reportForm.category"
@@ -1193,12 +1479,14 @@ onUnmounted(() => {
               {{ cat }}
             </option>
           </select>
+
           <textarea
             v-model="reportForm.details"
             rows="4"
             placeholder="Detail alasan..."
             class="w-full bg-black border border-white/10 rounded-3xl p-5 text-xs text-white outline-none focus:border-red-500 italic resize-none shadow-xl"
           ></textarea>
+
           <div class="flex gap-3">
             <button
               @click="showReportModal = false"
@@ -1206,6 +1494,7 @@ onUnmounted(() => {
             >
               Cancel
             </button>
+
             <button
               @click="submitReport"
               :disabled="isSubmittingReport"
@@ -1226,12 +1515,14 @@ onUnmounted(() => {
         class="absolute inset-0 bg-black/95 backdrop-blur-xl"
         @click="showPaymentModal = false"
       ></div>
+
       <div
         class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[45px] p-10 text-center shadow-2xl"
       >
         <h3 class="text-2xl font-[1000] italic uppercase text-white mb-8">
           Escrow <span class="text-yellow-500">Payment</span>
         </h3>
+
         <button
           @click="confirmPayment('QRIS')"
           class="w-full p-6 bg-white/5 border border-white/5 rounded-3xl flex items-center justify-between hover:border-yellow-500/50 transition-all group mb-4 shadow-xl"
@@ -1239,8 +1530,10 @@ onUnmounted(() => {
           <span class="text-xs font-black italic text-white uppercase"
             >QRIS / ALL E-WALLET</span
           >
+
           <QrCodeIcon class="w-6 h-6 text-yellow-500" />
         </button>
+
         <button
           @click="confirmPayment('BANK_TRANSFER')"
           class="w-full p-6 bg-white/5 border border-white/5 rounded-3xl flex items-center justify-between hover:border-blue-500/50 transition-all group shadow-xl"
@@ -1248,8 +1541,10 @@ onUnmounted(() => {
           <span class="text-xs font-black italic text-white uppercase"
             >BANK TRANSFER (ESCROW)</span
           >
+
           <BanknotesIcon class="w-6 h-6 text-blue-500" />
         </button>
+
         <button
           @click="showPaymentModal = false"
           class="mt-10 text-[9px] font-black text-gray-600 uppercase italic underline underline-offset-4"
@@ -1267,8 +1562,9 @@ onUnmounted(() => {
         class="absolute inset-0 bg-black/95 backdrop-blur-2xl"
         @click="showDepositModal = false"
       ></div>
+
       <div
-        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/10 rounded-[45px] p-10 text-center shadow-2xl"
+        class="relative w-full max-w-md bg-[#0d0d0d] border border-white/5 rounded-[45px] p-10 text-center shadow-2xl"
       >
         <div
           class="w-20 h-20 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-yellow-500/20"
@@ -1286,7 +1582,7 @@ onUnmounted(() => {
           {{
             props.userProfile?.reputation < 50
               ? "Wajib jaminan 30% karena reputasi di bawah standar (Probation)."
-              : `Jaminan diperlukan untuk bid di luar limit rank ${userRank.name}.`
+              : `Jaminan diperlukan untuk bid di luar limit rank ${userRank.value.name}.`
           }}
         </p>
 
@@ -1295,45 +1591,41 @@ onUnmounted(() => {
         >
           <div class="flex justify-between items-center">
             <span class="text-[10px] font-black text-gray-500 uppercase italic"
-              >Requirement</span
+              >Your Bid</span
             >
+
             <span class="text-sm font-black text-white italic">{{
-              formatPrice(requiredDeposit)
+              formatPrice(bidAmount)
             }}</span>
           </div>
+
           <div
             class="flex justify-between items-center pt-4 border-t border-white/5"
           >
-            <span class="text-[10px] font-black text-gray-500 uppercase italic"
-              >Your Balance</span
-            >
-            <span
-              :class="
-                hasEnoughBalanceForDeposit ? 'text-white' : 'text-red-500'
-              "
-              class="text-sm font-black italic"
-            >
-              {{ formatPrice(props.userProfile?.balance || 0) }}
-            </span>
+            <div class="text-left">
+              <span
+                class="text-[10px] font-black text-yellow-500 uppercase italic block leading-none"
+                >Security Bond</span
+              >
+
+              <span class="text-[8px] text-gray-600 uppercase font-bold italic"
+                >Progressive rate: {{ depositPercentage }}%</span
+              >
+            </div>
+
+            <span class="text-lg font-[1000] text-yellow-500 italic">{{
+              formatPrice(requiredDeposit)
+            }}</span>
           </div>
         </div>
 
         <div class="flex flex-col gap-3">
           <button
-            v-if="hasEnoughBalanceForDeposit"
             @click="executeBidTransaction"
             :disabled="isSubmitting"
             class="w-full bg-yellow-500 text-black py-5 rounded-[25px] font-[1000] italic uppercase text-xs shadow-xl active:scale-95 transition-all"
           >
-            {{ isSubmitting ? "PROCESSING..." : "PAY DEPOSIT & BID" }}
-          </button>
-
-          <button
-            v-else
-            @click="router.push('/wallet')"
-            class="w-full bg-red-600 text-white py-5 rounded-[25px] font-[1000] italic uppercase text-xs shadow-xl active:scale-95 transition-all"
-          >
-            INSUFFICIENT BALANCE - TOP UP NOW
+            {{ isSubmitting ? "PROCESSING..." : "CONFIRM & DEPOSIT" }}
           </button>
 
           <button
@@ -1352,11 +1644,14 @@ onUnmounted(() => {
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
   -webkit-appearance: none;
+
   margin: 0;
 }
+
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
