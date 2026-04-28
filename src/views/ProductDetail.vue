@@ -595,6 +595,15 @@ watch(
   },
   { immediate: true }, // Langsung cek pas halaman dibuka
 );
+watchEffect(() => {
+  if (product.value) {
+    console.log("=== CEK TOMBOL PAY ===");
+    console.log("Match ID:", product.value.winner_id === props.userProfile?.id);
+    console.log("Fallback Status:", product.value.fallback_status);
+    console.log("Transaction Exist:", !!transaction.value);
+    console.log("Transaction Status:", transaction.value?.status);
+  }
+});
 
 onMounted(async () => {
   await syncServerTime();
