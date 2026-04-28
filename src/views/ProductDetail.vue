@@ -196,22 +196,27 @@ const loadingFallback = ref(false);
 const handleFallback = async (choice) => {
   loadingFallback.value = true;
   try {
-    const { data, error } = await supabase.rpc("handle_fallback_choice", {
-      p_product_id: product.value.id,
-      p_choice: choice,
-    });
+    const { data: rpcData, error } = await supabase.rpc(
+      "handle_fallback_choice",
+      {
+        p_product_id: product.value.id,
+        p_choice: choice,
+      },
+    );
     if (error) throw error;
-    await fetchProductDetail();
 
-    alert(data);
+    // PAKSA UPDATE LOKAL (Jangan nunggu fetch)
+    if (choice === "accepted") {
+      product.value.fallback_status = "accepted";
+    }
+
+    await fetchProductDetail(); // Tetap panggil buat sinkron sisanya
   } catch (err) {
-    console.error("Fallback Error:", err.message);
-    alert("Gagal memproses pilihan.");
+    console.error(err);
   } finally {
     loadingFallback.value = false;
   }
 };
-
 // Logic buat nentuin UI muncul
 const showFallbackUI = computed(() => {
   // Pastiin userProfile ada, baru bandingin ID-nya
@@ -650,6 +655,7 @@ onMounted(async () => {
           filter: `id=eq.${route.params.id}`,
         },
         (payload) => {
+          console.log("REALTIME UPDATE MASUK:", payload.new.fallback_status);
           if (payload.new.status === "banned") {
             showBannedModal.value = true;
             return;
@@ -1102,6 +1108,12 @@ onUnmounted(() => {
             >
               {{ product.name }}
             </h2>
+            <pre class="text-[10px] text-white bg-red-900 p-2">
+  Status: {{ product?.fallback_status }}
+  WinnerID: {{ product?.winner_id }}
+  UserID: {{ props.userProfile?.id }}
+</pre
+            >
             <div
               @click="router.push(`/user/${product.profiles?.username}`)"
               class="flex items-center gap-4 p-5 bg-white/[0.03] border border-white/10 rounded-[30px] cursor-pointer w-fit group"
@@ -1304,15 +1316,11 @@ onUnmounted(() => {
                     </span>
                   </div>
                   <button
-                    v-if="
-                      product.winner_id === props.userProfile?.id &&
-                      (product.fallback_status === 'accepted' ||
-                        product.fallback_stage === 1)
-                    "
+                    v-if="product?.fallback_status === 'accepted'"
                     @click="showPaymentModal = true"
-                    class="w-full bg-green-500 text-black py-5 rounded-[25px] font-[1000] italic uppercase text-xs flex items-center justify-center gap-3 shadow-lg active:scale-95 transition-all"
+                    class="w-full bg-green-500 ..."
                   >
-                    <ShieldCheckIcon class="w-5 h-5" /> Pay to Escrow
+                    TEST TOMBOL MUNCUL
                   </button>
                 </div>
                 <div
