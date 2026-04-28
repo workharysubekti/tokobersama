@@ -57,7 +57,13 @@ const handleAction = async (notif) => {
     notif.is_read = true;
   }
 
-  if (notif.title.includes("FOLLOW") || notif.title.includes("FOLLBACK")) {
+  // Cek kalau judulnya mengandung kata WINNER (Sesuai RPC CRON kita)
+  if (notif.title.includes("WINNER")) {
+    router.push(`/product/${notif.related_id}?action=checkout`); // Arahkan langsung ke produk
+  } else if (
+    notif.title.includes("FOLLOW") ||
+    notif.title.includes("FOLLBACK")
+  ) {
     if (notif.sender?.username) {
       router.push(`/user/${notif.sender.username}`);
     }
@@ -149,9 +155,11 @@ onUnmounted(() => {
         :key="notif.id"
         @click="handleAction(notif)"
         :class="[
-          notif.is_read
-            ? 'border-white/5 opacity-60'
-            : 'border-yellow-500/30 bg-yellow-500/[0.02] shadow-[0_0_20px_rgba(234,179,8,0.05)]',
+          notif.title.includes('WINNER')
+            ? 'border-yellow-500 bg-yellow-500/10 shadow-[0_0_25px_rgba(234,179,8,0.15)]'
+            : notif.is_read
+              ? 'border-white/5 opacity-60'
+              : 'border-yellow-500/30 bg-yellow-500/[0.02] shadow-[0_0_20px_rgba(234,179,8,0.05)]',
         ]"
         class="bg-[#0d0d0d] border p-5 rounded-[28px] hover:border-yellow-500/50 transition-all cursor-pointer group"
       >
@@ -159,11 +167,19 @@ onUnmounted(() => {
           <div
             class="w-12 h-12 rounded-2xl overflow-hidden border border-white/10 bg-black flex-shrink-0"
           >
+            <div
+              v-if="notif.title.includes('WINNER')"
+              class="w-full h-full flex items-center justify-center bg-yellow-500/20"
+            >
+              <TrophyIcon class="w-6 h-6 text-yellow-500" />
+            </div>
+
             <img
-              v-if="notif.sender?.avatar_url"
+              v-else-if="notif.sender?.avatar_url"
               :src="notif.sender.avatar_url"
               class="w-full h-full object-cover"
             />
+
             <div
               v-else
               class="w-full h-full flex items-center justify-center bg-gray-900"
