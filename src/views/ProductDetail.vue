@@ -198,10 +198,11 @@ const handleFallback = async (choice) => {
 
 // Logic buat nentuin UI muncul
 const showFallbackUI = computed(() => {
+  // Pastiin userProfile ada, baru bandingin ID-nya
   return (
-    product.value.winner_id === currentUser.id &&
-    product.value.fallback_stage > 1 &&
-    product.value.fallback_status === "pending"
+    props.userProfile?.id === product.value?.winner_id &&
+    product.value?.fallback_stage > 1 &&
+    product.value?.fallback_status === "pending"
   );
 });
 
