@@ -421,7 +421,7 @@ const fetchProductDetail = async () => {
       const { data: txData } = await supabase
         .from("transactions")
         .select("*")
-        .eq("product_id", data.id)
+        .eq("product_id", product.value.id)
         .eq("buyer_id", props.userProfile.id) // Kunci berdasarkan user yang login
         .maybeSingle();
 
