@@ -31,7 +31,7 @@ const followingCount = ref(0);
 const balance = ref(0);
 const activeProductsCounts = ref(0);
 
-// --- LOGIKA LOGOUT ---
+// --- LOGIKA LOGOUT (KODE SUCI) ---
 const handleLogout = async () => {
   const confirmLogout = confirm("Konfirmasi Logout dari sistem TokBer?");
   if (!confirmLogout) return;
@@ -39,7 +39,7 @@ const handleLogout = async () => {
   router.push("/login");
 };
 
-// --- LOGIKA AVATAR ---
+// --- LOGIKA AVATAR (KODE SUCI) ---
 const triggerFileInput = () => {
   fileInput.value.click();
 };
@@ -103,14 +103,14 @@ const fetchUserStats = async () => {
   followingCount.value = followingRes.count || 0;
 };
 
-// --- LOGIKA RANK ---
+// --- LOGIKA RANK (UPDATED LOGIC) ---
 const myRank = computed(() => {
-  // Tambahkan proteksi agar tidak error saat data props belum landing
-  if (!props.userProfile) return { name: "LOADING", color: "#666" };
+  if (!props.userProfile)
+    return { name: "LOADING", color: "#666", icon: BoltIcon };
 
   return getRankDetails(
     props.userProfile.reputation || 0,
-    props.userProfile.role === "admin", // Pastikan kolom 'role' ada di tabel profiles
+    props.userProfile.is_admin === true,
   );
 });
 
@@ -235,13 +235,23 @@ onMounted(() => {
             class="inline-flex items-center gap-4 px-6 py-3 bg-yellow-500/5 border border-yellow-500/20 rounded-[24px] active:scale-95 transition-all w-fit"
           >
             <div
-              :class="[myRank.bg, myRank.color]"
-              class="p-2 rounded-xl border border-white/5"
+              :style="{
+                color: myRank.color,
+                backgroundColor: myRank.color + '15',
+                borderColor: myRank.color + '30',
+              }"
+              class="p-2 rounded-xl border"
             >
               <component :is="myRank.icon" class="w-4 h-4" />
             </div>
             <div class="text-left">
-              <p class="text-[9px] text-white leading-none mb-1 font-black">
+              <p
+                :style="{
+                  color: myRank.color,
+                  textShadow: `0 0 10px ${myRank.color}44`,
+                }"
+                class="text-[9px] leading-none mb-1 font-black"
+              >
                 RANK: {{ myRank.name }}
               </p>
               <p
@@ -437,15 +447,6 @@ onMounted(() => {
       </div>
     </div>
   </div>
-  <span
-    :style="{
-      color: myRank.color,
-      textShadow: `0 0 10px ${myRank.color}44`,
-    }"
-    class="font-black italic"
-  >
-    {{ myRank.name }}
-  </span>
 </template>
 
 <style scoped>

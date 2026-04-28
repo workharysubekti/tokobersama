@@ -322,7 +322,7 @@ const myRank = computed(() => {
   // Pastikan profile.value.role isinya beneran "admin" (huruf kecil semua)
   return getRankDetails(
     profile.value.reputation || 0,
-    profile.value.role === "admin",
+    profile.value.is_admin === true,
   );
 });
 
@@ -607,7 +607,16 @@ onUnmounted(() => {
                 class="px-6 py-2 rounded-full border border-white/5 text-[10px] flex items-center gap-2"
               >
                 <component :is="myRank.icon" class="w-4 h-4" />
-                <span>{{ myRank.name }}</span>
+                <span
+                  v-if="myRank"
+                  :style="{
+                    color: myRank.color,
+                    textShadow: `0 0 10px ${myRank.color}66`,
+                  }"
+                  class="text-xs font-black italic tracking-tighter border border-current px-2 py-0.5 rounded"
+                >
+                  {{ myRank.name }}
+                </span>
               </div>
               <div
                 class="flex items-center gap-2 text-yellow-500 bg-yellow-500/5 px-4 py-2 rounded-full border border-yellow-500/10"
@@ -962,13 +971,4 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
-  <span
-    :style="{
-      color: myRank.color,
-      textShadow: `0 0 10px ${myRank.color}44`,
-    }"
-    class="font-black italic"
-  >
-    {{ myRank.name }}
-  </span>
 </template>
