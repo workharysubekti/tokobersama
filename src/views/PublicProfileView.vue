@@ -28,6 +28,7 @@ import {
   PhotoIcon,
 } from "@heroicons/vue/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/vue/24/solid";
+import { getRankDetails } from "../utils/rankUtils.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -311,35 +312,11 @@ const averageRating = computed(() => {
   return base;
 });
 
-const userRank = computed(() => {
-  if (profile.value?.is_admin)
-    return {
-      name: "OWNER",
-      color: "text-red-600",
-      bg: "bg-red-600/10",
-      icon: ShieldCheckIcon,
-    };
-  const rep = profile.value?.reputation || 0;
-  if (rep >= 500)
-    return {
-      name: "LEGEND",
-      color: "text-yellow-500",
-      bg: "bg-yellow-500/10",
-      icon: TrophyIcon,
-    };
-  if (rep >= 200)
-    return {
-      name: "EXPERT",
-      color: "text-red-500",
-      bg: "bg-red-600/10",
-      icon: FireIcon,
-    };
-  return {
-    name: "MEMBER",
-    color: "text-blue-500",
-    bg: "bg-blue-500/10",
-    icon: ShieldCheckIcon,
-  };
+const myRank = computed(() => {
+  return getRankDetails(
+    userProfile.value.reputation,
+    userProfile.value.role === "admin",
+  );
 });
 
 const showReviewModal = ref(false);
@@ -500,11 +477,11 @@ onUnmounted(() => {
 
               <div class="hidden lg:flex items-center gap-4">
                 <div
-                  :class="[userRank.bg, userRank.color]"
+                  :class="[myRank.bg, myRank.color]"
                   class="px-5 py-1.5 rounded-full border border-white/5 text-[9px] flex items-center gap-2"
                 >
-                  <component :is="userRank.icon" class="w-3.5 h-3.5" />
-                  <span>{{ userRank.name }}</span>
+                  <component :is="myRank.icon" class="w-3.5 h-3.5" />
+                  <span>{{ myRank.name }}</span>
                 </div>
                 <div
                   class="flex items-center gap-1.5 text-yellow-500 bg-yellow-500/5 px-4 py-1.5 rounded-full border border-yellow-500/10"
@@ -610,11 +587,11 @@ onUnmounted(() => {
 
             <div class="lg:hidden flex items-center justify-center gap-4">
               <div
-                :class="[userRank.bg, userRank.color]"
+                :class="[myRank.bg, myRank.color]"
                 class="px-6 py-2 rounded-full border border-white/5 text-[10px] flex items-center gap-2"
               >
-                <component :is="userRank.icon" class="w-4 h-4" />
-                <span>{{ userRank.name }}</span>
+                <component :is="myRank.icon" class="w-4 h-4" />
+                <span>{{ myRank.name }}</span>
               </div>
               <div
                 class="flex items-center gap-2 text-yellow-500 bg-yellow-500/5 px-4 py-2 rounded-full border border-yellow-500/10"
@@ -973,10 +950,10 @@ onUnmounted(() => {
 
 <span
   :style="{
-    color: userRank.color,
-    textShadow: `0 0 10px ${userRank.color}44`,
+    color: myRank.color,
+    textShadow: `0 0 10px ${myRank.color}44`,
   }"
   class="font-black italic"
 >
-  {{ userRank.name }}
+  {{ myRank.name }}
 </span>
