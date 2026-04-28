@@ -87,6 +87,14 @@ const syncServerTime = async () => {
   }
 };
 
+// Fungsi hitung penalti otomatis sesuai dokumen TOKBER
+const getPenaltyPoint = (stage) => {
+  if (stage === 1) return 150;
+  if (stage === 2) return 100;
+  if (stage === 3) return 50;
+  return 0;
+};
+
 // --- LOGIKA RANKING (UNIQUE BIDDERS) ---
 const rankedBids = computed(() => {
   if (!recentBids.value || recentBids.value.length === 0) return [];
@@ -517,9 +525,42 @@ const executeBidTransaction = async () => {
   }
 };
 
+// Variabel khusus Fallback (Biar gak bentrok sama timer utama)
+const fallbackCountdownText = ref("02:00:00");
+let fallbackInterval = null;
+
+const startFallbackTimer = () => {
+  // 1. Bersihkan kalau sudah ada (Biar gak tumpuk)
+  if (fallbackInterval) clearInterval(fallbackInterval);
+
+  if (!product.value?.fallback_deadline) return;
+
+  const runTick = () => {
+    const deadline = new Date(product.value.fallback_deadline).getTime();
+    const now = new Date().getTime();
+    const diff = deadline - now;
+
+    if (diff <= 0) {
+      fallbackCountdownText.value = "EXPIRED";
+      clearInterval(fallbackInterval);
+      return;
+    }
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    fallbackCountdownText.value = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  };
+
+  runTick(); // Jalankan instan
+  fallbackInterval = setInterval(runTick, 1000); // Jalan tiap detik
+};
+
 onMounted(async () => {
   await syncServerTime();
   await fetchProductDetail();
+  startFallbackTimer();
   timerInterval = setInterval(updateTimer, 1000);
 
   if (route.params.id) {
@@ -580,6 +621,15 @@ onMounted(async () => {
             product.value.current_bid = payload.new.current_bid;
             product.value.end_time = payload.new.end_time;
 
+            // TAMBAHKAN INI BIAR REAL-TIME:
+            product.value.fallback_stage = payload.new.fallback_stage;
+            product.value.fallback_status = payload.new.fallback_status;
+            product.value.fallback_deadline = payload.new.fallback_deadline;
+
+            if (payload.new.fallback_deadline) {
+              startCountdown();
+            }
+
             // Update nominal input bid selanjutnya
             const nextMinBid = Number(payload.new.current_bid) + 10000;
             if (bidAmount.value < nextMinBid) {
@@ -620,8 +670,12 @@ onUnmounted(() => {
   <div v-if="product" class="bg-black min-h-screen text-white pb-32">
     <div
       v-if="showFallbackUI"
-      class="mb-8 overflow-hidden rounded-[32px] border-2 border-yellow-500 bg-black shadow-[0_0_40px_rgba(234,179,8,0.2)]"
+      class="relative z-[60] mb-8 mt-16 md:mt-0 overflow-hidden rounded-[32px] border-2 border-yellow-500 bg-black shadow-[0_0_40px_rgba(234,179,8,0.2)]"
     >
+      <div
+        class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-yellow-500 to-transparent"
+      ></div>
+
       <div class="p-6 md:p-8">
         <div class="flex flex-col md:flex-row items-center gap-6">
           <div
@@ -643,10 +697,10 @@ onUnmounted(() => {
                 product.fallback_stage
               }}, barang ini sekarang milikmu.
               <br class="hidden md:block" />
-              <span class="text-red-500 font-black"
-                >Pilih sebelum Jam 10:00 pagi</span
-              >
-              untuk lepas tanpa penalti.
+              Keputusan Berakhir Dalam:
+              <span class="text-red-500 font-[1000] text-sm md:text-base ml-1">
+                {{ fallbackCountdownText }}
+              </span>
             </p>
           </div>
         </div>
@@ -657,7 +711,7 @@ onUnmounted(() => {
             :disabled="loadingFallback"
             class="group relative overflow-hidden py-4 rounded-2xl bg-yellow-500 text-black font-[1000] italic uppercase text-sm transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
           >
-            <span class="relative z-10">Ambil Item</span>
+            <span class="relative z-10 text-[11px] md:text-sm">Ambil Item</span>
             <div
               class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform"
             ></div>
@@ -666,7 +720,7 @@ onUnmounted(() => {
           <button
             @click="handleFallback('released')"
             :disabled="loadingFallback"
-            class="py-4 rounded-2xl bg-white/5 border border-white/10 text-gray-400 font-[1000] italic uppercase text-sm transition-all hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50 active:scale-95 disabled:opacity-50"
+            class="py-4 rounded-2xl bg-white/5 border border-white/10 text-gray-400 font-[1000] italic uppercase text-[11px] md:text-sm transition-all hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50 active:scale-95 disabled:opacity-50"
           >
             Lepaskan
           </button>
@@ -679,9 +733,7 @@ onUnmounted(() => {
         <p
           class="text-[9px] font-black italic text-yellow-500 uppercase tracking-[0.2em]"
         >
-          *Konsekuensi Bid & Run: -{{
-            product.fallback_stage === 2 ? "100" : "50"
-          }}
+          *Konsekuensi Bid & Run: -{{ getPenaltyPoint(product.fallback_stage) }}
           Reputasi
         </p>
       </div>
