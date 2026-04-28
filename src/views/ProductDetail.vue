@@ -419,7 +419,7 @@ const executeBidTransaction = async () => {
   try {
     isSubmitting.value = true;
 
-    // Backup waktu lama buat perbandingan badge
+    // Backup end_time lama buat bandingin
     const oldEnd = new Date(product.value.end_time).getTime();
 
     const { data, error } = await supabase.rpc("execute_bid_v1", {
@@ -434,20 +434,23 @@ const executeBidTransaction = async () => {
       return;
     }
 
-    // --- SINKRONISASI TOTAL ---
+    // --- SINKRONISASI INSTAN (BIAR GAK CONFLICT SAMA MODAL) ---
     // Update state product DETIK INI JUGA dari data kembalian database
-    const newEnd = new Date(data.new_end_time).getTime();
-
     product.value.end_time = data.new_end_time;
     product.value.current_bid = data.new_bid;
     bidAmount.value = Number(data.new_bid) + 10000;
 
-    // Trigger visual badge "EXTENDED" kalau emang nambah > 2 detik
+    const newEnd = new Date(data.new_end_time).getTime();
+
+    // Trigger visual badge "EXTENDED" secara manual
     if (newEnd > oldEnd + 2000) {
       showExtensionBadge.value = true;
       setTimeout(() => {
         showExtensionBadge.value = false;
       }, 3000);
+
+      // HP Bergetar tanda perang (Optional tapi mantap)
+      if (window.navigator.vibrate) window.navigator.vibrate([100, 50, 100]);
     }
 
     showDepositModal.value = false;
