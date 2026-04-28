@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, onUnmounted, watch, nextTick } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import { supabase } from "../lib/supabase.js";
 import { notify } from "../utils/notify.js";
 import {
