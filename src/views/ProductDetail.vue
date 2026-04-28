@@ -640,7 +640,7 @@ onMounted(async () => {
             product.value.fallback_deadline = payload.new.fallback_deadline;
 
             if (payload.new.fallback_deadline) {
-              startCountdown();
+              startFallbackTimer();
             }
 
             // Update nominal input bid selanjutnya
