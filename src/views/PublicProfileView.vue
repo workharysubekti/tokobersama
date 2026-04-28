@@ -314,8 +314,8 @@ const averageRating = computed(() => {
 
 const myRank = computed(() => {
   return getRankDetails(
-    userProfile.value.reputation,
-    userProfile.value.role === "admin",
+    profile.value.reputation,
+    profile.value.role === "admin",
   );
 });
 
