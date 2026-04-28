@@ -422,7 +422,7 @@ const fetchProductDetail = async () => {
         .from("transactions")
         .select("*")
         .eq("product_id", data.id)
-        .eq("user_id", props.userProfile.id) // Kunci berdasarkan user yang login
+        .eq("buyer_id", props.userProfile.id) // Kunci berdasarkan user yang login
         .maybeSingle();
 
       transaction.value = txData; // Refresh state transaksi
@@ -570,7 +570,6 @@ const startFallbackTimer = () => {
   if (!product.value?.fallback_deadline) return;
 
   const runTick = () => {
-    console.log("Timer Berdetak!");
     const deadline = new Date(product.value.fallback_deadline).getTime();
     const now = new Date().getTime();
     const diff = deadline - now;
@@ -603,26 +602,6 @@ watch(
   },
   { immediate: true }, // Langsung cek pas halaman dibuka
 );
-
-// --- KODE CCTV DEBUGGING ---
-watchEffect(() => {
-  if (product.value) {
-    console.log("=== DIAGNOSA TOMBOL BAYAR ===");
-    console.log(
-      "1. Akun Cocok?",
-      product.value.winner_id === props.userProfile?.id,
-    );
-    console.log("2. Status Produk:", product.value.status);
-    console.log("3. Stage Fallback:", product.value.fallback_stage);
-    console.log("4. Status Fallback:", product.value.fallback_status);
-    console.log("5. Data Transaksi Ada?", !!transaction.value);
-    if (transaction.value) {
-      console.log("6. Status Transaksi:", transaction.value.status);
-    }
-    console.log("=============================");
-  }
-});
-// --- END DEBUG --
 
 onMounted(async () => {
   await syncServerTime();
