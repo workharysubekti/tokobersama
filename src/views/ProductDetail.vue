@@ -168,8 +168,10 @@ const isSeller = computed(() => {
 });
 
 const totalToPay = computed(() => {
-  const winningBid = recentBids.value[0]?.amount || 0;
-  return winningBid + adminFee;
+  // Cari bid terakhir milik user yang sedang login di riwayat bid
+  const myBid = recentBids.value.find(b => b.user_id === props.userProfile?.id);
+  const winningAmount = myBid ? myBid.amount : (product.value?.current_bid || 0);
+  return winningAmount + adminFee;
 });
 
 // --- LOGIKA USER RANK & LIMIT (SINKRON DENGAN RANKUTILS) ---
@@ -356,22 +358,32 @@ const fetchBids = async () => {
 };
 
 const fetchTransaction = async () => {
-  if (product.value?.status !== "closed") return;
+  if (product.value?.status !== "closed" || !props.userProfile?.id) return;
+  
+  // 1. Cari transaksi milik SAYA
   const { data } = await supabase
     .from("transactions")
     .select("*")
     .eq("product_id", route.params.id)
+    .eq("buyer_id", props.userProfile.id)
     .maybeSingle();
-  if (data) transaction.value = data;
-  else if (isWinner.value) {
+
+  if (data) {
+    transaction.value = data;
+  } else if (isWinner.value) {
+    // 2. Kalau gak ada, baru buat. Pake harga bid SAYA, bukan Rank #1
+    const myBid = recentBids.value.find(b => b.user_id === props.userProfile.id);
+    const myAmount = myBid ? myBid.amount : 0;
+
     const { data: newTx } = await supabase
       .from("transactions")
       .insert({
         product_id: product.value.id,
         buyer_id: props.userProfile.id,
         seller_id: product.value.owner_id,
-        amount_bid: recentBids.value[0].amount,
-        total_amount: totalToPay.value,
+        amount_bid: myAmount,
+        total_amount: myAmount + adminFee,
+        status: 'pending_payment'
       })
       .select()
       .single();
@@ -413,38 +425,29 @@ const fetchProductDetail = async () => {
   if (!route.params.id) return;
   loading.value = true;
   try {
+    // 1. Ambil Data Produk
     const { data, error } = await supabase
       .from("products")
-      .select(
-        "*, profiles!owner_id(username, full_name, avatar_url, reputation), fallback_stage, fallback_status, fallback_deadline",
-      )
+      .select("*, profiles!owner_id(username, full_name, avatar_url, reputation), fallback_stage, fallback_status, fallback_deadline")
       .eq("id", route.params.id)
       .maybeSingle();
 
     if (error || !data) return router.push("/");
     product.value = data;
 
-    // --- BAGIAN YANG BIKIN TxStatus KOSONG ---
-    if (props.userProfile?.id) {
-      const { data: txData, error: txError } = await supabase
-        .from("transactions") // 1. Pastikan pake S
-        .select("*")
-        .eq("product_id", data.id)
-        .eq("buyer_id", props.userProfile.id) // 2. Pastikan buyer_id, bukan user_id
-        .maybeSingle();
-
-      if (txError) console.error("Error tarik transaksi:", txError.message);
-
-      // Simpan ke ref transaction agar TxStatus di kotak merah berubah
-      transaction.value = txData;
-    }
-
+    // 2. Ambil Bids (Wajib duluan biar kita tau nominal bid lo berapa)
     await fetchBids();
 
-    bidAmount.value =
-      recentBids.value.length > 0
+    // 3. Ambil atau Buat Transaksi (Cukup panggil fungsinya saja)
+    if (props.userProfile?.id) {
+      await fetchTransaction(); 
+    }
+
+    // 4. Set Nominal Input Bid Selanjutnya
+    bidAmount.value = recentBids.value.length > 0
         ? Number(recentBids.value[0].amount) + 10000
         : Number(data.starting_bid) + 10000;
+
   } catch (err) {
     console.error("Fetch Error:", err);
   } finally {
