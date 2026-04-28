@@ -57,6 +57,22 @@ const isSubmittingAction = ref(false);
 // --- SYNC & THROTTLE STATES ---
 const isCooldown = ref(false);
 
+// --- FORMATTER INPUT BID (ANTI-BINGUNG) ---
+const formattedBidAmount = computed({
+  get() {
+    // Menampilkan angka dengan format titik (id-ID)
+    if (!bidAmount.value) return "";
+    return new Intl.NumberFormat("id-ID").format(bidAmount.value);
+  },
+  set(newValue) {
+    // Menghapus semua titik sebelum disimpan kembali ke bidAmount (angka murni)
+    const number = Number(newValue.replace(/\./g, ""));
+    if (!isNaN(number)) {
+      bidAmount.value = number;
+    }
+  },
+});
+
 // --- FUNGSI SYNC JAM (SILENT WAR) ---
 const syncServerTime = async () => {
   try {
@@ -964,7 +980,7 @@ onUnmounted(() => {
 
                 <div class="relative group">
                   <span
-                    class="absolute left-5 lg:left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-xs lg:text-sm italic tracking-tighter z-10"
+                    class="absolute left-5 lg:left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-xs lg:text-sm italic tracking-tighter z-10 pointer-events-none"
                   >
                     IDR
                   </span>
@@ -986,14 +1002,16 @@ onUnmounted(() => {
                   </div>
 
                   <input
-                    v-model.number="bidAmount"
-                    type="number"
-                    class="w-full bg-black border-2 border-white/10 rounded-3xl py-5 lg:py-7 pl-14 lg:pl-20 pr-4 lg:pr-6 text-xl lg:text-3xl font-[1000] italic focus:border-yellow-500 text-white outline-none shadow-2xl transition-all"
+                    v-model="formattedBidAmount"
+                    type="text"
+                    inputmode="numeric"
+                    class="w-full bg-black border-2 border-white/10 rounded-3xl py-5 lg:py-7 pl-14 lg:pl-20 pr-4 lg:pr-6 font-[1000] italic focus:border-yellow-500 text-white outline-none shadow-2xl transition-all"
                     :class="
                       bidAmount.toString().length > 9
                         ? 'text-lg lg:text-3xl'
                         : 'text-xl lg:text-3xl'
                     "
+                    placeholder="0"
                   />
                 </div>
 
