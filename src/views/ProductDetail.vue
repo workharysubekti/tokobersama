@@ -20,7 +20,6 @@ import {
   LockClosedIcon,
 } from "@heroicons/vue/24/outline";
 import { getRankDetails } from "../utils/rankUtils.js";
-import { p } from "vue-router/dist/router-CWoNjPRp.mjs";
 
 // --- PROPS & ROUTING ---
 const props = defineProps({
