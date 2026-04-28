@@ -387,7 +387,7 @@ const fetchProductDetail = async () => {
     const { data, error } = await supabase
       .from("products")
       .select(
-        "*, profiles!owner_id(username, full_name, avatar_url, reputation)",
+        "*, profiles!owner_id(username, full_name, avatar_url, reputation), fallback_stage, fallback_status, fallback_deadline",
       )
       .eq("id", route.params.id)
       .maybeSingle();
@@ -536,6 +536,7 @@ const startFallbackTimer = () => {
   if (!product.value?.fallback_deadline) return;
 
   const runTick = () => {
+    console.log("Timer Berdetak!");
     const deadline = new Date(product.value.fallback_deadline).getTime();
     const now = new Date().getTime();
     const diff = deadline - now;
@@ -556,6 +557,18 @@ const startFallbackTimer = () => {
   runTick(); // Jalankan instan
   fallbackInterval = setInterval(runTick, 1000); // Jalan tiap detik
 };
+
+// Taruh ini di bawah fungsi startFallbackTimer
+watch(
+  () => product.value?.fallback_deadline,
+  (newDeadline) => {
+    if (newDeadline) {
+      console.log("Deadline terdeteksi, menjalankan timer...");
+      startFallbackTimer();
+    }
+  },
+  { immediate: true }, // Langsung cek pas halaman dibuka
+);
 
 onMounted(async () => {
   await syncServerTime();
@@ -778,32 +791,41 @@ onUnmounted(() => {
     </div>
 
     <div
-      class="lg:hidden fixed top-[64px] inset-x-0 z-[90] pointer-events-none px-5 py-3"
+      class="lg:hidden fixed top-[64px] inset-x-0 z-[90] pointer-events-none px-6 py-2"
     >
       <div
         :class="
           isIntense
-            ? 'bg-red-600 border-red-500 shadow-red-500/20'
+            ? 'bg-red-600 border-red-500 shadow-red-500/40'
             : timeLeft === 'VALIDATING...'
               ? 'bg-blue-600 border-blue-500'
-              : 'bg-yellow-500 border-yellow-400'
+              : 'bg-yellow-500 border-yellow-400 shadow-yellow-500/20'
         "
-        class="pointer-events-auto rounded-2xl border-2 shadow-2xl flex flex-col items-center justify-center py-2 transition-all duration-500"
+        class="pointer-events-auto rounded-full border shadow-lg flex items-center justify-between px-4 py-1.5 transition-all duration-500"
       >
         <div class="flex items-center gap-2">
-          <ClockIcon class="w-4 h-4 text-black animate-pulse" />
-          <span class="text-[8px] font-black uppercase italic text-black"
-            >Ends In</span
+          <ClockIcon class="w-3.5 h-3.5 text-black animate-pulse" />
+          <span
+            class="text-[9px] font-black uppercase italic text-black tracking-widest whitespace-nowrap"
           >
+            Ends In
+          </span>
         </div>
-        <span class="text-lg font-[1000] italic text-black tracking-tighter">{{
-          timeLeft
-        }}</span>
-        <span
-          v-if="showExtensionBadge"
-          class="text-[7px] font-black text-black uppercase animate-pulse"
-          >Anti-Sniper: Time Extended!</span
-        >
+
+        <div class="flex items-center gap-2">
+          <span
+            class="text-base font-[1000] italic text-black tracking-tighter leading-none"
+          >
+            {{ timeLeft }}
+          </span>
+
+          <span
+            v-if="showExtensionBadge"
+            class="bg-black text-[7px] text-white px-1.5 py-0.5 rounded-md font-black uppercase animate-bounce"
+          >
+            +Time
+          </span>
+        </div>
       </div>
     </div>
 
