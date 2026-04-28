@@ -55,7 +55,7 @@ const hasNotifiedIntense = ref(false);
 const showBannedModal = ref(false);
 const showDepositModal = ref(false); // FIXED: Deklarasi State Modal
 
-// --- OUTBID & ESCROW STATES ---
+// --- OUTBID & ESCROW STATES ---//
 const isOutbid = ref(false);
 const transaction = ref(null);
 const showPaymentModal = ref(false);
