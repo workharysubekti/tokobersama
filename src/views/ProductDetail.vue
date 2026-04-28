@@ -964,11 +964,13 @@ onUnmounted(() => {
 
                 <div class="relative group">
                   <span
-                    class="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-sm italic tracking-tighter"
-                    >IDR</span
+                    class="absolute left-5 lg:left-6 top-1/2 -translate-y-1/2 text-gray-600 font-black text-xs lg:text-sm italic tracking-tighter z-10"
                   >
+                    IDR
+                  </span>
+
                   <div
-                    class="flex gap-3 mb-4 overflow-x-auto no-scrollbar pb-2"
+                    class="flex gap-2 lg:gap-3 mb-4 overflow-x-auto no-scrollbar pb-2"
                   >
                     <button
                       v-for="plus in [10000, 50000, 100000, 500000]"
@@ -977,15 +979,21 @@ onUnmounted(() => {
                         bidAmount =
                           (product.current_bid || product.starting_bid) + plus
                       "
-                      class="flex-shrink-0 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black italic text-yellow-500 hover:bg-yellow-500 hover:text-black transition-all active:scale-90 shadow-lg"
+                      class="flex-shrink-0 bg-white/5 border border-white/10 px-3 lg:px-4 py-2 rounded-xl text-[9px] lg:text-[10px] font-black italic text-yellow-500 hover:bg-yellow-500 hover:text-black transition-all active:scale-90 shadow-lg"
                     >
                       +{{ plus / 1000 }}K
                     </button>
                   </div>
+
                   <input
                     v-model.number="bidAmount"
                     type="number"
-                    class="w-full bg-black border-2 border-white/10 rounded-3xl py-7 pl-20 pr-6 text-3xl font-[1000] italic focus:border-yellow-500 text-white outline-none shadow-2xl"
+                    class="w-full bg-black border-2 border-white/10 rounded-3xl py-5 lg:py-7 pl-14 lg:pl-20 pr-4 lg:pr-6 text-xl lg:text-3xl font-[1000] italic focus:border-yellow-500 text-white outline-none shadow-2xl transition-all"
+                    :class="
+                      bidAmount.toString().length > 9
+                        ? 'text-lg lg:text-3xl'
+                        : 'text-xl lg:text-3xl'
+                    "
                   />
                 </div>
 
