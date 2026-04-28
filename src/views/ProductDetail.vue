@@ -156,10 +156,10 @@ const hasEnoughBalanceForDeposit = computed(() => {
 
 // --- LOGIKA SETTLEMENT ---
 const isWinner = computed(() => {
+  // Pemenang adalah orang yang ID-nya sama dengan winner_id di produk saat status CLOSED
   return (
     product.value?.status === "closed" &&
-    recentBids.value.length > 0 &&
-    props.userProfile?.id === recentBids.value[0].user_id
+    props.userProfile?.id === product.value?.winner_id
   );
 });
 
@@ -1114,7 +1114,7 @@ onUnmounted(() => {
   Status: {{ product?.fallback_status }}
   WinnerID: {{ product?.winner_id }}
   UserID: {{ props.userProfile?.id }}
-  TxStatus: {{ transactions?.status || "KOSONG/NULL" }}
+  TxStatus: {{ transaction?.status || "KOSONG/NULL" }}
   IsMatch: {{ product?.winner_id === props.userProfile?.id }}
 </pre
             >
