@@ -154,7 +154,7 @@ const hasEnoughBalanceForDeposit = computed(() => {
   return (props.userProfile?.balance || 0) >= requiredDeposit.value;
 });
 
-// --- LOGIKA SETTLEMENT ---
+// --- LOGIKA SETTLEMENT -----
 const isWinner = computed(() => {
   // Pemenang adalah orang yang ID-nya sama dengan winner_id di produk saat status CLOSED
   return (
