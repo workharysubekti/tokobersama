@@ -430,6 +430,8 @@ const fetchProductDetail = async () => {
       .from("products")
       .select("*, profiles!owner_id(username, full_name, avatar_url, reputation), fallback_stage, fallback_status, fallback_deadline")
       .eq("id", route.params.id)
+      .order('created_at', { ascending: false })
+      .limit (1)
       .maybeSingle();
 
     if (error || !data) return router.push("/");
