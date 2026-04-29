@@ -8,8 +8,30 @@ export function useBidding(product, recentBids, userProfile) {
   const bidAmount = ref(0);
   const isSubmitting = ref(false);
   const isCooldown = ref(false);
-  const isOutbid = ref(false);
   const showDepositModal = ref(false);
+
+  // --- LOGIKA RECLAIM (KABEL YANG TADI PUTUS) ---
+  const isOutbid = computed(() => {
+    // 1. Kalau gak ada bid atau user gak login, gak usah merah
+    if (
+      !recentBids.value ||
+      recentBids.value.length === 0 ||
+      !userProfile.value
+    )
+      return false;
+
+    // 2. Cek apakah penawar tertinggi (Rank #1) BUKAN kita
+    const topBidderId = recentBids.value[0].user_id;
+    const isNotRank1 = topBidderId !== userProfile.value.id;
+
+    // 3. Cek apakah kita pernah nge-bid di barang ini (pernah ada di list)
+    const haveIBidBefore = recentBids.value.some(
+      (bid) => bid.user_id === userProfile.value.id,
+    );
+
+    // 4. Kalau kita pernah ngebid tapi sekarang bukan nomor 1 = KENA SALIP (MERAH!)
+    return isNotRank1 && haveIBidBefore;
+  });
 
   // --- 1. FORMATTER TITIK (Balikin fungsi yang hilang) ---
   const formattedBidAmount = computed({
