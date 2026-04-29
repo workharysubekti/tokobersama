@@ -41,13 +41,16 @@ const adminFee = 5000;
 const {
   product,
   recentBids,
-  transaction,
   loading,
   rankedBids,
-  isWinner,
-  isSeller,
   allImages,
+  activeImgIndex,
+  handleTouchStart,
+  handleTouchEnd, // Ambil fungsi swipe
   fetchProductDetail,
+  subscribeToAuction,
+  handleFallback,
+  confirmPayment,
 } = useAuctionData(productId, userProfileRef);
 
 const {
@@ -167,6 +170,15 @@ onMounted(async () => {
   await syncServerTime();
   await fetchProductDetail();
   startTimer();
+
+  // AKTIFKAN REAL-TIME
+  subscribeToAuction((type) => {
+    if (type === "NEW_BID") {
+      // Auto-update input harga penawaran
+      const nextBid = Number(recentBids.value[0].amount) + 10000;
+      if (bidAmount.value < nextBid) bidAmount.value = nextBid;
+    }
+  });
 });
 </script>
 
