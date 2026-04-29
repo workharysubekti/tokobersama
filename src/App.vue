@@ -30,10 +30,13 @@ const showToast = (title, message, targetPath) => {
 
   // --- LOGIKA PENYINGKAT PESAN (INTERCEPTOR) ---
   if (title.toUpperCase().includes("OUTBID")) {
-    finalTitle = "OUTBID DETECTION";
+    finalTitle = "OUTBID";
     // Biasanya message: "Tawaranmu disalip pada: KITTY CAT"
     // Kita bersihkan kalimat pembukanya, ambil nama barangnya aja
-    finalMessage = message.replace(/.*[:\-\s]/g, "").trim();
+    finalMessage = message
+      .replace(/Tawaranmu disalip pada|item|produk|di/gi, "")
+      .replace(/[:\-]/g, "")
+      .trim();
   }
 
   customToast.value = {
@@ -281,15 +284,15 @@ onMounted(async () => {
         class="fixed top-4 inset-x-0 z-[9999] flex justify-center px-6 pointer-events-auto cursor-pointer"
       >
         <div
-          class="bg-black border px-5 py-2.5 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex items-center gap-4 min-w-[220px] max-w-sm transition-all border-white/10 group active:scale-95"
+          class="bg-black border px-5 py-3 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.6)] flex items-center gap-4 min-w-[240px] max-w-sm transition-all border-white/10 group active:scale-95"
           :class="
             customToast.title.includes('OUTBID')
-              ? 'border-red-500/50 shadow-red-500/20'
-              : 'border-yellow-500/50 shadow-yellow-500/20'
+              ? 'border-red-500/50 shadow-red-500/10'
+              : 'border-yellow-500/50 shadow-yellow-500/10'
           "
         >
           <div
-            class="w-2.5 h-2.5 rounded-full animate-pulse"
+            class="w-2.5 h-2.5 rounded-full animate-pulse flex-shrink-0"
             :class="
               customToast.title.includes('OUTBID')
                 ? 'bg-red-500'
@@ -299,7 +302,7 @@ onMounted(async () => {
 
           <div class="flex flex-col overflow-hidden">
             <span
-              class="text-[9px] font-black uppercase italic leading-none tracking-[0.1em]"
+              class="text-[9px] font-[1000] uppercase italic leading-none tracking-[0.15em]"
               :class="
                 customToast.title.includes('OUTBID')
                   ? 'text-red-500'
@@ -308,19 +311,17 @@ onMounted(async () => {
             >
               {{ customToast.title }}
             </span>
-            <span
-              class="text-[11px] font-bold text-white truncate italic mt-0.5"
-            >
+            <span class="text-[12px] font-bold text-white truncate italic mt-1">
               {{ customToast.message }}
             </span>
           </div>
 
           <div
-            class="ml-auto pl-2 opacity-0 group-hover:opacity-100 transition-opacity"
+            class="ml-auto pl-2 opacity-40 group-hover:opacity-100 transition-opacity"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              class="h-3 w-3 text-gray-500"
+              class="h-3.5 w-3.5 text-white"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -328,8 +329,8 @@ onMounted(async () => {
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                stroke-width="3"
-                d="9 5l7 7-7 7"
+                stroke-width="4"
+                d="M9 5l7 7-7 7"
               />
             </svg>
           </div>
