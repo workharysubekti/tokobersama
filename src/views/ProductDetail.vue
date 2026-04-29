@@ -85,7 +85,6 @@ const showPaymentModal = ref(false);
 const showDepositModal = ref(false);
 const isBotActive = ref(true);
 const loadingFallback = ref(false);
-const activeImgIndex = ref(0);
 const reportForm = ref({ category: "Palsu / Kw", details: "" }); // Tambah ini juga
 const reportCategories = [
   "Palsu / KW",
