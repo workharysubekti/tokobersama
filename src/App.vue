@@ -25,9 +25,25 @@ let notificationChannel = null;
 
 // FUNGSI UNTUK MEMUNCULKAN NOTIFIKASI INTERNAL
 const showToast = (title, message, targetPath) => {
-  customToast.value = { title, message, targetPath };
+  let finalTitle = title;
+  let finalMessage = message;
 
-  // Hilang otomatis setelah 6 detik
+  // --- LOGIKA PENYINGKAT PESAN (INTERCEPTOR) ---
+  if (title.toUpperCase().includes("OUTBID")) {
+    finalTitle = "OUTBID DETECTION";
+    // Biasanya message: "Tawaranmu disalip pada: KITTY CAT"
+    // Kita bersihkan kalimat pembukanya, ambil nama barangnya aja
+    finalMessage = message.replace(/.*[:\-\s]/g, "").trim();
+  }
+
+  customToast.value = {
+    title: finalTitle,
+    message: finalMessage,
+    targetPath,
+  };
+
+  if (window.navigator.vibrate) window.navigator.vibrate(200);
+
   setTimeout(() => {
     customToast.value = null;
   }, 6000);
@@ -63,12 +79,8 @@ const listenToNotifications = async () => {
 
   const {
     data: { user: authUser },
-    error,
   } = await supabase.auth.getUser();
-
-  if (error || !authUser) return;
-
-  const myId = authUser.id;
+  if (!authUser) return;
 
   notificationChannel = supabase
     .channel("global-alerts")
@@ -78,7 +90,7 @@ const listenToNotifications = async () => {
         event: "INSERT",
         schema: "public",
         table: "notifications",
-        filter: `user_id=eq.${myId}`,
+        filter: `user_id=eq.${authUser.id}`,
       },
       async (payload) => {
         const notif = payload.new;
@@ -94,10 +106,7 @@ const listenToNotifications = async () => {
               .select("username")
               .eq("id", notif.from_user_id)
               .single();
-
-            if (sender) {
-              pathTujuan = `/user/${sender.username}`;
-            }
+            if (sender) pathTujuan = `/user/${sender.username}`;
           } else if (notif.related_id) {
             pathTujuan = `/product/${notif.related_id}`;
           }
@@ -105,6 +114,7 @@ const listenToNotifications = async () => {
           console.error("GPS Error:", err);
         }
 
+        // PANGGIL TOAST
         showToast(notif.title, notif.message, pathTujuan);
       },
     )
@@ -254,31 +264,76 @@ onMounted(async () => {
       </div>
     </transition>
 
-    <transition name="notif-pop">
+    <transition
+      enter-active-class="duration-500 ease-out"
+      enter-from-class="-translate-y-20 opacity-0 scale-95"
+      enter-to-class="translate-y-0 opacity-100 scale-100"
+      leave-active-class="duration-300 ease-in"
+      leave-from-class="translate-y-0 opacity-100 scale-100"
+      leave-to-class="-translate-y-20 opacity-0 scale-95"
+    >
       <div
         v-if="customToast"
-        @click="router.push(customToast.targetPath)"
-        class="fixed top-6 left-4 right-4 z-[9999] bg-[#111]/90 backdrop-blur-xl border border-yellow-500/50 p-4 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,1)] flex items-center gap-4 active:scale-95 transition-all cursor-pointer max-w-md mx-auto"
+        @click="
+          router.push(customToast.targetPath);
+          customToast = null;
+        "
+        class="fixed top-4 inset-x-0 z-[9999] flex justify-center px-6 pointer-events-auto cursor-pointer"
       >
         <div
-          class="w-10 h-10 bg-yellow-500 rounded-2xl flex items-center justify-center shrink-0"
+          class="bg-black border px-5 py-2.5 rounded-full shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex items-center gap-4 min-w-[220px] max-w-sm transition-all border-white/10 group active:scale-95"
+          :class="
+            customToast.title.includes('OUTBID')
+              ? 'border-red-500/50 shadow-red-500/20'
+              : 'border-yellow-500/50 shadow-yellow-500/20'
+          "
         >
-          <BellIcon class="w-5 h-5 text-black" />
-        </div>
-        <div class="flex-1 min-w-0">
-          <p
-            class="text-[9px] font-black text-yellow-500 uppercase italic tracking-widest"
+          <div
+            class="w-2.5 h-2.5 rounded-full animate-pulse"
+            :class="
+              customToast.title.includes('OUTBID')
+                ? 'bg-red-500'
+                : 'bg-yellow-500'
+            "
+          ></div>
+
+          <div class="flex flex-col overflow-hidden">
+            <span
+              class="text-[9px] font-black uppercase italic leading-none tracking-[0.1em]"
+              :class="
+                customToast.title.includes('OUTBID')
+                  ? 'text-red-500'
+                  : 'text-yellow-500'
+              "
+            >
+              {{ customToast.title }}
+            </span>
+            <span
+              class="text-[11px] font-bold text-white truncate italic mt-0.5"
+            >
+              {{ customToast.message }}
+            </span>
+          </div>
+
+          <div
+            class="ml-auto pl-2 opacity-0 group-hover:opacity-100 transition-opacity"
           >
-            {{ customToast.title }}
-          </p>
-          <p class="text-[11px] font-bold text-white uppercase truncate italic">
-            {{ customToast.message }}
-          </p>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-3 w-3 text-gray-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="3"
+                d="9 5l7 7-7 7"
+              />
+            </svg>
+          </div>
         </div>
-        <XMarkIcon
-          @click.stop="customToast = null"
-          class="w-5 h-5 text-gray-600 hover:text-white"
-        />
       </div>
     </transition>
 
