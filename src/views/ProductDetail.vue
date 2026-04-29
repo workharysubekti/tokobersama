@@ -210,6 +210,9 @@ const handleFallback = async (choice) => {
     // PAKSA UPDATE LOKAL (Jangan nunggu fetch)
     if (choice === "accepted") {
       product.value.fallback_status = "accepted";
+      notify.success("Selamat!", "Item sekarang milikmu. Segera selesaikan pembayaran! 🏆");
+    } else {
+      notify.warn("Dilepaskan", "Item dilepaskan ke penawar berikutnya.");
     }
 
     await fetchProductDetail(); // Tetap panggil buat sinkron sisanya
@@ -609,6 +612,17 @@ watch(
   },
   { immediate: true }, // Langsung cek pas halaman dibuka
 );
+
+  // Notifikasi otomatis pas user dapet giliran Fallback
+watch(() => product.value?.winner_id, (newWinner, oldWinner) => {
+  if (newWinner === props.userProfile?.id && oldWinner !== props.userProfile?.id) {
+    // Akun ini baru aja dapet operan tahta!
+    notify.success("Panggilan Fallback!", "Giliranmu tiba! Ambil item sekarang di area Fallback.");
+    
+    // Opsional: Bikin HP getar biar berasa (khas PUBG Mobile lo)
+    if (window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
+  }
+});
 
 onMounted(async () => {
   await syncServerTime();
