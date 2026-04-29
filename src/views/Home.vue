@@ -351,6 +351,93 @@ const isSlotAvailable = computed(
           </div>
         </div>
       </section>
+
+      <section class="max-w-7xl mx-auto px-4 py-1">
+        <router-link
+          to="/hall-of-fate"
+          class="group block relative overflow-hidden rounded-[2.5rem] border border-white/5 bg-[#0a0a0a] transition-all hover:border-yellow-500/30"
+        >
+          <div
+            class="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-yellow-500/5 via-transparent to-transparent opacity-50 group-hover:scale-125 transition-transform duration-1000"
+          ></div>
+
+          <div
+            class="relative z-10 flex flex-col md:flex-row items-center justify-between p-8 md:p-12 gap-8"
+          >
+            <div class="text-center md:text-left">
+              <div
+                class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-600/10 border border-red-500/20 mb-4"
+              >
+                <span class="relative flex h-2 w-2">
+                  <span
+                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"
+                  ></span>
+                  <span
+                    class="relative inline-flex rounded-full h-2 w-2 bg-red-500"
+                  ></span>
+                </span>
+                <span
+                  class="text-[10px] font-black uppercase tracking-widest text-red-500"
+                  >Live Judgment</span
+                >
+              </div>
+
+              <h2
+                class="text-4xl md:text-6xl font-[1000] italic uppercase tracking-tighter text-white leading-none"
+              >
+                Hall Of
+                <span
+                  class="text-yellow-500 italic drop-shadow-[0_0_15px_rgba(234,179,8,0.3)]"
+                  >Fate</span
+                >
+              </h2>
+              <p
+                class="text-gray-500 text-xs md:text-sm font-bold uppercase tracking-[0.3em] mt-3"
+              >
+                Pantau Pembayaran & Eksekusi Reputasi Secara Real-Time
+              </p>
+            </div>
+
+            <div class="flex flex-col items-center md:items-end gap-4">
+              <div class="flex -space-x-3 mb-2">
+                <div
+                  v-for="i in 3"
+                  :key="i"
+                  class="w-10 h-10 rounded-full border-2 border-black bg-gray-800 flex items-center justify-center overflow-hidden"
+                >
+                  <img
+                    :src="`https://api.dicebear.com/7.x/avataaars/svg?seed=${i}`"
+                  />
+                </div>
+                <div
+                  class="w-10 h-10 rounded-full border-2 border-black bg-yellow-500 flex items-center justify-center text-black text-[10px] font-black italic"
+                >
+                  +5
+                </div>
+              </div>
+
+              <div
+                class="bg-yellow-500 text-black px-8 py-3 rounded-2xl font-[1000] italic uppercase text-sm shadow-[0_0_30px_rgba(234,179,8,0.2)] group-hover:scale-105 group-hover:shadow-yellow-500/40 transition-all"
+              >
+                Enter The Arena
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white/5 py-2 overflow-hidden border-t border-white/5">
+            <div class="flex gap-10 animate-marquee whitespace-nowrap">
+              <span
+                v-for="n in 5"
+                :key="n"
+                class="text-[8px] font-bold uppercase italic text-gray-600 tracking-widest"
+              >
+                🚨 REPUTATION 5.0 IS ACTIVE • NO BID & RUN TOLERATED • CHECK
+                YOUR STANDING •
+              </span>
+            </div>
+          </div>
+        </router-link>
+      </section>
     </div>
   </div>
 </template>
@@ -379,5 +466,18 @@ const isSlotAvailable = computed(
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+.animate-marquee {
+  display: inline-flex;
+  animation: marquee 30s linear infinite;
+}
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
 }
 </style>

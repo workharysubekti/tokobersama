@@ -124,6 +124,12 @@ const routes = [
     component: () => import("../src/views/user/FollowList.vue"), // Sesuaikan path file FollowList.vue tadi
     meta: { showBottomNav: true },
   },
+  {
+    path: "/hall-of-fate",
+    name: "HallOfFate",
+    component: () => import("../src/views/HallOfFate.vue"),
+    meta: { showBottomNav: true },
+  },
 ];
 
 const router = createRouter({

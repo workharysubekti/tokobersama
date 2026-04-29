@@ -1,309 +1,88 @@
 <script setup>
-import {
-  ref,
-  onMounted,
-  computed,
-  onUnmounted,
-  watch,
-  nextTick,
-  watchEffect,
-} from "vue";
-import { useRouter, useRoute } from "vue-router";
+import { ref, onMounted, computed, watch, nextTick } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { supabase } from "../lib/supabase.js";
 import { notify } from "../utils/notify.js";
-import {
-  ClockIcon,
-  ArrowLeftIcon,
-  ShieldCheckIcon,
+import { formatPrice } from "../utils/format.js";
+
+// 1. Import Pusat Icon
+import { Icons } from "../utils/icons.js";
+const {
   TrophyIcon,
-  FireIcon,
-  BanknotesIcon,
-  ArrowPathIcon,
-  UserCircleIcon,
-  TagIcon,
   ExclamationTriangleIcon,
+  ArrowLeftIcon,
+  ClockIcon,
   UserIcon,
-  ChatBubbleLeftRightIcon,
-  QrCodeIcon,
+  ShieldCheckIcon,
+  UserCircleIcon,
+  ArrowPathIcon,
+  BanknotesIcon,
   LockClosedIcon,
-} from "@heroicons/vue/24/outline";
-import { getRankDetails } from "../utils/rankUtils.js";
+  TagIcon,
+  QrCodeIcon,
+} = Icons;
+
+// 2. Import Logic Composables
+import { useAuctionTimer } from "../composables/auction/useAuctionTimer";
+import { useAuctionData } from "../composables/auction/useAuctionData";
+import { useBidding } from "../composables/auction/useBidding";
+import { useReputation } from "../composables/useReputation";
 
 // --- PROPS & ROUTING ---
-const props = defineProps({
-  userProfile: Object,
-});
+const props = defineProps({ userProfile: Object });
+const userProfileRef = computed(() => props.userProfile);
 const route = useRoute();
 const router = useRouter();
-
-// --- DATA STATES ---
-const product = ref(null);
-const recentBids = ref([]);
-const loading = ref(true);
-const bidAmount = ref(0);
-const isSubmitting = ref(false);
-const timeLeft = ref("");
-const activeBidTab = ref("ranking");
-
-// --- SILENT WAR INTEGRATION STATES ---
-const serverOffset = ref(0); // Offset jam server
-const showExtensionBadge = ref(false); // Indikator waktu bertambah
-
-// --- AUCTION BEHAVIOR STATES ---
-const isIntense = ref(false);
-const hasNotifiedIntense = ref(false);
-const showBannedModal = ref(false);
-const showDepositModal = ref(false); // FIXED: Deklarasi State Modal
-
-// --- OUTBID & ESCROW STATES ---//
-const isOutbid = ref(false);
-const transaction = ref(null);
-const showPaymentModal = ref(false);
+const productId = parseInt(route.params.id);
+// Masukkan di bagian UI STATES ProductDetail.vue
 const adminFee = 5000;
-const isSubmittingAction = ref(false);
 
-// --- SYNC & THROTTLE STATES ---
-const isCooldown = ref(false);
+// --- CALL LOGIC (Panggil Pekerja) ---
+const {
+  product,
+  recentBids,
+  transaction,
+  loading,
+  rankedBids,
+  isWinner,
+  isSeller,
+  allImages,
+  fetchProductDetail,
+} = useAuctionData(productId, userProfileRef);
 
-// --- FORMATTER INPUT BID (ANTI-BINGUNG) ---
-const formattedBidAmount = computed({
-  get() {
-    // Menampilkan angka dengan format titik (id-ID)
-    if (!bidAmount.value) return "";
-    return new Intl.NumberFormat("id-ID").format(bidAmount.value);
-  },
-  set(newValue) {
-    // Menghapus semua titik sebelum disimpan kembali ke bidAmount (angka murni)
-    const number = Number(newValue.replace(/\./g, ""));
-    if (!isNaN(number)) {
-      bidAmount.value = number;
-    }
-  },
-});
+const {
+  timeLeft,
+  isIntense,
+  showExtensionBadge,
+  syncServerTime,
+  startTimer,
+  updateTimer,
+} = useAuctionTimer(product);
 
-// --- FUNGSI SYNC JAM (SILENT WAR) ---
-const syncServerTime = async () => {
-  try {
-    const start = Date.now();
-    const { data } = await supabase.rpc("get_server_time");
-    const serverTime = data ? new Date(data).getTime() : Date.now();
-    const end = Date.now();
-    const latency = (end - start) / 2;
-    serverOffset.value = serverTime - (end - latency);
-  } catch (e) {
-    serverOffset.value = 0;
-  }
-};
+const {
+  bidAmount,
+  isSubmitting,
+  isCooldown,
+  isOutbid,
+  userRank,
+  requiredDeposit,
+  needsDeposit,
+  executeBidTransaction,
+} = useBidding(product, recentBids, userProfileRef);
 
-// Fungsi hitung penalti otomatis sesuai dokumen TOKBER
-const getPenaltyPoint = (stage) => {
-  if (stage === 1) return 150;
-  if (stage === 2) return 100;
-  if (stage === 3) return 50;
-  return 0;
-};
+const { now, getTimer, executePenalty } = useReputation();
 
-// --- LOGIKA RANKING (UNIQUE BIDDERS) ---
-const rankedBids = computed(() => {
-  if (!recentBids.value || recentBids.value.length === 0) return [];
-  const seenUsers = new Set();
-  const uniqueBidders = [];
-  for (const bid of recentBids.value) {
-    if (!seenUsers.has(bid.user_id)) {
-      seenUsers.add(bid.user_id);
-      uniqueBidders.push(bid);
-    }
-  }
-  return uniqueBidders.slice(0, 8);
-});
-
-// --- LOGIKA DEPOSIT PROGRESIF (TAHAP 2 - MASTER TABLE) ---
-const depositPercentage = computed(() => {
-  const rep = props.userProfile?.reputation || 0;
-  const isAdmin = !!props.userProfile?.is_admin; // FIXED: Flexible Boolean Check
-
-  if (isAdmin) return 0; // OWNER bebas jaminan
-
-  // KHUSUS: Reputasi < 50 atau MINUS (Wajib 30% Flat untuk semua nominal)
-  if (rep < 50) return 30;
-
-  // PROGRESIF BERDASARKAN RANK
-  if (rep >= 1200) return 0; // LEGEND
-  if (rep >= 800) return 5; // MASTER
-  if (rep >= 400) return 10; // EXPERT
-  if (rep >= 200) return 15; // INTERMEDIATE
-  return 20; // MEMBER (0-199)
-});
-
-const requiredDeposit = computed(() => {
-  return (bidAmount.value * depositPercentage.value) / 100;
-});
-
-const needsDeposit = computed(() => {
-  const isAdmin = !!props.userProfile?.is_admin;
-  if (isAdmin) return false; // OWNER KEBAL ATURAN
-
-  const rep = props.userProfile?.reputation || 0;
-  if (rep < 50) return true; // User berdosa wajib depo
-
-  // User normal depo jika lewat limit kasta
-  return bidAmount.value > userRank.value.limit;
-});
-
-const hasEnoughBalanceForDeposit = computed(() => {
-  return (props.userProfile?.balance || 0) >= requiredDeposit.value;
-});
-
-// --- LOGIKA SETTLEMENT -----
-const isWinner = computed(() => {
-  // Pemenang adalah orang yang ID-nya sama dengan winner_id di produk saat status CLOSED
-  return (
-    product.value?.status === "closed" &&
-    props.userProfile?.id === product.value?.winner_id
-  );
-});
-
-const isSeller = computed(() => {
-  return props.userProfile?.id === product.value?.owner_id;
-});
-
-const totalToPay = computed(() => {
-  // Cari bid terakhir milik user yang sedang login di riwayat bid
-  const myBid = recentBids.value.find(
-    (b) => b.user_id === props.userProfile?.id,
-  );
-  const winningAmount = myBid ? myBid.amount : product.value?.current_bid || 0;
-  return winningAmount + adminFee;
-});
-
-// --- LOGIKA USER RANK & LIMIT (SINKRON DENGAN RANKUTILS) ---
-const userRank = computed(() => {
-  const isAdmin = !!props.userProfile?.is_admin; // FIXED: Flexible Boolean Check
-  // Langsung panggil utility, berikan reputasi dan status admin
-  const details = getRankDetails(
-    props.userProfile?.reputation || 0,
-    !!props.userProfile?.is_admin, // FIXED: Flexible Boolean Check
-  );
-
-  return {
-    ...details,
-    extraClass:
-      details.name === "OWNER"
-        ? "font-[1000] drop-shadow-[0_0_10px_#EF4444aa]"
-        : "font-black",
-  };
-});
-
-// --- FALLBACK WINNER ---
-const loadingFallback = ref(false);
-
-const handleFallback = async (choice) => {
-  loadingFallback.value = true;
-  try {
-    const { data: rpcData, error } = await supabase.rpc(
-      "handle_fallback_choice",
-      {
-        p_product_id: product.value.id,
-        p_choice: choice,
-      },
-    );
-    if (error) throw error;
-
-    // PAKSA UPDATE LOKAL (Jangan nunggu fetch)
-    if (choice === "accepted") {
-      product.value.fallback_status = "accepted";
-      notify.success(
-        "Selamat!",
-        "Item sekarang milikmu. Segera selesaikan pembayaran! 🏆",
-      );
-    } else {
-      notify.warn("Dilepaskan", "Item dilepaskan ke penawar berikutnya.");
-    }
-
-    await fetchProductDetail(); // Tetap panggil buat sinkron sisanya
-  } catch (err) {
-    console.error(err);
-  } finally {
-    loadingFallback.value = false;
-  }
-};
-// Logic buat nentuin UI muncul
-const showFallbackUI = computed(() => {
-  // Pastiin userProfile ada, baru bandingin ID-nya
-  return (
-    props.userProfile?.id === product.value?.winner_id &&
-    product.value?.fallback_stage > 1 &&
-    product.value?.fallback_status === "pending"
-  );
-});
-
-// --- WATCHER OUTBID (SILENT INTEGRATION) ---
-watch(recentBids, (newVal, oldVal) => {
-  if (oldVal && oldVal.length > 0 && newVal.length > 0 && props.userProfile) {
-    const wasTop = oldVal[0].user_id === props.userProfile.id;
-    const isNowOutbid = newVal[0].user_id !== props.userProfile.id;
-    if (wasTop && isNowOutbid && product.value?.status !== "closed") {
-      isOutbid.value = true;
-      if (window.navigator.vibrate) window.navigator.vibrate(200);
-    }
-  }
-  if (newVal.length > 0 && newVal[0].user_id === props.userProfile?.id) {
-    isOutbid.value = false;
-  }
-});
-
-// --- LOGIKA MULTI-IMAGE STACK ---
-const activeImgIndex = ref(0);
-const touchStartX = ref(0);
-const touchEndX = ref(0);
-
-const allImages = computed(() => {
-  if (!product.value) return [];
-  const images = [];
-  if (product.value.image_url) images.push(product.value.image_url);
-  const extra = product.value.additional_images;
-  if (extra) {
-    if (Array.isArray(extra)) images.push(...extra);
-    else if (typeof extra === "string") {
-      try {
-        const parsed = JSON.parse(extra);
-        if (Array.isArray(parsed)) images.push(...parsed);
-        else images.push(extra);
-      } catch (e) {
-        images.push(extra);
-      }
-    }
-  }
-  return images.filter((url) => url && url.trim() !== "");
-});
-
-const nextImage = () => {
-  if (allImages.value.length > 1)
-    activeImgIndex.value = (activeImgIndex.value + 1) % allImages.value.length;
-};
-const prevImage = () => {
-  if (allImages.value.length > 1)
-    activeImgIndex.value =
-      (activeImgIndex.value - 1 + allImages.value.length) %
-      allImages.value.length;
-};
-const handleTouchStart = (e) => {
-  touchStartX.value = e.screenX || e.touches[0].clientX;
-};
-const handleTouchEnd = (e) => {
-  touchEndX.value = e.screenX || e.changedTouches[0].clientX;
-  handleSwipe();
-};
-const handleSwipe = () => {
-  const swipeDistance = touchStartX.value - touchEndX.value;
-  if (swipeDistance > 50) nextImage();
-  if (swipeDistance < -50) prevImage();
-};
-
-// --- LOGIKA REPORT ---
+// --- UI STATES (Variabel buat Modal & Toggle UI) ---
+// Ini harus ada di sini karena ini urusan tampilan/UI
+const activeBidTab = ref("ranking");
+const showBannedModal = ref(false);
 const showReportModal = ref(false);
-const isSubmittingReport = ref(false);
-const reportForm = ref({ category: "Palsu / Kw", details: "" });
+const showPaymentModal = ref(false);
+const showDepositModal = ref(false);
+const isBotActive = ref(true);
+const loadingFallback = ref(false);
+const activeImgIndex = ref(0);
+const reportForm = ref({ category: "Palsu / Kw", details: "" }); // Tambah ini juga
 const reportCategories = [
   "Palsu / KW",
   "Penipuan Harga",
@@ -313,460 +92,60 @@ const reportCategories = [
   "Lainnya",
 ];
 
-const submitReport = async () => {
-  if (!props.userProfile) return notify.error("Auth Required", "Login dulu!");
-  if (reportForm.value.details.length < 5)
-    return notify.error("Data Kurang", "Minimal 5 karakter.");
-  try {
-    isSubmittingReport.value = true;
-    const { error } = await supabase.from("reports").insert({
-      product_id: product.value.id,
-      reporter_id: props.userProfile.id,
-      target_user_id: product.value.owner_id,
-      reason_category: reportForm.value.category,
-      reason: reportForm.value.details,
-      status: "pending",
-    });
-    if (error) throw error;
-    notify.success("Laporan Terkirim", "Moderator akan meninjau aset ini.");
-    showReportModal.value = false;
-    reportForm.value.details = "";
-  } catch (err) {
-    notify.error("Gagal Melapor", err.message);
-  } finally {
-    isSubmittingReport.value = false;
-  }
-};
-
-// --- UTILS & FETCHING ---
-let timerInterval = null;
-let bidSubscription = null;
-
-const formatPrice = (price) => {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(price || 0);
-};
-
-const fetchBids = async () => {
-  if (!route.params.id) return;
-  const { data } = await supabase
-    .from("bids")
-    .select("*, profiles(username, full_name, avatar_url, reputation)")
-    .eq("product_id", route.params.id)
-    .order("amount", { ascending: false })
-    .limit(50);
-  if (data) {
-    recentBids.value = data;
-    if (data.length > 0 && product.value)
-      product.value.current_bid = data[0].amount;
-  }
-};
-
-const fetchTransaction = async () => {
-  console.log("--- DEBUG FETCH TX ---");
-  console.log("Product Status:", product.value?.status);
-  console.log("User ID:", props.userProfile?.id);
-
-  // COBA KOMENTARI DULU SYARAT INI BUAT NGETES:
-  // if (product.value?.status !== "closed" || !props.userProfile?.id) return;
-
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("*")
-    .eq("product_id", route.params.id)
-    .eq("buyer_id", props.userProfile.id)
-    .maybeSingle();
-
-  if (error) {
-    console.error("SQL ERROR:", error.message); // Cek kalau ada error permission
-  }
-
-  console.log("DATA TX DITEMUKAN:", data);
-  if (data) transaction.value = data;
-};
-
-const confirmPayment = async (method) => {
-  if (!transaction.value) {
-    notify.error("Error", "Data transaksi tidak ditemukan.");
-    return;
-  }
-
-  isSubmittingAction.value = true;
-
-  try {
-    // LANGSUNG TEMBAK RPC (Gak usah pake .update() manual lagi)
-    const { data, error } = await supabase.rpc("confirm_auction_payment", {
-      p_transaction_id: transaction.value.id,
-      p_product_id: product.value.id,
-      p_user_id: props.userProfile.id,
-      p_payment_method: method,
-      p_reputation_reward: 25,
-    });
-
-    if (error) throw error;
-
-    await fetchProductDetail(); // Tarik data terbaru setelah bayar
-    notify.success("Berhasil!", "Dana aman di Escrow & Reputasi bertambah! 🚀");
-    showPaymentModal.value = false;
-  } catch (err) {
-    console.error("Payment Error:", err.message);
-    notify.error("Gagal", "Gagal konfirmasi, silakan coba lagi.");
-  } finally {
-    isSubmittingAction.value = false;
-  }
-};
-const fetchProductDetail = async () => {
-  if (!route.params.id) return;
-  loading.value = true;
-  try {
-    // 1. Ambil Data Produk
-    const { data, error } = await supabase
-      .from("products")
-      .select(
-        "*, profiles!owner_id(username, full_name, avatar_url, reputation), fallback_stage, fallback_status, fallback_deadline",
-      )
-      .eq("id", parseInt(route.params.id))
-      .maybeSingle();
-
-    if (error || !data) return router.push("/");
-    product.value = data;
-
-    // 2. Ambil Bids (Wajib duluan biar kita tau nominal bid lo berapa)
-    await fetchBids();
-
-    // 3. Ambil atau Buat Transaksi (Cukup panggil fungsinya saja)
-    if (props.userProfile?.id) {
-      await fetchTransaction();
-    }
-
-    // 4. Set Nominal Input Bid Selanjutnya
-    bidAmount.value =
-      recentBids.value.length > 0
-        ? Number(recentBids.value[0].amount) + 10000
-        : Number(data.starting_bid) + 10000;
-  } catch (err) {
-    console.error("Fetch Error:", err);
-  } finally {
-    loading.value = false;
-  }
-};
-
-// --- LOGIKA TIMER (SILENT & OFFSET INTEGRATED) ---
-const updateTimer = () => {
-  if (!product.value?.end_time) return;
-  const end = new Date(product.value.end_time).getTime();
-  const now = Date.now() + serverOffset.value; // SYNCED
-  const diff = end - now;
-
-  if (diff <= 0) {
-    if (product.value.status === "active") {
-      timeLeft.value = "VALIDATING...";
-    } else {
-      timeLeft.value = "ENDED";
-    }
-    isIntense.value = false;
-    return;
-  }
-
-  if (diff > 0 && diff <= 120000) {
-    isIntense.value = true;
-  } else {
-    if (diff > 120000) {
-      isIntense.value = false;
-      hasNotifiedIntense.value = false;
-    }
-  }
-
-  const d = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  const s = Math.floor((diff % (1000 * 60)) / 1000);
-  if (d > 0) {
-    timeLeft.value = `${d}d ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  } else {
-    timeLeft.value = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  }
-};
-
-// --- FUNGSI UTAMA PLACE BID (PENYARING) ---
-const placeBid = async () => {
-  if (!props.userProfile || isCooldown.value) return;
-  const isAdmin = !!props.userProfile?.is_admin; // FIXED: Flexible Boolean Check
-
-  // 1. Cek Status Produk (KODE SUCI MAS)
-  if (product.value.status !== "active" || timeLeft.value === "VALIDATING...") {
-    return notify.error("Lelang Berakhir", "Pintu transmisi sudah ditutup.");
-  }
-
-  // 2. Cek Posisi (KODE SUCI MAS)
-  if (!isAdmin) {
-    const isCurrentWinner =
-      recentBids.value.length > 0 &&
-      recentBids.value[0].user_id === props.userProfile.id;
-    if (isCurrentWinner)
-      return notify.error("Top Position", "Tawaranmu masih tertinggi!");
-  }
-
-  // 3. LOGIKA BARU: CEK APAKAH BUTUH DEPOSIT?
-  if (needsDeposit.value) {
-    // FIXED: Langsung buka modal saja, biarkan modal yang mengatur tombol Bayar/Topup
-    showDepositModal.value = true;
-    return;
-  }
-
-  // 4. Jika lancar jaya (Tanpa Deposit), langsung eksekusi
-  await executeBidTransaction();
-};
-
-// --- FUNGSI EKSEKUSI DATABASE (KODE SUCI YANG DIPINDAH) ---
-const executeBidTransaction = async () => {
-  try {
-    isSubmitting.value = true;
-
-    // Backup waktu lama buat perbandingan badge visual
-    const oldEnd = new Date(product.value.end_time).getTime();
-
-    const { data, error } = await supabase.rpc("execute_bid_v1", {
-      p_product_id: product.value.id,
-      p_user_id: props.userProfile.id,
-      p_bid_amount: bidAmount.value,
-    });
-
-    if (error) {
-      notify.error("Gagal", error.message);
-      await fetchBids(); // Refresh jika harga di layar ternyata sudah basi
-      return;
-    }
-
-    // --- INSTANT VISUAL SYNC ---
-    // Update data di layar detik ini juga pake data dari database
-    product.value.end_time = data.new_end_time;
-    product.value.current_bid = data.new_bid;
-    bidAmount.value = Number(data.new_bid) + 10000;
-
-    const newEnd = new Date(data.new_end_time).getTime();
-
-    // Trigger badge "EXTENDED!" secara manual jika waktu nambah
-    if (newEnd > oldEnd + 1000) {
-      showExtensionBadge.value = true;
-      setTimeout(() => {
-        showExtensionBadge.value = false;
-      }, 3000);
-      if (window.navigator.vibrate) window.navigator.vibrate([100, 50, 100]);
-    }
-
-    showDepositModal.value = false;
-
-    // Paksa UI ngitung ulang countdown SEKARANG
-    nextTick(() => {
-      updateTimer();
-    });
-
-    isCooldown.value = true;
-    setTimeout(() => {
-      isCooldown.value = false;
-    }, 1500);
-  } catch (err) {
-    notify.error("Error", err.message);
-  } finally {
-    isSubmitting.value = false;
-  }
-};
-
-// Variabel khusus Fallback (Biar gak bentrok sama timer utama)
-const fallbackCountdownText = ref("00:00:00");
-let fallbackInterval = null;
-
-// 1. Tentukan Deadline Aktif (3 Jam atau 24 Jam)
-const activeDeadline = computed(() => {
-  if (!product.value) return null;
-
-  // Jika masih masa mikir, pakai yang 3 jam
-  if (product.value.fallback_decision_status === "awaiting") {
-    return product.value.fallback_decision_deadline;
-  }
-
-  // Jika sudah komit/bayar, pakai yang 24 jam
-  return product.value.fallback_deadline;
+// --- UI COMPUTED ---
+const showFallbackUI = computed(() => {
+  return (
+    product.value?.status === "closed" &&
+    props.userProfile?.id === product.value?.winner_id &&
+    product.value?.fallback_stage > 1 &&
+    product.value?.fallback_status === "pending"
+  );
 });
 
-const startFallbackTimer = () => {
-  if (fallbackInterval) clearInterval(fallbackInterval);
+const totalToPay = computed(() => {
+  const myBid = recentBids.value.find(
+    (b) => b.user_id === props.userProfile?.id,
+  );
+  return (myBid ? myBid.amount : product.value?.current_bid || 0) + 5000;
+});
 
-  // Jika tidak ada deadline di kedua kolom, matikan timer
-  if (!activeDeadline.value) {
-    fallbackCountdownText.value = "00:00:00";
-    return;
-  }
-
-  const runTick = () => {
-    const deadline = new Date(activeDeadline.value).getTime();
-    const now = new Date().getTime();
-    const diff = deadline - now;
-
-    if (diff <= 0) {
-      fallbackCountdownText.value = "EXPIRED";
-      clearInterval(fallbackInterval);
-      return;
-    }
-
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-    fallbackCountdownText.value = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-  };
-
-  runTick();
-  fallbackInterval = setInterval(runTick, 1000);
+// --- UI METHODS (Logic Pendek khusus tampilan) ---
+const nextImage = () => {
+  if (allImages.value.length > 1)
+    activeImgIndex.value = (activeImgIndex.value + 1) % allImages.value.length;
 };
 
-// 2. Watch perubahan deadline ATAU status keputusan
-watch(
-  [() => activeDeadline.value, () => product.value?.fallback_decision_status],
-  ([newDeadline, newStatus]) => {
-    if (newDeadline) {
-      console.log(
-        `Timer Jalan: Mode ${newStatus === "awaiting" ? "Mikir (3h)" : "Bayar (24h)"}`,
-      );
-      startFallbackTimer();
-    } else {
-      fallbackCountdownText.value = "00:00:00";
-      if (fallbackInterval) clearInterval(fallbackInterval);
-    }
-  },
-  { immediate: true },
-);
+const handlePlaceBid = async () => {
+  if (needsDeposit.value) {
+    showDepositModal.value = true;
+  } else {
+    await executeBidTransaction((isExtended) => {
+      if (isExtended) {
+        showExtensionBadge.value = true;
+        setTimeout(() => {
+          showExtensionBadge.value = false;
+        }, 3000);
+      }
+      nextTick(() => updateTimer());
+    });
+  }
+};
 
-// Notifikasi otomatis pas user dapet giliran Fallback
-watch(
-  () => product.value?.winner_id,
-  (newWinner) => {
-    if (
-      newWinner === props.userProfile?.id &&
-      product.value?.fallback_status === "pending" // <--- KUNCINYA DI SINI
-    ) {
-      // Cuma muncul kalau statusnya masih nunggu keputusan (pending)
-      notify.success(
-        "Panggilan Fallback!",
-        "Giliranmu tiba! Ambil item sekarang di area Fallback.",
-      );
+// --- WATCHER ROBOT PENALTI ---
+watch(now, async () => {
+  if (!isBotActive.value || !product.value || product.value.status !== "closed")
+    return;
+  if (getTimer(product.value) === "EXPIRED") {
+    isBotActive.value = false;
+    await executePenalty(product.value, fetchProductDetail);
+  }
+});
 
-      if (window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
-    }
-  },
-);
-
+// --- LIFECYCLE ---
 onMounted(async () => {
   await syncServerTime();
   await fetchProductDetail();
-  startFallbackTimer();
-  timerInterval = setInterval(updateTimer, 1000);
-
-  if (route.params.id) {
-    // 1. PEMBERSIHAN MUTLAK (Obat Error Console)
-    // Hapus channel lama jika sudah ada (mencegah double subscribe saat hot-reload/navigasi)
-    if (bidSubscription) {
-      supabase.removeChannel(bidSubscription);
-    }
-
-    // 2. SETUP DATA TRANSMISSION
-    bidSubscription = supabase
-      .channel(`live-auction-${route.params.id}`)
-      // LISTENER BID BARU
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "bids",
-          filter: `product_id=eq.${route.params.id}`,
-        },
-        () => {
-          fetchBids();
-        },
-      )
-      // LISTENER UPDATE PRODUK (ANTI-SNIPER DETECTOR)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "products",
-          filter: `id=eq.${route.params.id}`,
-        },
-        (payload) => {
-          console.log("REALTIME UPDATE MASUK:", payload.new.fallback_status);
-          if (payload.new.status === "banned") {
-            showBannedModal.value = true;
-            return;
-          }
-
-          if (product.value) {
-            // Deteksi penambahan waktu untuk badge visual
-            const oldEnd = new Date(product.value.end_time).getTime();
-            const newEnd = new Date(payload.new.end_time).getTime();
-
-            // Logika REBIRTH (Status balik jadi Active)
-            if (
-              payload.new.status === "active" &&
-              product.value.status === "closed"
-            ) {
-              transaction.value = null;
-              notify.success("REBIRTH!", "Lelang diaktifkan kembali!");
-            }
-
-            // --- UPDATE STATE UTAMA ---
-            product.value.status = payload.new.status;
-            product.value.winner_id = payload.new.winner_id;
-            product.value.current_bid = payload.new.current_bid;
-            product.value.end_time = payload.new.end_time;
-
-            // TAMBAHKAN INI BIAR REAL-TIME:
-            product.value.fallback_stage = payload.new.fallback_stage;
-            product.value.fallback_status = payload.new.fallback_status;
-            product.value.fallback_deadline = payload.new.fallback_deadline;
-
-            if (payload.new.fallback_deadline) {
-              startFallbackTimer();
-            }
-
-            // Update nominal input bid selanjutnya
-            const nextMinBid = Number(payload.new.current_bid) + 10000;
-            if (bidAmount.value < nextMinBid) {
-              bidAmount.value = nextMinBid;
-            }
-
-            // --- TRIGGER VISUAL ANTI-SNIPER ---
-            // Jika waktu akhir bergeser lebih dari 1 detik, munculkan badge
-            if (newEnd > oldEnd + 1000) {
-              showExtensionBadge.value = true;
-              setTimeout(() => {
-                showExtensionBadge.value = false;
-              }, 3000);
-              hasNotifiedIntense.value = false; // Reset notifikasi intense
-            }
-
-            // Paksa timer refresh detik ini juga
-            nextTick(() => updateTimer());
-          }
-        },
-      )
-      // 3. PANGGIL SUBSCRIBE PALING TERAKHIR
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          console.log("AUCTION TRANSMISSION CONNECTED");
-        }
-      });
-  }
-});
-
-onUnmounted(() => {
-  clearInterval(timerInterval);
-  if (bidSubscription) supabase.removeChannel(bidSubscription);
+  startTimer();
 });
 </script>
 
