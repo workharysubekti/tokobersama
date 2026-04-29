@@ -11,6 +11,30 @@ export function useBidding(product, recentBids, userProfile) {
   const isOutbid = ref(false);
   const showDepositModal = ref(false);
 
+  // --- 1. FORMATTER TITIK (Balikin fungsi yang hilang) ---
+  const formattedBidAmount = computed({
+    get() {
+      if (!bidAmount.value) return "";
+      return new Intl.NumberFormat("id-ID").format(bidAmount.value);
+    },
+    set(newValue) {
+      const number = Number(newValue.replace(/\./g, ""));
+      if (!isNaN(number)) bidAmount.value = number;
+    },
+  });
+
+  // --- 2. WATCHER HARGA (Biar input gak 0 pas loading kelar) ---
+  watch(
+    () => product.value,
+    (newProd) => {
+      if (newProd && bidAmount.value === 0) {
+        const current = newProd.current_bid || newProd.starting_bid;
+        bidAmount.value = Number(current) + 10000;
+      }
+    },
+    { immediate: true },
+  );
+
   const userRank = computed(() =>
     getRankDetails(
       userProfile.value?.reputation || 0,
@@ -62,6 +86,7 @@ export function useBidding(product, recentBids, userProfile) {
 
   return {
     bidAmount,
+    formattedBidAmount,
     isSubmitting,
     isCooldown,
     isOutbid,

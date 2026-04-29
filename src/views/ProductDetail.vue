@@ -61,6 +61,7 @@ const {
 
 const {
   bidAmount,
+  formattedBidAmount,
   isSubmitting,
   isCooldown,
   isOutbid,
@@ -115,20 +116,40 @@ const nextImage = () => {
     activeImgIndex.value = (activeImgIndex.value + 1) % allImages.value.length;
 };
 
-const handlePlaceBid = async () => {
+const placeBid = async () => {
+  if (!props.userProfile || isCooldown.value) return;
+
+  // 1. Cek Status
+  if (product.value.status !== "active" || timeLeft.value === "VALIDATING...") {
+    return notify.error("Lelang Berakhir", "Pintu transmisi sudah ditutup.");
+  }
+
+  // 2. Cek Posisi (Kecuali Admin)
+  if (!props.userProfile.is_admin) {
+    const isCurrentWinner =
+      recentBids.value.length > 0 &&
+      recentBids.value[0].user_id === props.userProfile.id;
+    if (isCurrentWinner)
+      return notify.error("Top Position", "Tawaranmu masih tertinggi!");
+  }
+
+  // 3. Deposit Check
   if (needsDeposit.value) {
     showDepositModal.value = true;
-  } else {
-    await executeBidTransaction((isExtended) => {
-      if (isExtended) {
-        showExtensionBadge.value = true;
-        setTimeout(() => {
-          showExtensionBadge.value = false;
-        }, 3000);
-      }
-      nextTick(() => updateTimer());
-    });
+    return;
   }
+
+  // 4. Eksekusi
+  await executeBidTransaction((isExtended) => {
+    if (isExtended) {
+      showExtensionBadge.value = true;
+      setTimeout(() => {
+        showExtensionBadge.value = false;
+      }, 3000);
+      if (window.navigator.vibrate) window.navigator.vibrate([100, 50, 100]);
+    }
+    nextTick(() => updateTimer());
+  });
 };
 
 // --- WATCHER ROBOT PENALTI ---
