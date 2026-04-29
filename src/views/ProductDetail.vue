@@ -577,17 +577,33 @@ const executeBidTransaction = async () => {
 };
 
 // Variabel khusus Fallback (Biar gak bentrok sama timer utama)
-const fallbackCountdownText = ref("02:00:00");
+const fallbackCountdownText = ref("00:00:00");
 let fallbackInterval = null;
 
+// 1. Tentukan Deadline Aktif (3 Jam atau 24 Jam)
+const activeDeadline = computed(() => {
+  if (!product.value) return null;
+
+  // Jika masih masa mikir, pakai yang 3 jam
+  if (product.value.fallback_decision_status === "awaiting") {
+    return product.value.fallback_decision_deadline;
+  }
+
+  // Jika sudah komit/bayar, pakai yang 24 jam
+  return product.value.fallback_deadline;
+});
+
 const startFallbackTimer = () => {
-  // 1. Bersihkan kalau sudah ada (Biar gak tumpuk)
   if (fallbackInterval) clearInterval(fallbackInterval);
 
-  if (!product.value?.fallback_deadline) return;
+  // Jika tidak ada deadline di kedua kolom, matikan timer
+  if (!activeDeadline.value) {
+    fallbackCountdownText.value = "00:00:00";
+    return;
+  }
 
   const runTick = () => {
-    const deadline = new Date(product.value.fallback_deadline).getTime();
+    const deadline = new Date(activeDeadline.value).getTime();
     const now = new Date().getTime();
     const diff = deadline - now;
 
@@ -604,20 +620,25 @@ const startFallbackTimer = () => {
     fallbackCountdownText.value = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   };
 
-  runTick(); // Jalankan instan
-  fallbackInterval = setInterval(runTick, 1000); // Jalan tiap detik
+  runTick();
+  fallbackInterval = setInterval(runTick, 1000);
 };
 
-// Taruh ini di bawah fungsi startFallbackTimer
+// 2. Watch perubahan deadline ATAU status keputusan
 watch(
-  () => product.value?.fallback_deadline,
-  (newDeadline) => {
+  [() => activeDeadline.value, () => product.value?.fallback_decision_status],
+  ([newDeadline, newStatus]) => {
     if (newDeadline) {
-      console.log("Deadline terdeteksi, menjalankan timer...");
+      console.log(
+        `Timer Jalan: Mode ${newStatus === "awaiting" ? "Mikir (3h)" : "Bayar (24h)"}`,
+      );
       startFallbackTimer();
+    } else {
+      fallbackCountdownText.value = "00:00:00";
+      if (fallbackInterval) clearInterval(fallbackInterval);
     }
   },
-  { immediate: true }, // Langsung cek pas halaman dibuka
+  { immediate: true },
 );
 
 // Notifikasi otomatis pas user dapet giliran Fallback
