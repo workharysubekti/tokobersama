@@ -169,8 +169,10 @@ const isSeller = computed(() => {
 
 const totalToPay = computed(() => {
   // Cari bid terakhir milik user yang sedang login di riwayat bid
-  const myBid = recentBids.value.find(b => b.user_id === props.userProfile?.id);
-  const winningAmount = myBid ? myBid.amount : (product.value?.current_bid || 0);
+  const myBid = recentBids.value.find(
+    (b) => b.user_id === props.userProfile?.id,
+  );
+  const winningAmount = myBid ? myBid.amount : product.value?.current_bid || 0;
   return winningAmount + adminFee;
 });
 
@@ -210,7 +212,10 @@ const handleFallback = async (choice) => {
     // PAKSA UPDATE LOKAL (Jangan nunggu fetch)
     if (choice === "accepted") {
       product.value.fallback_status = "accepted";
-      notify.success("Selamat!", "Item sekarang milikmu. Segera selesaikan pembayaran! 🏆");
+      notify.success(
+        "Selamat!",
+        "Item sekarang milikmu. Segera selesaikan pembayaran! 🏆",
+      );
     } else {
       notify.warn("Dilepaskan", "Item dilepaskan ke penawar berikutnya.");
     }
@@ -420,7 +425,9 @@ const fetchProductDetail = async () => {
     // 1. Ambil Data Produk
     const { data, error } = await supabase
       .from("products")
-      .select("*, profiles!owner_id(username, full_name, avatar_url, reputation), fallback_stage, fallback_status, fallback_deadline")
+      .select(
+        "*, profiles!owner_id(username, full_name, avatar_url, reputation), fallback_stage, fallback_status, fallback_deadline",
+      )
       .eq("id", parseInt(route.params.id))
       .maybeSingle();
 
@@ -432,14 +439,14 @@ const fetchProductDetail = async () => {
 
     // 3. Ambil atau Buat Transaksi (Cukup panggil fungsinya saja)
     if (props.userProfile?.id) {
-      await fetchTransaction(); 
+      await fetchTransaction();
     }
 
     // 4. Set Nominal Input Bid Selanjutnya
-    bidAmount.value = recentBids.value.length > 0
+    bidAmount.value =
+      recentBids.value.length > 0
         ? Number(recentBids.value[0].amount) + 10000
         : Number(data.starting_bid) + 10000;
-
   } catch (err) {
     console.error("Fetch Error:", err);
   } finally {
@@ -613,16 +620,24 @@ watch(
   { immediate: true }, // Langsung cek pas halaman dibuka
 );
 
-  // Notifikasi otomatis pas user dapet giliran Fallback
-watch(() => product.value?.winner_id, (newWinner, oldWinner) => {
-  if (newWinner === props.userProfile?.id && oldWinner !== props.userProfile?.id) {
-    // Akun ini baru aja dapet operan tahta!
-    notify.success("Panggilan Fallback!", "Giliranmu tiba! Ambil item sekarang di area Fallback.");
-    
-    // Opsional: Bikin HP getar biar berasa (khas PUBG Mobile lo)
-    if (window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
-  }
-});
+// Notifikasi otomatis pas user dapet giliran Fallback
+watch(
+  () => product.value?.winner_id,
+  (newWinner) => {
+    if (
+      newWinner === props.userProfile?.id &&
+      product.value?.fallback_status === "pending" // <--- KUNCINYA DI SINI
+    ) {
+      // Cuma muncul kalau statusnya masih nunggu keputusan (pending)
+      notify.success(
+        "Panggilan Fallback!",
+        "Giliranmu tiba! Ambil item sekarang di area Fallback.",
+      );
+
+      if (window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
+    }
+  },
+);
 
 onMounted(async () => {
   await syncServerTime();
