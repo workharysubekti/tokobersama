@@ -1,5 +1,5 @@
 // src/composables/auction/useBidding.js
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { supabase } from "../../lib/supabase.js";
 import { notify } from "../../utils/notify.js";
 import { getRankDetails } from "../../utils/rankUtils.js";
