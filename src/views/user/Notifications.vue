@@ -35,26 +35,38 @@ const fetchNotifications = async () => {
   try {
     const { data, error } = await supabase
       .from("notifications")
-      .select(`*, sender:profiles!from_user_id (username, avatar_url)`)
+      .select(
+        `
+        *,
+        sender:profiles!from_user_id (username, avatar_url)
+      `,
+      )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
+    // --- LOGIKA FILTER BARU (ANTI-PIKUN) ---
+
     // 1. Filter Kategori WINS (Harta Karun)
+    // Tetap pake title check karena WINNER & FALLBACK itu status sakral
     notifications.value.wins = data.filter(
       (n) => n.title?.includes("WINNER") || n.title?.includes("FALLBACK"),
     );
 
-    // 2. Filter Kategori ACTIVITY (Bids, Follows, dll)
-    // Biar gak double, kita exclude yang sudah masuk ke WINS
-    notifications.value.activity = data.filter(
-      (n) =>
-        (n.type === "activity" || !n.type) &&
-        !n.title?.includes("WINNER") &&
-        !n.title?.includes("FALLBACK"),
-    );
+    // 2. Filter Kategori ACTIVITY (Bids, Follows, Outbid, dll)
+    notifications.value.activity = data.filter((n) => {
+      // Masukin tipe-tipe baru dari SQL lo (new_bid, outbid)
+      const activityTypes = ["activity", "new_bid", "outbid"];
 
+      return (
+        (activityTypes.includes(n.type) || !n.type) &&
+        !n.title?.includes("WINNER") &&
+        !n.title?.includes("FALLBACK")
+      );
+    });
+
+    // 3. Filter Support & Broadcast (Tetap sama)
     notifications.value.support = data.filter((n) => n.type === "support");
     notifications.value.broadcast = data.filter((n) => n.type === "broadcast");
   } catch (err) {
