@@ -70,6 +70,11 @@ const routes = [
         name: "AdminAuctions",
         component: () => import("./views/admin/Auctions.vue"),
       },
+      {
+        path: "command",
+        name: "Commands",
+        component: () => import("./views/admin/Command.vue"),
+      },
     ],
   },
   { path: "/login", component: Login },
@@ -128,6 +133,24 @@ const routes = [
     path: "/hall-of-fate",
     name: "HallOfFate",
     component: () => import("../src/views/HallOfFate.vue"),
+    meta: { showBottomNav: true },
+  },
+  {
+    path: "/reputation-info",
+    name: "Reputation",
+    component: () => import("../src/views/Reputation.vue"),
+    meta: { showBottomNav: true },
+  },
+  {
+    path: "/legalcenter",
+    name: "LegalCenter",
+    component: () => import("../src/views/LegalCenter.vue"),
+    meta: { showBottomNav: true },
+  },
+  {
+    path: "/ticketview",
+    name: "TicketView",
+    component: () => import("../src/views/user/TicketCenter.vue"),
     meta: { showBottomNav: true },
   },
 ];

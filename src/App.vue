@@ -355,7 +355,11 @@ onMounted(async () => {
       </main>
     </div>
 
-    <BottomNav v-if="route.meta.showBottomNav" :userProfile="userProfile" />
+    <BottomNav
+      v-if="route.meta.showBottomNav"
+      :userProfile="userProfile"
+      class="bottom-nav-main"
+    />
 
     <transition name="notif">
       <div

@@ -22,6 +22,7 @@ const menuItems = [
   { name: "Tickets", icon: ChatBubbleLeftRightIcon, path: "/admin/tickets" },
   { name: "Stats", icon: ChartBarIcon, path: "/admin/stats" },
   { name: "Income", icon: BanknotesIcon, path: "/admin/income" },
+  { name: "Commands", icon: ShieldCheckIcon, path: "/admin/command" },
 ];
 
 const logout = () => {
